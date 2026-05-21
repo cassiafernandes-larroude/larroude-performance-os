@@ -5,4 +5,8 @@ export default function CacPage() {
     <DashboardEmbed
       src="https://larroude-cac-dashboard-app.vercel.app/"
       title="CAC - nCAC - CRC"
-      subtitle="Custo de aquis
+      subtitle="Custo de aquisicao, novo cliente e retencao - US e BR"
+      externalUrl="https://larroude-cac-dashboard-app.vercel.app/"
+    />
+  );
+}
