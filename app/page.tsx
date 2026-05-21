@@ -4,6 +4,8 @@ import { DiagnosticCard } from "@/components/cards/DiagnosticCard";
 import { Sparkles } from "lucide-react";
 import { getMetricBundle } from "@/lib/data/metrics";
 import { runDiagnostics } from "@/lib/intelligence/diagnostics";
+import { generateNarrative } from "@/lib/intelligence/narrative";
+import { cached } from "@/lib/cache";
 import type { Period } from "@/types/metric";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +22,13 @@ export default async function DailyBriefingPage({
     getMetricBundle("BR", period),
   ]);
   const diagnostics = await runDiagnostics({ us, br });
+
+  // narrativa cacheada por 30min para nao gastar API a cada page load
+  const narrative = await cached(
+    `narrative:${period}`,
+    1800,
+    () => generateNarrative(us, br, diagnostics)
+  );
 
   const source = us.metrics[0]?.source ?? "Mock";
   const sourceLabel = source === "BQ" ? "BigQuery Larroude OS" : "Mock data (configure GCP_SA_KEY_BASE64)";
@@ -105,35 +114,28 @@ export default async function DailyBriefingPage({
           </div>
         ) : (
           <div className="card mb-7 text-center py-8" style={{ color: "var(--ink-muted)" }}>
-            <p className="text-[13px]">Nenhum diagnóstico crítico no período. ✓</p>
+            <p className="text-[13px]">Nenhum diagnostico critico no periodo.</p>
           </div>
         )}
 
-        {/* Narrative placeholder */}
+        {/* Narrative */}
         <div className="card card-prose mb-7" style={{ background: "linear-gradient(180deg, #FFFFFF 0%, #FFF8FB 100%)", border: "1px solid var(--pink-soft)" }}>
-          <div className="flex items-center gap-2 mb-3">
-            <Sparkles className="w-4 h-4" style={{ color: "var(--pink-deep)" }} />
-            <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--pink-deep)" }}>
-              Análise - cross-source
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4" style={{ color: "var(--pink-deep)" }} />
+              <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--pink-deep)" }}>
+                Analise - cross-source
+              </span>
+            </div>
+            <span className="text-[10px]" style={{ color: "var(--ink-muted)" }}>
+              {narrative.source === "anthropic" ? "via Claude" : "fallback"}
             </span>
           </div>
           <h2 className="font-display text-[18px] lg:text-[22px] mb-3" style={{ color: "var(--ink)" }}>
-            Visão consolidada {period}
+            {narrative.title}
           </h2>
-          <div className="space-y-3 text-[12px] lg:text-[13px] leading-relaxed" style={{ color: "var(--ink-soft)" }}>
-            <p>
-              <strong style={{ color: "var(--ink)" }}>US:</strong> spend {us.metrics.find(m => m.key === "amount_spent")?.formatted} -
-              ROAS {us.metrics.find(m => m.key === "roas_gross")?.formatted} -
-              gross sales {us.metrics.find(m => m.key === "gross_sales")?.formatted}.
-            </p>
-            <p>
-              <strong style={{ color: "var(--ink)" }}>BR:</strong> spend {br.metrics.find(m => m.key === "amount_spent")?.formatted} -
-              ROAS {br.metrics.find(m => m.key === "roas_gross")?.formatted} -
-              gross sales {br.metrics.find(m => m.key === "gross_sales")?.formatted}.
-            </p>
-            <p style={{ color: "var(--ink-muted)" }}>
-              Narrativa via Anthropic ainda inativa - configure ANTHROPIC_API_KEY para análise automática diária.
-            </p>
+          <div className="text-[12px] lg:text-[13px] leading-relaxed whitespace-pre-line" style={{ color: "var(--ink-soft)" }}>
+            {narrative.body}
           </div>
         </div>
 
