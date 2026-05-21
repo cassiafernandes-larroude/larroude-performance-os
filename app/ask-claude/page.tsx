@@ -1,11 +1,11 @@
-import { Placeholder } from "@/components/layout/Placeholder";
+import { AskClaudePanel } from "@/components/chat/AskClaudePanel";
+
+export const dynamic = "force-dynamic";
 
 export default function AskClaudePage() {
   return (
-    <Placeholder
-      title="Ask Claude"
-      subtitle="Chat com tool use sobre todos os dados · BQ + Meta + Klaviyo + Shopify"
-      phase="Fase 4"
-    />
+    <div className="h-[calc(100vh-0px)] lg:h-screen">
+      <AskClaudePanel />
+    </div>
   );
 }
