@@ -4,22 +4,23 @@ import { Sparkles, History, X, CornerDownRight, Paperclip, AtSign, ArrowUp } fro
 
 export function ChatDrawer({
   open,
+  hidden,
   onClose,
 }: {
   open: boolean;
+  hidden?: boolean;
   onClose: () => void;
 }) {
   return (
     <aside
       className={`chat-drawer fixed lg:relative top-0 right-0 h-full w-full sm:w-[420px] lg:w-[380px] flex-shrink-0 flex flex-col z-50 lg:z-auto shadow-xl lg:shadow-none pt-safe pb-safe ${
         open ? "open" : ""
-      }`}
+      } ${hidden ? "lg:hidden" : ""}`}
       style={{
         background: "white",
         borderLeft: "1px solid var(--border)",
       }}
     >
-      {/* Header */}
       <div
         className="px-4 py-3 flex items-center justify-between"
         style={{ borderBottom: "1px solid var(--border)" }}
@@ -39,7 +40,7 @@ export function ChatDrawer({
               Ask Claude
             </div>
             <div className="text-[10px]" style={{ color: "var(--ink-muted)" }}>
-              BQ · Meta · Klaviyo · Shopify
+              BQ - Meta - Klaviyo - Shopify
             </div>
           </div>
         </div>
@@ -47,7 +48,7 @@ export function ChatDrawer({
           <button
             className="p-2 rounded-lg"
             style={{ color: "var(--ink-muted)" }}
-            aria-label="Histórico"
+            aria-label="Historico"
           >
             <History className="w-4 h-4" />
           </button>
@@ -62,7 +63,6 @@ export function ChatDrawer({
         </div>
       </div>
 
-      {/* Body */}
       <div className="flex-1 overflow-y-auto scroll-area px-4 py-4 space-y-5">
         <div>
           <div className="chat-msg-ai-header">Claude</div>
@@ -70,7 +70,7 @@ export function ChatDrawer({
             className="text-[13px] leading-relaxed"
             style={{ color: "var(--ink-soft)" }}
           >
-            Em breve: chat integrado com BigQuery, Meta, Klaviyo e Shopify via tool use. Disponível na Fase 4 do roadmap.
+            Em breve: chat integrado com BigQuery, Meta, Klaviyo e Shopify via tool use. Disponivel na Fase 4 do roadmap.
           </p>
         </div>
 
@@ -79,14 +79,14 @@ export function ChatDrawer({
             className="text-[10px] font-semibold uppercase tracking-wider px-1"
             style={{ color: "var(--ink-muted)" }}
           >
-            Sugestões (preview)
+            Sugestoes (preview)
           </div>
           <button className="chip-suggestion">
             <CornerDownRight
               className="w-3 h-3 flex-shrink-0"
               style={{ color: "var(--ink-muted)" }}
             />
-            <span>Quais campanhas Meta US têm fadiga?</span>
+            <span>Quais campanhas Meta US tem fadiga?</span>
           </button>
           <button className="chip-suggestion">
             <CornerDownRight
@@ -100,12 +100,11 @@ export function ChatDrawer({
               className="w-3 h-3 flex-shrink-0"
               style={{ color: "var(--ink-muted)" }}
             />
-            <span>nCAC sem pré-order, 90d</span>
+            <span>nCAC sem pre-order, 90d</span>
           </button>
         </div>
       </div>
 
-      {/* Input */}
       <div
         className="px-4 py-3 pb-safe"
         style={{ borderTop: "1px solid var(--border)" }}
@@ -149,7 +148,7 @@ export function ChatDrawer({
         </div>
         <div className="flex items-center justify-between mt-2 px-1">
           <span className="text-[10px]" style={{ color: "var(--ink-muted)" }}>
-            Claude Opus 4.7 · Fase 4
+            Claude Opus 4.7 - Fase 4
           </span>
         </div>
       </div>
