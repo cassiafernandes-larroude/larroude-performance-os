@@ -4,5 +4,5 @@ export default function CacPage() {
   return (
     <DashboardEmbed
       src="https://larroude-cac-dashboard-app.vercel.app/"
-      title="CAC · nCAC · CRC"
-      subtitle="Custo de aqu
+      title="CAC - nCAC - CRC"
+      subtitle="Custo de aquis
