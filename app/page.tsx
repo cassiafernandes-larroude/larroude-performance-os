@@ -23,7 +23,6 @@ export default async function DailyBriefingPage({
   ]);
   const diagnostics = await runDiagnostics({ us, br });
 
-  // narrativa cacheada por 30min para nao gastar API a cada page load
   const narrative = await cached(
     `narrative:${period}`,
     1800,
@@ -69,7 +68,7 @@ export default async function DailyBriefingPage({
 
         <FiltersBar />
 
-        {/* US Section */}
+        {/* ===== US Section ===== */}
         <div className="section-marker mb-3">
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--ink-muted)" }}>🇺🇸 ESTADOS UNIDOS</span>
@@ -77,7 +76,7 @@ export default async function DailyBriefingPage({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2 lg:gap-3 mb-7 lg:mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2 lg:gap-3 mb-5">
           {us.metrics.slice(0, 8).map((m) => (
             <MetricCard
               key={m.key}
@@ -89,7 +88,27 @@ export default async function DailyBriefingPage({
           ))}
         </div>
 
-        {/* Diagnósticos */}
+        {/* ===== BR Section (logo abaixo do US) ===== */}
+        <div className="section-marker mb-3">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--ink-muted)" }}>🇧🇷 BRASIL</span>
+            <span className="badge" style={{ background: "var(--pink-soft)", color: "var(--pink-deep)" }}>BRL</span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2 lg:gap-3 mb-7 lg:mb-8">
+          {br.metrics.slice(0, 8).map((m) => (
+            <MetricCard
+              key={m.key}
+              label={m.label}
+              value={m.formatted}
+              delta={m.delta_pct != null ? { value: m.delta_label!, positive: m.delta_pct >= 0 } : undefined}
+              hint={!m.delta_label ? m.hint : undefined}
+            />
+          ))}
+        </div>
+
+        {/* ===== Diagnósticos ===== */}
         <div className="section-marker mb-3">
           <div className="flex items-baseline gap-2 lg:gap-3 flex-wrap">
             <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--ink-muted)" }}>🔬 DIAGNOSTICOS</span>
@@ -118,7 +137,7 @@ export default async function DailyBriefingPage({
           </div>
         )}
 
-        {/* Narrative */}
+        {/* ===== Narrative ===== */}
         <div className="card card-prose mb-7" style={{ background: "linear-gradient(180deg, #FFFFFF 0%, #FFF8FB 100%)", border: "1px solid var(--pink-soft)" }}>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
@@ -137,26 +156,6 @@ export default async function DailyBriefingPage({
           <div className="text-[12px] lg:text-[13px] leading-relaxed whitespace-pre-line" style={{ color: "var(--ink-soft)" }}>
             {narrative.body}
           </div>
-        </div>
-
-        {/* BR Section */}
-        <div className="section-marker mb-3">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--ink-muted)" }}>🇧🇷 BRASIL</span>
-            <span className="badge" style={{ background: "var(--pink-soft)", color: "var(--pink-deep)" }}>BRL</span>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2 lg:gap-3 mb-8">
-          {br.metrics.slice(0, 8).map((m) => (
-            <MetricCard
-              key={m.key}
-              label={m.label}
-              value={m.formatted}
-              delta={m.delta_pct != null ? { value: m.delta_label!, positive: m.delta_pct >= 0 } : undefined}
-              hint={!m.delta_label ? m.hint : undefined}
-            />
-          ))}
         </div>
       </div>
     </>
