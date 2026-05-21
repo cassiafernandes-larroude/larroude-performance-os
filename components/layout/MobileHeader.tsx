@@ -1,6 +1,7 @@
 "use client";
 
 import { Menu, Sparkles } from "lucide-react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const titleMap: Record<string, string> = {
@@ -8,29 +9,27 @@ const titleMap: Record<string, string> = {
   "/north-star": "North Star",
   "/executive": "Executive View",
   "/dashboard-principal": "Dashboard Principal",
-  "/ltv-cohorts": "LTV · Cohorts",
-  "/cac-ncac-crc": "CAC · nCAC · CRC",
+  "/ltv-cohorts": "LTV - Cohorts",
+  "/cac-ncac-crc": "CAC - nCAC - CRC",
   "/klaviyo": "Klaviyo CRM",
   "/meta-ads": "Meta Ads",
   "/google-ads": "Google Ads",
   "/shopify": "Shopify",
-  "/pre-order": "Pré-Order Tracker",
+  "/pre-order": "Pre-Order Tracker",
   "/site-performance": "Site Performance",
-  "/diagnostics": "Diagnósticos",
+  "/diagnostics": "Diagnosticos",
   "/anomalies": "Anomalias",
   "/cohort-analysis": "Cohort Analysis",
   "/ask-claude": "Ask Claude",
-  "/glossario": "Glossário KPIs",
+  "/glossario": "Glossario KPIs",
   "/fontes": "Fontes de Dados",
   "/alertas": "Alertas",
 };
 
 export function MobileHeader({
   onOpenSidebar,
-  onOpenChat,
 }: {
   onOpenSidebar: () => void;
-  onOpenChat: () => void;
 }) {
   const pathname = usePathname();
   const title = titleMap[pathname] || "Performance OS";
@@ -62,10 +61,10 @@ export function MobileHeader({
           {title}
         </div>
       </div>
-      <button
-        onClick={onOpenChat}
+      <Link
+        href="/ask-claude"
         className="p-2 -mr-2 rounded-lg flex items-center gap-1"
-        aria-label="Abrir Ask Claude"
+        aria-label="Ir para Ask Claude"
       >
         <div
           className="w-7 h-7 rounded-lg flex items-center justify-center"
@@ -73,7 +72,7 @@ export function MobileHeader({
         >
           <Sparkles className="w-4 h-4 text-white" />
         </div>
-      </button>
+      </Link>
     </header>
   );
 }
