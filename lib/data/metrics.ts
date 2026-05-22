@@ -97,7 +97,7 @@ export async function getMetricBundle(
   const cacheKey = customRange
     ? `metrics-v6:${market}:custom:${customRange.from}:${customRange.to}`
     : `metrics-v6:${market}:${period}`;
-  return cached(cacheKey, 300, async () => {
+  return cached(cacheKey, 1800, async () => {
     const range = customRange ?? dateRangeCompleted(period);
     const prevRange = customRange
       ? previousRangeOf(customRange.from, customRange.to)

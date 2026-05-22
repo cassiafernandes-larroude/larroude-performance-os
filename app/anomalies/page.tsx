@@ -2,7 +2,7 @@ import { getMetricBundle } from "@/lib/data/metrics";
 import { zscore } from "@/lib/intelligence/diagnostics";
 import { Activity } from "lucide-react";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 300;
 
 export default async function AnomaliesPage() {
   const [us, br] = await Promise.all([

@@ -1,6 +1,6 @@
 import { Database, CheckCircle2, XCircle, Clock, Megaphone, ShoppingBag, Mail, Search, Cpu, Sparkles } from "lucide-react";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 300;
 
 type Status = "ok" | "partial" | "missing";
 

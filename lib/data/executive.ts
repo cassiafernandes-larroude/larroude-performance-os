@@ -53,7 +53,7 @@ const MOCK: Record<Market, Omit<ExecutiveBundle, "market" | "period" | "source">
 };
 
 export async function getExecutiveBundle(market: Market): Promise<ExecutiveBundle> {
-  return cached(`executive-v2:${market}`, 600, async () => {
+  return cached(`executive-v3:${market}`, 1800, async () => {
     // Periodo 28d completo (igual Overview)
     const today = new Date();
     const to = new Date(today.getTime() - 24 * 3600 * 1000);

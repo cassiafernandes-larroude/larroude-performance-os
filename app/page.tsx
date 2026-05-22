@@ -8,7 +8,7 @@ import { generateNarrative } from "@/lib/intelligence/narrative";
 import { cached } from "@/lib/cache";
 import type { Period } from "@/types/metric";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 300;
 
 export default async function DailyBriefingPage({
   searchParams,

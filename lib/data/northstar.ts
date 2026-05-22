@@ -86,7 +86,7 @@ const MOCK_BR: Omit<NorthStarBundle, "market" | "period" | "source"> = {
 };
 
 export async function getNorthStarBundle(market: Market): Promise<NorthStarBundle> {
-  return cached(`northstar-v3:${market}`, 600, async () => {
+  return cached(`northstar-v4:${market}`, 1800, async () => {
     // Janela 12 meses, terminando ontem
     const today = new Date();
     const to = new Date(today.getTime() - 24 * 3600 * 1000);

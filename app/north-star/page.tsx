@@ -2,7 +2,7 @@ import { getNorthStarBundle } from "@/lib/data/northstar";
 import { formatCurrency, formatNumber, formatMultiplier, formatPercent } from "@/lib/utils/format";
 import { Sparkles, TrendingUp, Users, Repeat, Coins } from "lucide-react";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 300;
 
 export default async function NorthStarPage() {
   const [us, br] = await Promise.all([

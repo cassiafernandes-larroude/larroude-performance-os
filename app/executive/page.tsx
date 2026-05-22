@@ -2,7 +2,7 @@ import { getExecutiveBundle } from "@/lib/data/executive";
 import { formatCurrency, formatMultiplier, formatNumber, formatPercent } from "@/lib/utils/format";
 import { TrendingDown, TrendingUp, DollarSign, Clock, Target, Activity } from "lucide-react";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 300;
 
 export default async function ExecutivePage() {
   const [us, br] = await Promise.all([
