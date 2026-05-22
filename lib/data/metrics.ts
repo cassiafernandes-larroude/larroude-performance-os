@@ -3,7 +3,6 @@ import { dateRangeForPeriod, previousPeriodRange, periodToDays } from "@/lib/uti
 import { formatCurrency, formatMultiplier, formatNumber, formatPercent } from "@/lib/utils/format";
 import { hasBigQueryCredentials, runQuery } from "@/lib/bigquery/client";
 import { aggregatedKpisSQL } from "@/lib/bigquery/queries/metrics";
-import { getMetaSpend, getGoogleSpend, hasSupermetricsCredentials } from "@/lib/supermetrics";
 import { cached } from "@/lib/cache";
 
 type AggRow = {
@@ -123,25 +122,14 @@ export async function getMetricBundle(market: Market, period: Period): Promise<M
       hint: m.hint,
     });
 
-    // Supermetrics-first (igual ao dashboard principal): se SUPERMETRICS_API_KEY existir, usa Supermetrics como source-of-truth do spend
-    let cMetaSpend = num(c.meta_spend), pMetaSpend = num(p.meta_spend);
-    let cGoogleSpend = num(c.google_spend), pGoogleSpend = num(p.google_spend);
-    if (hasSupermetricsCredentials()) {
-      const [smMeta, smMetaPrev, smGoogle, smGooglePrev] = await Promise.all([
-        getMetaSpend(market, range.from, range.to),
-        getMetaSpend(market, prevRange.from, prevRange.to),
-        getGoogleSpend(market, range.from, range.to),
-        getGoogleSpend(market, prevRange.from, prevRange.to),
-      ]);
-      if (smMeta > 0) cMetaSpend = smMeta;
-      if (smMetaPrev > 0) pMetaSpend = smMetaPrev;
-      if (smGoogle > 0) cGoogleSpend = smGoogle;
-      if (smGooglePrev > 0) pGoogleSpend = smGooglePrev;
-    }
-    cMetaSpend = Number(cMetaSpend) || 0;
-    cGoogleSpend = Number(cGoogleSpend) || 0;
-    pMetaSpend = Number(pMetaSpend) || 0;
-    pGoogleSpend = Number(pGoogleSpend) || 0;
+    // Alinhado com dashboard principal: meta_spend = (total BQ) - google_spend
+    // Pega TUDO que nao e Google (Meta + TikTok + Pinterest + etc)
+    const cGoogleSpend = num(c.google_spend);
+    const pGoogleSpend = num(p.google_spend);
+    const cTotalSpendBQ = num(c.spend);
+    const pTotalSpendBQ = num(p.spend);
+    const cMetaSpend = Math.max(0, cTotalSpendBQ - cGoogleSpend);
+    const pMetaSpend = Math.max(0, pTotalSpendBQ - pGoogleSpend);
     const cSpend = cMetaSpend + cGoogleSpend;
     const pSpend = pMetaSpend + pGoogleSpend;
     const cGross = num(c.gross_sales), pGross = num(p.gross_sales);
