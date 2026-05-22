@@ -3,6 +3,7 @@ import { dateRangeForPeriod, previousPeriodRange, periodToDays } from "@/lib/uti
 import { formatCurrency, formatMultiplier, formatNumber, formatPercent } from "@/lib/utils/format";
 import { hasBigQueryCredentials, runQuery } from "@/lib/bigquery/client";
 import { aggregatedKpisSQL } from "@/lib/bigquery/queries/metrics";
+import { getMetaSpend, getGoogleSpend, hasSupermetricsCredentials } from "@/lib/supermetrics";
 import { cached } from "@/lib/cache";
 
 type AggRow = {
@@ -115,9 +116,23 @@ export async function getMetricBundle(market: Market, period: Period): Promise<M
       hint: m.hint,
     });
 
-    const cSpend = num(c.spend), pSpend = num(p.spend);
-    const cMetaSpend = num(c.meta_spend), pMetaSpend = num(p.meta_spend);
-    const cGoogleSpend = num(c.google_spend), pGoogleSpend = num(p.google_spend);
+    // Supermetrics-first (igual ao dashboard principal): se SUPERMETRICS_API_KEY existir, usa Supermetrics como source-of-truth do spend
+    let cMetaSpend = num(c.meta_spend), pMetaSpend = num(p.meta_spend);
+    let cGoogleSpend = num(c.google_spend), pGoogleSpend = num(p.google_spend);
+    if (hasSupermetricsCredentials()) {
+      const [smMeta, smMetaPrev, smGoogle, smGooglePrev] = await Promise.all([
+        getMetaSpend(market, range.from, range.to),
+        getMetaSpend(market, prevRange.from, prevRange.to),
+        getGoogleSpend(market, range.from, range.to),
+        getGoogleSpend(market, prevRange.from, prevRange.to),
+      ]);
+      if (smMeta > 0) cMetaSpend = smMeta;
+      if (smMetaPrev > 0) pMetaSpend = smMetaPrev;
+      if (smGoogle > 0) cGoogleSpend = smGoogle;
+      if (smGooglePrev > 0) pGoogleSpend = smGooglePrev;
+    }
+    const cSpend = cMetaSpend + cGoogleSpend;
+    const pSpend = pMetaSpend + pGoogleSpend;
     const cGross = num(c.gross_sales), pGross = num(p.gross_sales);
     const cOrderRev = num(c.order_revenue), pOrderRev = num(p.order_revenue);
     const cTotal = num(c.total_sales), pTotal = num(p.total_sales);
