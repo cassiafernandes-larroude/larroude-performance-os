@@ -88,7 +88,7 @@ export async function getMetricBundle(market: Market, period: Period): Promise<M
       fetchAdsBQ(market, prevRange),
     ]);
 
-    const source: MetricSource = ordersBQ && adsBQ ? "BQ" : "Mock";
+    const source: MetricSource = ordersBQ || adsBQ ? "BQ" : "Mock";
     const orders = ordersBQ ?? mockOrders(market);
     const ads = adsBQ ?? mockAds(market);
     const prevOrders = prevOrdersBQ ?? mockOrdersPrev(market);
