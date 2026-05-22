@@ -60,9 +60,16 @@ async function fetchKpis(market: Market, range: { from: string; to: string }): P
   }
 }
 
-function num(v: number | string | null | undefined): number {
+function num(v: unknown): number {
   if (v == null) return 0;
-  return typeof v === "string" ? Number(v) : v;
+  // BigQuery NUMERIC pode vir como string, number, ou objeto BigQueryNumeric
+  // BigQueryNumeric tem .toString() ou .value
+  if (typeof v === "object" && v !== null) {
+    if ("value" in v) return Number((v as { value: unknown }).value) || 0;
+    return Number((v as object).toString()) || 0;
+  }
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
 }
 
 function pct(curr: number, prev: number): number | null {
@@ -131,6 +138,10 @@ export async function getMetricBundle(market: Market, period: Period): Promise<M
       if (smGoogle > 0) cGoogleSpend = smGoogle;
       if (smGooglePrev > 0) pGoogleSpend = smGooglePrev;
     }
+    cMetaSpend = Number(cMetaSpend) || 0;
+    cGoogleSpend = Number(cGoogleSpend) || 0;
+    pMetaSpend = Number(pMetaSpend) || 0;
+    pGoogleSpend = Number(pGoogleSpend) || 0;
     const cSpend = cMetaSpend + cGoogleSpend;
     const pSpend = pMetaSpend + pGoogleSpend;
     const cGross = num(c.gross_sales), pGross = num(p.gross_sales);
