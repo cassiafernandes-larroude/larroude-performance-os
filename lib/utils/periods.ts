@@ -1,5 +1,7 @@
 import type { Period } from "@/types/metric";
 
+export type Granularity = "day" | "week" | "month";
+
 export function periodToDays(period: Period): number {
   switch (period) {
     case "7d": return 7;
@@ -9,6 +11,16 @@ export function periodToDays(period: Period): number {
     case "6M": return 180;
     case "12M": return 365;
   }
+}
+
+// Granularidade dinamica baseada no tamanho da janela (regra do dashboard principal)
+//   <= 28 dias  -> day
+//   29-90 dias  -> week (DATE_TRUNC WEEK MONDAY)
+//   > 90 dias   -> month
+export function granularityForDays(days: number): Granularity {
+  if (days <= 28) return "day";
+  if (days <= 90) return "week";
+  return "month";
 }
 
 export function dateRangeForPeriod(period: Period, today = new Date()): { from: string; to: string } {
@@ -31,14 +43,35 @@ export function previousPeriodRange(period: Period, today = new Date()): { from:
   };
 }
 
+// Calcula range "completo" (sem hoje) para um preset
+export function dateRangeCompleted(period: Period, today = new Date()): { from: string; to: string } {
+  const days = periodToDays(period);
+  const to = new Date(today.getTime() - 24 * 3600 * 1000); // ontem
+  const from = new Date(to.getTime() - (days - 1) * 24 * 3600 * 1000);
+  return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
+}
+
+// Range anterior comparativo (mesma janela imediatamente antes)
+export function previousRangeOf(from: string, to: string): { from: string; to: string } {
+  const fromD = new Date(from);
+  const toD = new Date(to);
+  const days = Math.round((toD.getTime() - fromD.getTime()) / (24 * 3600 * 1000)) + 1;
+  const prevTo = new Date(fromD.getTime() - 24 * 3600 * 1000);
+  const prevFrom = new Date(prevTo.getTime() - (days - 1) * 24 * 3600 * 1000);
+  return { from: prevFrom.toISOString().slice(0, 10), to: prevTo.toISOString().slice(0, 10) };
+}
+
+// Numero de dias entre two dates inclusive
+export function daysBetween(from: string, to: string): number {
+  const fromD = new Date(from);
+  const toD = new Date(to);
+  return Math.round((toD.getTime() - fromD.getTime()) / (24 * 3600 * 1000)) + 1;
+}
+
 export function formatPeriodLabel(period: Period): string {
   const map: Record<Period, string> = {
-    "7d": "7 dias",
-    "14d": "14 dias",
-    "28d": "28 dias",
-    "3M": "3 meses",
-    "6M": "6 meses",
-    "12M": "12 meses",
+    "7d": "7 dias", "14d": "14 dias", "28d": "28 dias",
+    "3M": "3 meses", "6M": "6 meses", "12M": "12 meses",
   };
   return map[period];
 }

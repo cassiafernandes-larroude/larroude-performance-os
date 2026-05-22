@@ -13,13 +13,16 @@ export const dynamic = "force-dynamic";
 export default async function DailyBriefingPage({
   searchParams,
 }: {
-  searchParams: { market?: string; period?: string };
+  searchParams: { market?: string; period?: string; from?: string; to?: string };
 }) {
   const period = (searchParams.period || "28d") as Period;
+  const customRange = searchParams.from && searchParams.to
+    ? { from: searchParams.from, to: searchParams.to }
+    : undefined;
 
   const [us, br] = await Promise.all([
-    getMetricBundle("US", period),
-    getMetricBundle("BR", period),
+    getMetricBundle("US", period, customRange),
+    getMetricBundle("BR", period, customRange),
   ]);
   const diagnostics = await runDiagnostics({ us, br });
 

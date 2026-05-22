@@ -1,5 +1,5 @@
 import type { Market, Period, MetricBundle, Metric, MetricSource } from "@/types/metric";
-import { dateRangeForPeriod, previousPeriodRange, periodToDays } from "@/lib/utils/periods";
+import { dateRangeForPeriod, previousPeriodRange, periodToDays, previousRangeOf } from "@/lib/utils/periods";
 import { formatCurrency, formatMultiplier, formatNumber, formatPercent } from "@/lib/utils/format";
 import { hasBigQueryCredentials, runQuery } from "@/lib/bigquery/client";
 import { aggregatedKpisSQL } from "@/lib/bigquery/queries/metrics";
@@ -89,11 +89,19 @@ const MOCK_BR: AggRow = {
   roas_gross: 13.29, roas_order: 13.70, roas_total: 13.70, new_customers: 7_700, cac: 90,
 };
 
-export async function getMetricBundle(market: Market, period: Period): Promise<MetricBundle> {
-  const cacheKey = `metrics-v5:${market}:${period}`;
+export async function getMetricBundle(
+  market: Market,
+  period: Period,
+  customRange?: { from: string; to: string }
+): Promise<MetricBundle> {
+  const cacheKey = customRange
+    ? `metrics-v6:${market}:custom:${customRange.from}:${customRange.to}`
+    : `metrics-v6:${market}:${period}`;
   return cached(cacheKey, 300, async () => {
-    const range = dateRangeCompleted(period);
-    const prevRange = previousDateRangeCompleted(period);
+    const range = customRange ?? dateRangeCompleted(period);
+    const prevRange = customRange
+      ? previousRangeOf(customRange.from, customRange.to)
+      : previousDateRangeCompleted(period);
 
     const [curr, prev] = await Promise.all([
       fetchKpis(market, range),
