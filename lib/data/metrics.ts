@@ -90,7 +90,7 @@ const MOCK_BR: AggRow = {
 };
 
 export async function getMetricBundle(market: Market, period: Period): Promise<MetricBundle> {
-  const cacheKey = `metrics-v4:${market}:${period}`;
+  const cacheKey = `metrics-v5:${market}:${period}`;
   return cached(cacheKey, 300, async () => {
     const range = dateRangeCompleted(period);
     const prevRange = previousDateRangeCompleted(period);
@@ -144,6 +144,12 @@ export async function getMetricBundle(market: Market, period: Period): Promise<M
     const cSpend = cMetaSpend + cGoogleSpend;
     const pSpend = pMetaSpend + pGoogleSpend;
     const cGross = num(c.gross_sales), pGross = num(p.gross_sales);
+    // Recalcular ROAS, CAC com spend Meta API real (substitui valores do BQ que usavam spend incompleto)
+    const recalcRoasGross = cSpend > 0 ? cGross / cSpend : 0;
+    const recalcRoasOrder = cSpend > 0 ? num(c.order_revenue) / cSpend : 0;
+    const recalcCac = c.new_customers > 0 ? cSpend / c.new_customers : 0;
+    const recalcRoasGrossPrev = pSpend > 0 ? pGross / pSpend : 0;
+    const recalcCacPrev = p.new_customers > 0 ? pSpend / p.new_customers : 0;
     const cOrderRev = num(c.order_revenue), pOrderRev = num(p.order_revenue);
     const cTotal = num(c.total_sales), pTotal = num(p.total_sales);
     const cAov = num(c.aov);
@@ -175,25 +181,25 @@ export async function getMetricBundle(market: Market, period: Period): Promise<M
       baseMetric({
         key: "roas_gross",
         label: "ROAS GROSS",
-        value: c.roas_gross,
-        formatted: formatMultiplier(c.roas_gross),
+        value: recalcRoasGross,
+        formatted: formatMultiplier(recalcRoasGross),
         currency: null,
-        delta_pct: pct(c.roas_gross, p.roas_gross),
+        delta_pct: pct(recalcRoasGross, recalcRoasGrossPrev),
       }),
       baseMetric({
         key: "roas_order",
         label: "ROAS ORDER",
-        value: c.roas_order,
-        formatted: formatMultiplier(c.roas_order),
+        value: recalcRoasOrder,
+        formatted: formatMultiplier(recalcRoasOrder),
         currency: null,
         hint: "Order Revenue / Spend",
       }),
       baseMetric({
         key: "cac",
         label: "CAC",
-        value: cCac,
-        formatted: formatCurrency(cCac, currency, false),
-        delta_pct: pct(cCac, pCac),
+        value: recalcCac,
+        formatted: formatCurrency(recalcCac, currency, false),
+        delta_pct: pct(recalcCac, recalcCacPrev),
       }),
       baseMetric({
         key: "gross_sales",
