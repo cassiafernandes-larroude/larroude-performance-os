@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const titleMap: Record<string, string> = {
-  "/": "Daily Briefing",
+  "/": "Overview",
   "/north-star": "North Star",
   "/executive": "Executive View",
   "/dashboard-principal": "Dashboard Principal",

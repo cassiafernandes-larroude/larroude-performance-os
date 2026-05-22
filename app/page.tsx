@@ -38,10 +38,8 @@ export default async function DailyBriefingPage({
         className="hidden lg:flex px-8 py-3 items-center justify-between"
         style={{ background: "var(--paper)", borderBottom: "1px solid var(--border)" }}
       >
-        <div className="flex items-center gap-2 text-[12px]" style={{ color: "var(--ink-muted)" }}>
-          <span>Overview</span>
-          <span>/</span>
-          <span style={{ color: "var(--ink)", fontWeight: 500 }}>Daily Briefing</span>
+        <div className="flex items-center gap-2 text-[12px]">
+          <span style={{ color: "var(--ink)", fontWeight: 500 }}>Overview</span>
         </div>
         <div className="flex items-center gap-2 text-[11px]" style={{ color: "var(--ink-muted)" }}>
           <div className="pulse-dot" />
@@ -54,7 +52,7 @@ export default async function DailyBriefingPage({
 
       <div className="px-4 lg:px-8 py-5 lg:py-8 max-w-[1500px] mx-auto">
         <div className="mb-4 lg:mb-5">
-          <h1 className="font-display text-[26px] lg:text-[36px]" style={{ color: "var(--ink)" }}>Daily Briefing</h1>
+          <h1 className="font-display text-[26px] lg:text-[36px]" style={{ color: "var(--ink)" }}>Overview</h1>
           <p className="text-[12px] lg:text-[14px] mt-1" style={{ color: "var(--ink-soft)" }}>
             Meta + Google + Shopify + Klaviyo - via {sourceLabel}
           </p>
