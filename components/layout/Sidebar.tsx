@@ -57,7 +57,6 @@ const navSections: NavSection[] = [
       { href: "/meta-ads", label: "Meta Ads", icon: Megaphone },
       { href: "/google-ads", label: "Google Ads", icon: Search },
       { href: "/shopify", label: "Shopify", icon: ShoppingBag },
-      { href: "/pre-order", label: "Pré-Order Tracker", icon: Package },
       { href: "/site-performance", label: "Site Performance", icon: Gauge },
     ],
   },
