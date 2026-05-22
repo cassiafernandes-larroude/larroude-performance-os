@@ -89,7 +89,7 @@ const MOCK_BR: AggRow = {
 };
 
 export async function getMetricBundle(market: Market, period: Period): Promise<MetricBundle> {
-  const cacheKey = `metrics-v2:${market}:${period}`;
+  const cacheKey = `metrics-v3:${market}:${period}`;
   return cached(cacheKey, 300, async () => {
     const range = dateRangeCompleted(period);
     const prevRange = previousDateRangeCompleted(period);
