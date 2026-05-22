@@ -189,37 +189,6 @@ function SitePerformanceSection({ bundle, flag, label }: {
         ))}
       </div>
 
-      {/* Third-party scripts */}
-      {bundle.third_parties.length > 0 && (
-        <>
-          <div className="mb-3 label-meta flex items-center gap-2" style={{ letterSpacing: "0.06em" }}>
-            <Globe className="w-3 h-3" />
-            <span>THIRD-PARTY SCRIPTS - IMPACTO</span>
-          </div>
-          <div className="card mb-6">
-            <table className="w-full text-[12px]">
-              <thead>
-                <tr style={{ borderBottom: "1px solid var(--border-soft)" }}>
-                  <th className="text-left py-2 label-meta">SCRIPT</th>
-                  <th className="text-right py-2 label-meta">BLOCKING</th>
-                  <th className="text-right py-2 label-meta">SIZE</th>
-                </tr>
-              </thead>
-              <tbody>
-                {bundle.third_parties.map((tp, i) => (
-                  <tr key={i} style={{ borderBottom: i < bundle.third_parties.length - 1 ? "1px solid var(--border-soft)" : "none" }}>
-                    <td className="py-2.5" style={{ color: "var(--ink)" }}>{tp.entity}</td>
-                    <td className="py-2.5 text-right font-num" style={{ color: tp.blocking_ms >= 250 ? "var(--negative)" : tp.blocking_ms >= 100 ? "var(--warning)" : "var(--ink-soft)" }}>
-                      {tp.blocking_ms}ms
-                    </td>
-                    <td className="py-2.5 text-right font-num" style={{ color: "var(--ink-muted)" }}>{(tp.transfer_size / 1024).toFixed(0)}KB</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
 
       {/* Opportunities */}
       {bundle.opportunities.length > 0 && (
