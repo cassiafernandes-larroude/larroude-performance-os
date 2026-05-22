@@ -16,8 +16,14 @@ export function aggregatedKpisSQL(market: Market) {
   const dataset = DATASET[market];
   const tz = TZ[market];
 
+  // BR: Meta da conta Larroude BR principal vem em USD → multiplicar por FX
+  // Mas Pre-Order BR já está em BRL → não converter
   const spendExpr = market === "BR"
-    ? `CASE WHEN LOWER(ad.channel) LIKE 'meta%' THEN ad.spend * IFNULL(fx.avg_rate_brl_usd, 5.0) ELSE ad.spend END`
+    ? `CASE
+         WHEN LOWER(ad.channel) LIKE 'meta%' AND NOT REGEXP_CONTAINS(LOWER(ad.campaign_name), r'pre[\\s_-]?order|preorder')
+           THEN ad.spend * IFNULL(fx.avg_rate_brl_usd, 5.0)
+         ELSE ad.spend
+       END`
     : `ad.spend`;
 
   const fxJoinSql = market === "BR"
