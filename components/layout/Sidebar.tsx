@@ -52,7 +52,7 @@ const navSections: NavSection[] = [
     items: [
       { href: "/dashboard-principal", label: "Dashboard Principal", icon: BarChart3 },
       { href: "/ltv-cohorts", label: "LTV", icon: TrendingUp },
-      { href: "/cac-ncac-crc", label: "CAC · nCAC · CRC", icon: Users },
+      { href: "/cac-ncac-crc", label: "CAC", icon: Users },
       { href: "/klaviyo", label: "Klaviyo CRM", icon: Mail },
       { href: "/meta-ads", label: "Meta Ads", icon: Megaphone },
       { href: "/google-ads", label: "Google Ads", icon: Search },
