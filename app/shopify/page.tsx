@@ -1,4 +1,5 @@
 import { getShopifyBundle } from "@/lib/data/shopify-dashboard";
+import { getInventory, getFulfillmentStatus } from "@/lib/shopify/inventory";
 import { formatCurrency, formatNumber, formatPercent } from "@/lib/utils/format";
 import { dateRangeCompleted } from "@/lib/utils/periods";
 import type { Market, Period } from "@/types/metric";
@@ -18,7 +19,11 @@ export default async function ShopifyPage({
     ? { from: searchParams.from, to: searchParams.to }
     : dateRangeCompleted(period);
 
-  const data = await getShopifyBundle(market, range);
+  const [data, inventory, fulfillment] = await Promise.all([
+    getShopifyBundle(market, range),
+    getInventory(market),
+    getFulfillmentStatus(market),
+  ]);
   const currency = market === "US" ? "USD" : "BRL";
 
   return (
@@ -257,29 +262,128 @@ export default async function ShopifyPage({
           </div>
         </div>
 
-        {/* Estoque + produtos atrasados (placeholder informativo) */}
+        {/* Estoque (Shopify Admin API real) */}
         <div className="section-marker mb-3">
-          <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--ink-muted)", letterSpacing: "0.06em" }}>ESTOQUE & FULFILLMENT</span>
-        </div>
-        <div className="card mb-7" style={{ background: "linear-gradient(180deg, #FFFFFF 0%, #FFF8FB 100%)", border: "1px solid var(--pink-soft)" }}>
-          <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "var(--pink-soft)", color: "var(--pink-deep)" }}>
-              <Package className="w-5 h-5" />
-            </div>
-            <div className="flex-1">
-              <h3 className="font-semibold text-[14px]" style={{ color: "var(--ink)" }}>Dados de estoque e fulfillment</h3>
-              <p className="text-[12px] mt-1" style={{ color: "var(--ink-soft)" }}>
-                Estoque por SKU/variante, produtos atrasados (delay no fulfillment) e niveis criticos requerem Shopify Admin API ao vivo (pode ser custoso para >1000 SKUs).
-                Pelo BQ atual ({DATASET[market]}) nao temos snapshot de inventario continuo. Posso plugar:
-              </p>
-              <ul className="text-[11px] mt-2 ml-4 list-disc" style={{ color: "var(--ink-soft)" }}>
-                <li>Shopify Admin API direto (variant inventory levels + fulfillment status)</li>
-                <li>Cron diario sincronizando snapshot de estoque ao BQ</li>
-                <li>Alertas para SKUs com {"<"} 20 unidades + alta procura</li>
-              </ul>
-            </div>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--ink-muted)", letterSpacing: "0.06em" }}>
+              ESTOQUE (SHOPIFY ADMIN API)
+            </span>
+            <span className="text-[10px]" style={{ color: "var(--ink-muted)" }}>
+              {inventory.source === "Shopify" ? "ao vivo" : "mock"} - {inventory.total_variants_sampled} variantes amostradas
+            </span>
           </div>
         </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-3">
+          <div className="card">
+            <div className="label-meta mb-1">UNIDADES EM ESTOQUE</div>
+            <div className="font-num font-bold text-[22px]" style={{ color: "var(--ink)" }}>{formatNumber(inventory.total_units_in_stock)}</div>
+            <div className="text-[11px]" style={{ color: "var(--ink-muted)" }}>{inventory.total_variants_sampled} SKUs</div>
+          </div>
+          <div className="card">
+            <div className="label-meta mb-1">ESTOQUE BAIXO</div>
+            <div className="font-num font-bold text-[22px]" style={{ color: inventory.low_stock_count > 30 ? "var(--warning)" : "var(--ink)" }}>
+              {formatNumber(inventory.low_stock_count)}
+            </div>
+            <div className="text-[11px]" style={{ color: "var(--ink-muted)" }}>SKUs com <= 20u</div>
+          </div>
+          <div className="card">
+            <div className="label-meta mb-1">SEM ESTOQUE</div>
+            <div className="font-num font-bold text-[22px]" style={{ color: inventory.out_of_stock_count > 10 ? "var(--negative)" : "var(--ink)" }}>
+              {formatNumber(inventory.out_of_stock_count)}
+            </div>
+            <div className="text-[11px]" style={{ color: "var(--ink-muted)" }}>SKUs zerados</div>
+          </div>
+        </div>
+        {inventory.low_stock_items.length > 0 && (
+          <div className="card mb-3">
+            <h4 className="text-[12px] font-semibold mb-3" style={{ color: "var(--ink)" }}>TOP variantes com estoque baixo</h4>
+            <div className="space-y-2">
+              {inventory.low_stock_items.map((item, i) => (
+                <div key={i} className="flex items-center gap-3 text-[12px]" style={{ borderTop: i > 0 ? "1px solid var(--border-soft)" : "none", paddingTop: i > 0 ? 8 : 0 }}>
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 font-num font-bold text-[12px]" style={{ background: item.available <= 5 ? "var(--negative-soft)" : "var(--warning-soft)", color: item.available <= 5 ? "var(--negative)" : "var(--warning)" }}>
+                    {item.available}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold truncate" style={{ color: "var(--ink)" }}>{item.product}</div>
+                    <div className="text-[11px]" style={{ color: "var(--ink-muted)" }}>{item.variant} - {item.sku || "sem SKU"}</div>
+                  </div>
+                  <div className="font-num text-[11px]" style={{ color: "var(--ink-muted)" }}>{formatCurrency(item.price, currency, false)}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {inventory.out_of_stock_items.length > 0 && (
+          <div className="card mb-7">
+            <h4 className="text-[12px] font-semibold mb-3" style={{ color: "var(--negative)" }}>SKUs sem estoque ({inventory.out_of_stock_count})</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {inventory.out_of_stock_items.map((item, i) => (
+                <div key={i} className="flex items-center gap-2 text-[12px]">
+                  <span className="w-2 h-2 rounded-full" style={{ background: "var(--negative)" }} />
+                  <span style={{ color: "var(--ink)" }}>{item.product}</span>
+                  <span style={{ color: "var(--ink-muted)" }}>- {item.variant}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Fulfillment (Shopify Admin API real) */}
+        <div className="section-marker mb-3">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--ink-muted)", letterSpacing: "0.06em" }}>
+              PEDIDOS PENDENTES & ATRASADOS
+            </span>
+            <span className="text-[10px]" style={{ color: "var(--ink-muted)" }}>
+              {fulfillment.source === "Shopify" ? "ao vivo" : "mock"} - top 100 pedidos abertos
+            </span>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+          <div className="card">
+            <div className="label-meta mb-1">PENDENTES DE FULFILLMENT</div>
+            <div className="font-num font-bold text-[22px]" style={{ color: "var(--ink)" }}>{formatNumber(fulfillment.pending_count)}</div>
+            <div className="text-[11px]" style={{ color: "var(--ink-muted)" }}>pedidos pagos sem despacho</div>
+          </div>
+          <div className="card">
+            <div className="label-meta mb-1">ATRASADOS (>=5 DIAS)</div>
+            <div className="font-num font-bold text-[22px]" style={{ color: fulfillment.late_count > 20 ? "var(--negative)" : fulfillment.late_count > 5 ? "var(--warning)" : "var(--ink)" }}>
+              {formatNumber(fulfillment.late_count)}
+            </div>
+            <div className="text-[11px]" style={{ color: "var(--ink-muted)" }}>requer acao imediata</div>
+          </div>
+        </div>
+        {fulfillment.unfulfilled_orders.length > 0 && (
+          <div className="card mb-7 overflow-x-auto">
+            <h4 className="text-[12px] font-semibold mb-3" style={{ color: "var(--ink)" }}>Pedidos mais antigos sem despacho</h4>
+            <table className="w-full text-[12px]">
+              <thead>
+                <tr style={{ borderBottom: "1px solid var(--border)" }}>
+                  <th className="text-left py-2 label-meta">PEDIDO</th>
+                  <th className="text-left py-2 label-meta">CLIENTE</th>
+                  <th className="text-left py-2 label-meta">DATA</th>
+                  <th className="text-right py-2 label-meta">DIAS</th>
+                  <th className="text-right py-2 label-meta">ITENS</th>
+                  <th className="text-right py-2 label-meta">TOTAL</th>
+                </tr>
+              </thead>
+              <tbody>
+                {fulfillment.unfulfilled_orders.map((o, i) => (
+                  <tr key={i} style={{ borderBottom: i < fulfillment.unfulfilled_orders.length - 1 ? "1px solid var(--border-soft)" : "none" }}>
+                    <td className="py-2 font-semibold" style={{ color: "var(--ink)" }}>{o.order_name}</td>
+                    <td className="py-2" style={{ color: "var(--ink-soft)" }}>{o.customer}</td>
+                    <td className="py-2 font-num" style={{ color: "var(--ink-muted)" }}>{o.created_at}</td>
+                    <td className="py-2 text-right font-num font-bold" style={{ color: o.days_open >= 7 ? "var(--negative)" : "var(--warning)" }}>
+                      {o.days_open}d
+                    </td>
+                    <td className="py-2 text-right font-num" style={{ color: "var(--ink-muted)" }}>{o.items_count}</td>
+                    <td className="py-2 text-right font-num" style={{ color: "var(--ink)" }}>{formatCurrency(o.total, currency)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </>
   );
@@ -328,6 +432,3 @@ function SuggestionCard({ suggestion }: { suggestion: Awaited<ReturnType<typeof 
     </div>
   );
 }
-
-// Re-exportar DATASET pra usar no informativo (pq esta unico no shopify-dashboard)
-const DATASET: Record<Market, string> = { US: "stg_shopify", BR: "stg_shopify_br" };
