@@ -1,5 +1,6 @@
 import { getSitePerformance } from "@/lib/data/site-performance";
 import { Gauge, Zap, Activity, Eye, Server, AlertTriangle, ExternalLink } from "lucide-react";
+import { RefreshButton } from "@/components/site-performance/RefreshButton";
 
 export const revalidate = 3600; // 1h
 
@@ -28,9 +29,12 @@ export default async function SitePerformancePage() {
           <p className="text-[12px] lg:text-[14px] mt-1" style={{ color: "var(--ink-soft)" }}>
             PageSpeed, LCP, CLS, INP - Core Web Vitals via Google PageSpeed Insights API (mobile)
           </p>
-          <p className="text-[11px] mt-1" style={{ color: "var(--ink-muted)" }}>
-            Atualizado em {new Date(us.fetched_at).toLocaleString("pt-BR")} - cache 1h
-          </p>
+          <div className="flex items-center justify-between gap-3 flex-wrap mt-2">
+            <p className="text-[11px]" style={{ color: "var(--ink-muted)" }}>
+              Atualizado em {new Date(us.fetched_at).toLocaleString("pt-BR")} - cache 1h
+            </p>
+            <RefreshButton />
+          </div>
         </div>
 
         <SitePerformanceSection bundle={us} flag="🇺🇸" label="ESTADOS UNIDOS - larroude.com" />
