@@ -50,10 +50,10 @@ const navSections: NavSection[] = [
   {
     title: "DASHBOARDS",
     items: [
-      { href: "/dashboard-principal", label: "Dashboard Principal", icon: BarChart3 },
+      { href: "/dashboard-principal", label: "Main Dashboard", icon: BarChart3 },
       { href: "/ltv-cohorts", label: "LTV", icon: TrendingUp },
       { href: "/cac-ncac-crc", label: "CAC", icon: Users },
-      { href: "/klaviyo", label: "Jornada Klaviyo", icon: Mail },
+      { href: "/klaviyo", label: "Klaviyo Journey", icon: Mail },
       { href: "/meta-ads", label: "Meta Ads", icon: Megaphone },
       { href: "/google-ads", label: "Google Ads", icon: Search },
       { href: "/shopify", label: "Shopify", icon: ShoppingBag },
@@ -61,10 +61,10 @@ const navSections: NavSection[] = [
     ],
   },
   {
-    title: "INTELIGÊNCIA",
+    title: "INTELLIGENCE",
     items: [
-      { href: "/diagnostics", label: "Diagnósticos", icon: Microscope, badge: "4" },
-      { href: "/anomalies", label: "Anomalias", icon: Activity },
+      { href: "/diagnostics", label: "Diagnostics", icon: Microscope, badge: "4" },
+      { href: "/anomalies", label: "Anomalies", icon: Activity },
       { href: "/cohort-analysis", label: "Cohort Analysis", icon: GitCompare },
       { href: "/ask-claude", label: "Ask Claude", icon: MessageSquare },
     ],
@@ -72,9 +72,9 @@ const navSections: NavSection[] = [
   {
     title: "CONFIG",
     items: [
-      { href: "/glossario", label: "Glossário KPIs", icon: BookOpen },
-      { href: "/fontes", label: "Fontes de Dados", icon: Database },
-      { href: "/alertas", label: "Alertas", icon: Bell },
+      { href: "/glossario", label: "KPI Glossary", icon: BookOpen },
+      { href: "/fontes", label: "Data Sources", icon: Database },
+      { href: "/alertas", label: "Alerts", icon: Bell },
     ],
   },
 ];
@@ -139,7 +139,7 @@ export function Sidebar({
           <Search className="w-3.5 h-3.5" style={{ color: "var(--ink-muted)" }} />
           <input
             type="text"
-            placeholder="Buscar..."
+            placeholder="Search..."
             className="bg-transparent text-[12px] flex-1 focus:outline-none"
             style={{ color: "var(--ink)" }}
           />

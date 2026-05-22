@@ -1,9 +1,9 @@
 import { getShopifyBundle } from "@/lib/data/shopify-dashboard";
 import { getInventory, getFulfillmentStatus } from "@/lib/shopify/inventory";
-import { formatCurrency, formatNumber, formatPercent } from "@/lib/utils/format";
+import { formatCurrency, formatNumber } from "@/lib/utils/format";
 import { dateRangeCompleted } from "@/lib/utils/periods";
 import type { Market, Period } from "@/types/metric";
-import { Package, ShoppingBag, RotateCcw, TrendingUp, Tag, AlertCircle, Lightbulb, ArrowDown, ArrowUp, Calendar } from "lucide-react";
+import { RotateCcw, TrendingUp, Tag, AlertCircle, Lightbulb, ArrowDown, ArrowUp, Calendar } from "lucide-react";
 import { FiltersBar } from "@/components/filters/FiltersBar";
 
 export const revalidate = 300;
@@ -40,50 +40,46 @@ export default async function ShopifyPage({
         <div className="mb-6">
           <h1 className="font-display text-[26px] lg:text-[36px]" style={{ color: "var(--ink)" }}>Shopify</h1>
           <p className="text-[12px] lg:text-[14px] mt-1" style={{ color: "var(--ink-soft)" }}>
-            Vendas, produtos, colecoes, devolucoes, funil de checkout, sugestoes automaticas
+            Sales, products, collections, returns, checkout funnel, automated suggestions
           </p>
           <p className="text-[11px] mt-1" style={{ color: "var(--ink-muted)" }}>
             <Calendar className="inline w-3 h-3 mr-1" />
-            {data.period.from} a {data.period.to} - via {data.source === "BQ" ? "BigQuery Larroude OS" : "Mock"}
+            {data.period.from} to {data.period.to} - via {data.source === "BQ" ? "BigQuery Larroude OS" : "Mock"}
           </p>
         </div>
 
         <FiltersBar />
 
-        {/* KPIs principais */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-7">
           <KPI label="ORDERS" value={formatNumber(data.orders)} />
           <KPI label="GROSS" value={formatCurrency(data.gross_sales, currency)} />
           <KPI label="NET SALES" value={formatCurrency(data.net_sales, currency)} />
           <KPI label="AOV" value={formatCurrency(data.aov, currency, false)} />
           <KPI label="UNITS" value={formatNumber(data.units_sold)} />
-          <KPI label="CHECKOUT CVR" value={`${data.conversion_rate_pct.toFixed(1)}%`} tone={data.conversion_rate_pct >= 60 ? "positive" : data.conversion_rate_pct >= 45 ? "warning" : "negative"} />
-          <KPI label="RETURN RATE" value={`${data.return_rate_pct.toFixed(1)}%`} tone={data.return_rate_pct <= 10 ? "positive" : data.return_rate_pct <= 18 ? "warning" : "negative"} />
+          <KPI label="CHECKOUT CVR" value={data.conversion_rate_pct.toFixed(1) + "%"} tone={data.conversion_rate_pct >= 60 ? "positive" : data.conversion_rate_pct >= 45 ? "warning" : "negative"} />
+          <KPI label="RETURN RATE" value={data.return_rate_pct.toFixed(1) + "%"} tone={data.return_rate_pct <= 10 ? "positive" : data.return_rate_pct <= 18 ? "warning" : "negative"} />
         </div>
 
-        {/* Funil de checkout */}
-        <div className="section-marker mb-3">
-          <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--ink-muted)", letterSpacing: "0.06em" }}>FUNIL DE CHECKOUT</span>
-        </div>
+        <SectionHeader title="CHECKOUT FUNNEL" />
         <div className="card mb-7">
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <div className="label-meta">CHECKOUTS INICIADOS</div>
+              <div className="label-meta">STARTED CHECKOUTS</div>
               <div className="font-num text-[24px] font-bold mt-1" style={{ color: "var(--ink)" }}>
                 {formatNumber(data.funnel.abandoned_checkouts + data.funnel.completed_orders)}
               </div>
             </div>
             <div>
-              <div className="label-meta">ABANDONADOS</div>
+              <div className="label-meta">ABANDONED</div>
               <div className="font-num text-[24px] font-bold mt-1" style={{ color: "var(--negative)" }}>
                 {formatNumber(data.funnel.abandoned_checkouts)}
               </div>
               <div className="text-[11px]" style={{ color: "var(--ink-muted)" }}>
-                {((data.funnel.abandoned_checkouts / (data.funnel.abandoned_checkouts + data.funnel.completed_orders)) * 100).toFixed(1)}%
+                {((data.funnel.abandoned_checkouts / Math.max(1, data.funnel.abandoned_checkouts + data.funnel.completed_orders)) * 100).toFixed(1)}%
               </div>
             </div>
             <div>
-              <div className="label-meta">COMPLETADOS</div>
+              <div className="label-meta">COMPLETED</div>
               <div className="font-num text-[24px] font-bold mt-1" style={{ color: "var(--positive)" }}>
                 {formatNumber(data.funnel.completed_orders)}
               </div>
@@ -92,42 +88,31 @@ export default async function ShopifyPage({
               </div>
             </div>
           </div>
-          <div className="mt-4">
-            <div className="h-3 rounded overflow-hidden flex" style={{ background: "var(--paper)" }}>
-              <div className="h-full" style={{ width: `${data.funnel.checkout_cvr_pct}%`, background: "var(--positive)" }} />
-              <div className="h-full" style={{ width: `${100 - data.funnel.checkout_cvr_pct}%`, background: "var(--negative)" }} />
-            </div>
+          <div className="mt-4 h-3 rounded overflow-hidden flex" style={{ background: "var(--paper)" }}>
+            <div className="h-full" style={{ width: data.funnel.checkout_cvr_pct + "%", background: "var(--positive)" }} />
+            <div className="h-full" style={{ width: (100 - data.funnel.checkout_cvr_pct) + "%", background: "var(--negative)" }} />
           </div>
         </div>
 
-        {/* Sugestoes de venda */}
         {data.suggestions.length > 0 && (
           <>
-            <div className="section-marker mb-3">
-              <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--ink-muted)", letterSpacing: "0.06em" }}>SUGESTOES AUTOMATICAS</span>
-              <span className="text-[11px] ml-2" style={{ color: "var(--ink-muted)" }}>cross-source ({data.suggestions.length} insights)</span>
-            </div>
+            <SectionHeader title="AUTOMATED SUGGESTIONS" extra={"cross-source (" + data.suggestions.length + " insights)"} />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-7">
-              {data.suggestions.map((s, i) => (
-                <SuggestionCard key={i} suggestion={s} />
-              ))}
+              {data.suggestions.map((s, i) => <SuggestionCard key={i} suggestion={s} />)}
             </div>
           </>
         )}
 
-        {/* Top produtos */}
-        <div className="section-marker mb-3">
-          <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--ink-muted)", letterSpacing: "0.06em" }}>TOP PRODUTOS (POR RECEITA)</span>
-        </div>
+        <SectionHeader title="TOP PRODUCTS (BY REVENUE)" />
         <div className="card mb-7 overflow-x-auto">
           <table className="w-full text-[12px]">
             <thead>
               <tr style={{ borderBottom: "1px solid var(--border)" }}>
-                <th className="text-left py-2 label-meta">PRODUTO</th>
+                <th className="text-left py-2 label-meta">PRODUCT</th>
                 <th className="text-right py-2 label-meta">UNITS</th>
                 <th className="text-right py-2 label-meta">ORDERS</th>
                 <th className="text-right py-2 label-meta">AVG PRICE</th>
-                <th className="text-right py-2 label-meta">RECEITA</th>
+                <th className="text-right py-2 label-meta">REVENUE</th>
               </tr>
             </thead>
             <tbody>
@@ -135,9 +120,7 @@ export default async function ShopifyPage({
                 <tr key={i} style={{ borderBottom: i < data.top_products.length - 1 ? "1px solid var(--border-soft)" : "none" }}>
                   <td className="py-2.5">
                     <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold" style={{ background: "var(--pink-soft)", color: "var(--pink-deep)" }}>
-                        {i + 1}
-                      </div>
+                      <div className="w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold" style={{ background: "var(--pink-soft)", color: "var(--pink-deep)" }}>{i + 1}</div>
                       <div>
                         <div className="font-semibold" style={{ color: "var(--ink)" }}>{p.name}</div>
                         <div className="text-[10px]" style={{ color: "var(--ink-muted)" }}>{p.sku}</div>
@@ -154,12 +137,9 @@ export default async function ShopifyPage({
           </table>
         </div>
 
-        {/* Top variantes */}
         {data.top_variants.length > 0 && (
           <>
-            <div className="section-marker mb-3">
-              <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--ink-muted)", letterSpacing: "0.06em" }}>TOP VARIANTES (COR + TAMANHO)</span>
-            </div>
+            <SectionHeader title="TOP VARIANTS (COLOR + SIZE)" />
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-7">
               {data.top_variants.slice(0, 8).map((v, i) => (
                 <div key={i} className="card">
@@ -175,21 +155,18 @@ export default async function ShopifyPage({
           </>
         )}
 
-        {/* Coleções */}
         {data.collections.length > 0 && (
           <>
-            <div className="section-marker mb-3">
-              <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--ink-muted)", letterSpacing: "0.06em" }}>PERFORMANCE POR COLECAO</span>
-            </div>
+            <SectionHeader title="COLLECTION PERFORMANCE" />
             <div className="card mb-7">
               {data.collections.map((c, i) => {
                 const maxRev = Math.max(...data.collections.map((x) => x.revenue));
-                const pct = (c.revenue / maxRev) * 100;
+                const pct = (c.revenue / Math.max(1, maxRev)) * 100;
                 return (
                   <div key={i} className="flex items-center gap-3 mb-2 last:mb-0">
                     <div className="w-32 text-[12px] truncate" style={{ color: "var(--ink-soft)" }}>{c.collection}</div>
                     <div className="flex-1 h-6 rounded relative" style={{ background: "var(--paper)" }}>
-                      <div className="h-full rounded flex items-center justify-end px-2" style={{ width: `${pct}%`, background: i === 0 ? "var(--pink-soft)" : "var(--paper-deep)" }}>
+                      <div className="h-full rounded flex items-center justify-end px-2" style={{ width: pct + "%", background: i === 0 ? "var(--pink-soft)" : "var(--paper-deep)" }}>
                         <span className="text-[10px] font-num font-semibold" style={{ color: "var(--ink)" }}>{formatNumber(c.units)}u</span>
                       </div>
                     </div>
@@ -202,27 +179,20 @@ export default async function ShopifyPage({
           </>
         )}
 
-        {/* Devoluções */}
-        <div className="section-marker mb-3">
-          <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--ink-muted)", letterSpacing: "0.06em" }}>DEVOLUCOES</span>
-        </div>
+        <SectionHeader title="RETURNS" />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-7">
           <div className="card">
-            <div className="label-meta mb-2">VALOR TOTAL REEMBOLSADO</div>
-            <div className="font-num font-bold text-[22px]" style={{ color: "var(--negative)" }}>
-              {formatCurrency(data.returns.total_refund_value, currency)}
-            </div>
-            <div className="text-[11px] mt-1" style={{ color: "var(--ink-muted)" }}>{formatNumber(data.returns.refund_orders)} pedidos refunded</div>
+            <div className="label-meta mb-2">TOTAL REFUNDED</div>
+            <div className="font-num font-bold text-[22px]" style={{ color: "var(--negative)" }}>{formatCurrency(data.returns.total_refund_value, currency)}</div>
+            <div className="text-[11px] mt-1" style={{ color: "var(--ink-muted)" }}>{formatNumber(data.returns.refund_orders)} refunded orders</div>
           </div>
           <div className="card">
             <div className="label-meta mb-2">RETURN RATE</div>
-            <div className="font-num font-bold text-[22px]" style={{ color: data.returns.return_rate_pct > 18 ? "var(--negative)" : data.returns.return_rate_pct > 10 ? "var(--warning)" : "var(--positive)" }}>
-              {data.returns.return_rate_pct.toFixed(1)}%
-            </div>
-            <div className="text-[11px] mt-1" style={{ color: "var(--ink-muted)" }}>vs orders no periodo</div>
+            <div className="font-num font-bold text-[22px]" style={{ color: data.returns.return_rate_pct > 18 ? "var(--negative)" : data.returns.return_rate_pct > 10 ? "var(--warning)" : "var(--positive)" }}>{data.returns.return_rate_pct.toFixed(1)}%</div>
+            <div className="text-[11px] mt-1" style={{ color: "var(--ink-muted)" }}>vs orders in period</div>
           </div>
-          <div className="card lg:col-span-1 md:col-span-2">
-            <div className="label-meta mb-2">TOP DEVOLVIDOS</div>
+          <div className="card">
+            <div className="label-meta mb-2">TOP RETURNED</div>
             {data.returns.top_returned.slice(0, 4).map((r, i) => (
               <div key={i} className="flex items-center justify-between py-1 text-[12px]" style={{ borderTop: i > 0 ? "1px solid var(--border-soft)" : "none" }}>
                 <span style={{ color: "var(--ink)" }}>{r.sku}</span>
@@ -232,27 +202,17 @@ export default async function ShopifyPage({
           </div>
         </div>
 
-        {/* Performance dia da semana */}
-        <div className="section-marker mb-3">
-          <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--ink-muted)", letterSpacing: "0.06em" }}>VENDAS POR DIA DA SEMANA</span>
-        </div>
+        <SectionHeader title="SALES BY WEEKDAY" />
         <div className="card mb-7">
           <div className="grid grid-cols-7 gap-2">
             {(() => {
               const maxOrders = Math.max(...data.weekday_perf.map((d) => d.orders));
+              const bestIdx = data.weekday_perf.indexOf(data.weekday_perf.reduce((a, b) => a.orders > b.orders ? a : b));
               return data.weekday_perf.map((d, i) => (
                 <div key={i} className="text-center">
                   <div className="label-meta mb-2">{d.weekday}</div>
-                  <div className="rounded-lg flex flex-col justify-end items-center" style={{
-                    height: 80,
-                    background: "var(--paper)",
-                    position: "relative",
-                  }}>
-                    <div className="w-full rounded-lg flex items-end justify-center" style={{
-                      height: `${(d.orders / maxOrders) * 100}%`,
-                      background: i === data.weekday_perf.indexOf(data.weekday_perf.reduce((a, b) => a.orders > b.orders ? a : b)) ? "var(--pink)" : "var(--paper-deep)",
-                      minHeight: 4,
-                    }} />
+                  <div className="rounded-lg flex flex-col justify-end items-center" style={{ height: 80, background: "var(--paper)" }}>
+                    <div className="w-full rounded-lg" style={{ height: ((d.orders / Math.max(1, maxOrders)) * 100) + "%", background: i === bestIdx ? "var(--pink)" : "var(--paper-deep)", minHeight: 4 }} />
                   </div>
                   <div className="font-num text-[12px] mt-2 font-semibold" style={{ color: "var(--ink)" }}>{formatNumber(d.orders)}</div>
                   <div className="text-[10px] font-num" style={{ color: "var(--ink-muted)" }}>{formatCurrency(d.revenue, currency)}</div>
@@ -262,50 +222,34 @@ export default async function ShopifyPage({
           </div>
         </div>
 
-        {/* Estoque (Shopify Admin API real) */}
-        <div className="section-marker mb-3">
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--ink-muted)", letterSpacing: "0.06em" }}>
-              ESTOQUE (SHOPIFY ADMIN API)
-            </span>
-            <span className="text-[10px]" style={{ color: "var(--ink-muted)" }}>
-              {inventory.source === "Shopify" ? "ao vivo" : "mock"} - {inventory.total_variants_sampled} variantes amostradas
-            </span>
-          </div>
-        </div>
+        <SectionHeader title={"INVENTORY (SHOPIFY ADMIN API)"} extra={inventory.source === "Shopify" ? "live - " + inventory.total_variants_sampled + " variants sampled" : "mock - " + inventory.total_variants_sampled + " variants"} />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-3">
           <div className="card">
-            <div className="label-meta mb-1">UNIDADES EM ESTOQUE</div>
+            <div className="label-meta mb-1">UNITS IN STOCK</div>
             <div className="font-num font-bold text-[22px]" style={{ color: "var(--ink)" }}>{formatNumber(inventory.total_units_in_stock)}</div>
             <div className="text-[11px]" style={{ color: "var(--ink-muted)" }}>{inventory.total_variants_sampled} SKUs</div>
           </div>
           <div className="card">
-            <div className="label-meta mb-1">ESTOQUE BAIXO</div>
-            <div className="font-num font-bold text-[22px]" style={{ color: inventory.low_stock_count > 30 ? "var(--warning)" : "var(--ink)" }}>
-              {formatNumber(inventory.low_stock_count)}
-            </div>
-            <div className="text-[11px]" style={{ color: "var(--ink-muted)" }}>SKUs com <= 20u</div>
+            <div className="label-meta mb-1">LOW STOCK</div>
+            <div className="font-num font-bold text-[22px]" style={{ color: inventory.low_stock_count > 30 ? "var(--warning)" : "var(--ink)" }}>{formatNumber(inventory.low_stock_count)}</div>
+            <div className="text-[11px]" style={{ color: "var(--ink-muted)" }}>SKUs with under 20u</div>
           </div>
           <div className="card">
-            <div className="label-meta mb-1">SEM ESTOQUE</div>
-            <div className="font-num font-bold text-[22px]" style={{ color: inventory.out_of_stock_count > 10 ? "var(--negative)" : "var(--ink)" }}>
-              {formatNumber(inventory.out_of_stock_count)}
-            </div>
-            <div className="text-[11px]" style={{ color: "var(--ink-muted)" }}>SKUs zerados</div>
+            <div className="label-meta mb-1">OUT OF STOCK</div>
+            <div className="font-num font-bold text-[22px]" style={{ color: inventory.out_of_stock_count > 10 ? "var(--negative)" : "var(--ink)" }}>{formatNumber(inventory.out_of_stock_count)}</div>
+            <div className="text-[11px]" style={{ color: "var(--ink-muted)" }}>zeroed SKUs</div>
           </div>
         </div>
         {inventory.low_stock_items.length > 0 && (
           <div className="card mb-3">
-            <h4 className="text-[12px] font-semibold mb-3" style={{ color: "var(--ink)" }}>TOP variantes com estoque baixo</h4>
+            <h4 className="text-[12px] font-semibold mb-3" style={{ color: "var(--ink)" }}>Top variants with low stock</h4>
             <div className="space-y-2">
               {inventory.low_stock_items.map((item, i) => (
                 <div key={i} className="flex items-center gap-3 text-[12px]" style={{ borderTop: i > 0 ? "1px solid var(--border-soft)" : "none", paddingTop: i > 0 ? 8 : 0 }}>
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 font-num font-bold text-[12px]" style={{ background: item.available <= 5 ? "var(--negative-soft)" : "var(--warning-soft)", color: item.available <= 5 ? "var(--negative)" : "var(--warning)" }}>
-                    {item.available}
-                  </div>
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 font-num font-bold text-[12px]" style={{ background: item.available <= 5 ? "var(--negative-soft)" : "var(--warning-soft)", color: item.available <= 5 ? "var(--negative)" : "var(--warning)" }}>{item.available}</div>
                   <div className="flex-1 min-w-0">
                     <div className="font-semibold truncate" style={{ color: "var(--ink)" }}>{item.product}</div>
-                    <div className="text-[11px]" style={{ color: "var(--ink-muted)" }}>{item.variant} - {item.sku || "sem SKU"}</div>
+                    <div className="text-[11px]" style={{ color: "var(--ink-muted)" }}>{item.variant} - {item.sku || "no SKU"}</div>
                   </div>
                   <div className="font-num text-[11px]" style={{ color: "var(--ink-muted)" }}>{formatCurrency(item.price, currency, false)}</div>
                 </div>
@@ -315,7 +259,7 @@ export default async function ShopifyPage({
         )}
         {inventory.out_of_stock_items.length > 0 && (
           <div className="card mb-7">
-            <h4 className="text-[12px] font-semibold mb-3" style={{ color: "var(--negative)" }}>SKUs sem estoque ({inventory.out_of_stock_count})</h4>
+            <h4 className="text-[12px] font-semibold mb-3" style={{ color: "var(--negative)" }}>Out of stock SKUs ({inventory.out_of_stock_count})</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               {inventory.out_of_stock_items.map((item, i) => (
                 <div key={i} className="flex items-center gap-2 text-[12px]">
@@ -328,42 +272,30 @@ export default async function ShopifyPage({
           </div>
         )}
 
-        {/* Fulfillment (Shopify Admin API real) */}
-        <div className="section-marker mb-3">
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--ink-muted)", letterSpacing: "0.06em" }}>
-              PEDIDOS PENDENTES & ATRASADOS
-            </span>
-            <span className="text-[10px]" style={{ color: "var(--ink-muted)" }}>
-              {fulfillment.source === "Shopify" ? "ao vivo" : "mock"} - top 100 pedidos abertos
-            </span>
-          </div>
-        </div>
+        <SectionHeader title="PENDING & LATE ORDERS" extra={fulfillment.source === "Shopify" ? "live - top 100 open orders" : "mock - top 100 open orders"} />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
           <div className="card">
-            <div className="label-meta mb-1">PENDENTES DE FULFILLMENT</div>
+            <div className="label-meta mb-1">PENDING FULFILLMENT</div>
             <div className="font-num font-bold text-[22px]" style={{ color: "var(--ink)" }}>{formatNumber(fulfillment.pending_count)}</div>
-            <div className="text-[11px]" style={{ color: "var(--ink-muted)" }}>pedidos pagos sem despacho</div>
+            <div className="text-[11px]" style={{ color: "var(--ink-muted)" }}>paid orders not yet shipped</div>
           </div>
           <div className="card">
-            <div className="label-meta mb-1">ATRASADOS (>=5 DIAS)</div>
-            <div className="font-num font-bold text-[22px]" style={{ color: fulfillment.late_count > 20 ? "var(--negative)" : fulfillment.late_count > 5 ? "var(--warning)" : "var(--ink)" }}>
-              {formatNumber(fulfillment.late_count)}
-            </div>
-            <div className="text-[11px]" style={{ color: "var(--ink-muted)" }}>requer acao imediata</div>
+            <div className="label-meta mb-1">LATE (5+ DAYS)</div>
+            <div className="font-num font-bold text-[22px]" style={{ color: fulfillment.late_count > 20 ? "var(--negative)" : fulfillment.late_count > 5 ? "var(--warning)" : "var(--ink)" }}>{formatNumber(fulfillment.late_count)}</div>
+            <div className="text-[11px]" style={{ color: "var(--ink-muted)" }}>requires immediate action</div>
           </div>
         </div>
         {fulfillment.unfulfilled_orders.length > 0 && (
           <div className="card mb-7 overflow-x-auto">
-            <h4 className="text-[12px] font-semibold mb-3" style={{ color: "var(--ink)" }}>Pedidos mais antigos sem despacho</h4>
+            <h4 className="text-[12px] font-semibold mb-3" style={{ color: "var(--ink)" }}>Oldest unfulfilled orders</h4>
             <table className="w-full text-[12px]">
               <thead>
                 <tr style={{ borderBottom: "1px solid var(--border)" }}>
-                  <th className="text-left py-2 label-meta">PEDIDO</th>
-                  <th className="text-left py-2 label-meta">CLIENTE</th>
-                  <th className="text-left py-2 label-meta">DATA</th>
-                  <th className="text-right py-2 label-meta">DIAS</th>
-                  <th className="text-right py-2 label-meta">ITENS</th>
+                  <th className="text-left py-2 label-meta">ORDER</th>
+                  <th className="text-left py-2 label-meta">CUSTOMER</th>
+                  <th className="text-left py-2 label-meta">DATE</th>
+                  <th className="text-right py-2 label-meta">DAYS</th>
+                  <th className="text-right py-2 label-meta">ITEMS</th>
                   <th className="text-right py-2 label-meta">TOTAL</th>
                 </tr>
               </thead>
@@ -373,9 +305,7 @@ export default async function ShopifyPage({
                     <td className="py-2 font-semibold" style={{ color: "var(--ink)" }}>{o.order_name}</td>
                     <td className="py-2" style={{ color: "var(--ink-soft)" }}>{o.customer}</td>
                     <td className="py-2 font-num" style={{ color: "var(--ink-muted)" }}>{o.created_at}</td>
-                    <td className="py-2 text-right font-num font-bold" style={{ color: o.days_open >= 7 ? "var(--negative)" : "var(--warning)" }}>
-                      {o.days_open}d
-                    </td>
+                    <td className="py-2 text-right font-num font-bold" style={{ color: o.days_open >= 7 ? "var(--negative)" : "var(--warning)" }}>{o.days_open}d</td>
                     <td className="py-2 text-right font-num" style={{ color: "var(--ink-muted)" }}>{o.items_count}</td>
                     <td className="py-2 text-right font-num" style={{ color: "var(--ink)" }}>{formatCurrency(o.total, currency)}</td>
                   </tr>
@@ -399,6 +329,17 @@ function KPI({ label, value, tone }: { label: string; value: string; tone?: "pos
   );
 }
 
+function SectionHeader({ title, extra }: { title: string; extra?: string }) {
+  return (
+    <div className="section-marker mb-3">
+      <div className="flex items-baseline gap-2 flex-wrap">
+        <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--ink-muted)", letterSpacing: "0.06em" }}>{title}</span>
+        {extra && <span className="text-[11px]" style={{ color: "var(--ink-muted)" }}>{extra}</span>}
+      </div>
+    </div>
+  );
+}
+
 function SuggestionCard({ suggestion }: { suggestion: Awaited<ReturnType<typeof getShopifyBundle>>["suggestions"][number] }) {
   const iconMap: Record<string, React.ReactNode> = {
     "high-cvr": <TrendingUp className="w-4 h-4" />,
@@ -412,16 +353,14 @@ function SuggestionCard({ suggestion }: { suggestion: Awaited<ReturnType<typeof 
   const bMap = { high: "var(--negative-soft)", medium: "var(--warning-soft)", low: "var(--positive-soft)" };
 
   return (
-    <div className="card" style={{ borderLeft: `3px solid ${cMap[suggestion.priority]}` }}>
+    <div className="card" style={{ borderLeft: "3px solid " + cMap[suggestion.priority] }}>
       <div className="flex items-start gap-3">
         <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: bMap[suggestion.priority], color: cMap[suggestion.priority] }}>
           {iconMap[suggestion.type] ?? <Lightbulb className="w-4 h-4" />}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <span className="badge" style={{ background: bMap[suggestion.priority], color: cMap[suggestion.priority], fontSize: 9 }}>
-              {suggestion.priority.toUpperCase()}
-            </span>
+            <span className="badge" style={{ background: bMap[suggestion.priority], color: cMap[suggestion.priority], fontSize: 9 }}>{suggestion.priority.toUpperCase()}</span>
             <span className="label-meta" style={{ fontSize: 9 }}>{suggestion.type.toUpperCase().replace("-", " ")}</span>
           </div>
           <h4 className="text-[13px] font-semibold mb-1" style={{ color: "var(--ink)" }}>{suggestion.title}</h4>
