@@ -1,24 +1,180 @@
-import { Database, CheckCircle2, XCircle, Clock } from "lucide-react";
+import { Database, CheckCircle2, XCircle, Clock, Megaphone, ShoppingBag, Mail, Search, Cpu, Sparkles } from "lucide-react";
+
+export const dynamic = "force-dynamic";
+
+type Status = "ok" | "partial" | "missing";
 
 type Source = {
   name: string;
-  status: "ok" | "partial" | "missing";
+  status: Status;
   desc: string;
+  envVars: string[];
+  iconCategory: "bq" | "meta" | "shopify" | "klaviyo" | "google" | "ai" | "tool";
+  notes?: string;
 };
 
-const sources: Source[] = [
-  { name: "BigQuery — larroude-data-platform", status: "ok", desc: "Fonte da verdade · Service account configurado" },
-  { name: "Meta Ads — US Larroudé", status: "ok", desc: "act_2047856822417350" },
-  { name: "Meta Ads — US Pre-Order", status: "ok", desc: "act_929449929417505" },
-  { name: "Meta Ads — BR (3 contas)", status: "partial", desc: "1 confirmada, 2 a confirmar" },
-  { name: "Shopify US", status: "ok", desc: "larroude-com.myshopify.com" },
-  { name: "Shopify BR", status: "ok", desc: "larroude-brasil.myshopify.com" },
-  { name: "Google Ads", status: "partial", desc: "Falta refresh_token" },
-  { name: "Klaviyo", status: "missing", desc: "API keys a configurar" },
-  { name: "Anthropic API", status: "missing", desc: "Necessário para Fase 4 (Ask Claude)" },
-];
+function check(...envs: string[]): Status {
+  const set = envs.filter((e) => !!process.env[e]);
+  if (set.length === envs.length) return "ok";
+  if (set.length > 0) return "partial";
+  return "missing";
+}
+
+const ICONS: Record<Source["iconCategory"], React.ReactNode> = {
+  bq: <Database className="w-4 h-4" />,
+  meta: <Megaphone className="w-4 h-4" />,
+  shopify: <ShoppingBag className="w-4 h-4" />,
+  klaviyo: <Mail className="w-4 h-4" />,
+  google: <Search className="w-4 h-4" />,
+  ai: <Sparkles className="w-4 h-4" />,
+  tool: <Cpu className="w-4 h-4" />,
+};
 
 export default function FontesPage() {
+  const sections: Array<{ title: string; sources: Source[] }> = [
+    {
+      title: "Analytics (fonte da verdade)",
+      sources: [
+        {
+          name: "BigQuery - larroude-data-platform",
+          status: check("GCP_SA_KEY_BASE64"),
+          desc: "Service Account JSON (base64) com role BigQuery Data Viewer + Job User",
+          envVars: ["GCP_PROJECT_ID", "GCP_SA_KEY_BASE64"],
+          iconCategory: "bq",
+          notes: "Datasets: shopify_us.orders, shopify_br.orders, gold_marketing.fct_ads_spend_daily, gold.unite_economics_*",
+        },
+      ],
+    },
+    {
+      title: "Midia paga - Meta Ads",
+      sources: [
+        {
+          name: "Meta App credentials",
+          status: check("META_ACCESS_TOKEN", "META_APP_ID", "META_APP_SECRET"),
+          desc: "Long-lived access token + App ID + App Secret",
+          envVars: ["META_ACCESS_TOKEN", "META_APP_ID", "META_APP_SECRET"],
+          iconCategory: "meta",
+          notes: "Token expira em 60 dias - refresh via API",
+        },
+        {
+          name: "Meta US - Larroude",
+          status: "ok",
+          desc: "act_2047856822417350 - campanhas regulares US",
+          envVars: ["META_US_MAIN_ACCOUNT_ID"],
+          iconCategory: "meta",
+        },
+        {
+          name: "Meta US - Pre-Order",
+          status: "ok",
+          desc: "act_929449929417505 - campanhas de pre-venda US",
+          envVars: ["META_US_PREORDER_ACCOUNT_ID"],
+          iconCategory: "meta",
+        },
+        {
+          name: "Meta BR - Principal",
+          status: "ok",
+          desc: "act_1735567560524487 - Larroude Brasil",
+          envVars: ["META_BR_ACCOUNT_PRINCIPAL"],
+          iconCategory: "meta",
+          notes: "Reporta em USD - multiplicador META_USD_TO_BRL aplicado no codigo",
+        },
+      ],
+    },
+    {
+      title: "Midia paga - Google",
+      sources: [
+        {
+          name: "Google Ads API",
+          status: check("GADS_DEVELOPER_TOKEN", "GADS_CLIENT_ID", "GADS_CLIENT_SECRET", "GADS_REFRESH_TOKEN"),
+          desc: "Developer Token + OAuth (client_id, secret, refresh)",
+          envVars: ["GADS_DEVELOPER_TOKEN", "GADS_CLIENT_ID", "GADS_CLIENT_SECRET", "GADS_REFRESH_TOKEN", "GADS_CUSTOMER_ID"],
+          iconCategory: "google",
+          notes: "GADS_REFRESH_TOKEN ainda pendente - usar fallback BQ ate resolver OAuth flow",
+        },
+        {
+          name: "Google Merchant Center US",
+          status: check("GMC_ID_US"),
+          desc: "ID 5747976495 - catalogo de produtos US",
+          envVars: ["GMC_ID_US"],
+          iconCategory: "google",
+        },
+      ],
+    },
+    {
+      title: "E-commerce - Shopify",
+      sources: [
+        {
+          name: "Shopify US - Admin API",
+          status: check("SHOPIFY_US_STORE_DOMAIN", "SHOPIFY_US_ADMIN_API_TOKEN"),
+          desc: "larroude-com.myshopify.com",
+          envVars: ["SHOPIFY_US_STORE_DOMAIN", "SHOPIFY_US_ADMIN_API_TOKEN"],
+          iconCategory: "shopify",
+          notes: "Admin API Token cobre orders, customers, products, abandoned checkouts",
+        },
+        {
+          name: "Shopify BR - Admin API",
+          status: check("SHOPIFY_BR_STORE_DOMAIN", "SHOPIFY_BR_ADMIN_API_TOKEN"),
+          desc: "larroude-brasil.myshopify.com",
+          envVars: ["SHOPIFY_BR_STORE_DOMAIN", "SHOPIFY_BR_ADMIN_API_TOKEN"],
+          iconCategory: "shopify",
+        },
+      ],
+    },
+    {
+      title: "CRM - Klaviyo",
+      sources: [
+        {
+          name: "Klaviyo US",
+          status: check("KLAVIYO_PRIVATE_API_KEY_US"),
+          desc: "pk_QY3GmW_... - flows, campaigns, segments US",
+          envVars: ["KLAVIYO_PRIVATE_API_KEY_US"],
+          iconCategory: "klaviyo",
+        },
+        {
+          name: "Klaviyo BR",
+          status: check("KLAVIYO_PRIVATE_API_KEY_BR"),
+          desc: "pk_U6TmNp_... - flows, campaigns, segments BR",
+          envVars: ["KLAVIYO_PRIVATE_API_KEY_BR"],
+          iconCategory: "klaviyo",
+          notes: "Welcome Series BR superando benchmark moda (CVR 4.2%)",
+        },
+      ],
+    },
+    {
+      title: "Conectores auxiliares",
+      sources: [
+        {
+          name: "Supermetrics",
+          status: check("SUPERMETRICS_API_KEY"),
+          desc: "Fallback para Meta + Google + Shopify quando API direta indisponivel",
+          envVars: ["SUPERMETRICS_API_KEY", "SUPERMETRICS_KEY_AD"],
+          iconCategory: "tool",
+          notes: "Conforme CLAUDE.md: priorizar APIs diretas, Supermetrics so fallback",
+        },
+      ],
+    },
+    {
+      title: "IA - Ask Claude + narrativa",
+      sources: [
+        {
+          name: "Anthropic API",
+          status: check("ANTHROPIC_API_KEY"),
+          desc: "Claude Opus 4.6 para Ask Claude chat + narrativa diaria",
+          envVars: ["ANTHROPIC_API_KEY"],
+          iconCategory: "ai",
+          notes: "Criar chave em console.anthropic.com/settings/keys",
+        },
+      ],
+    },
+  ];
+
+  const allSources = sections.flatMap((s) => s.sources);
+  const counts = {
+    ok: allSources.filter((s) => s.status === "ok").length,
+    partial: allSources.filter((s) => s.status === "partial").length,
+    missing: allSources.filter((s) => s.status === "missing").length,
+  };
+
   return (
     <div className="px-4 lg:px-8 py-5 lg:py-8 max-w-[1500px] mx-auto">
       <div className="mb-6">
@@ -26,39 +182,112 @@ export default function FontesPage() {
           Fontes de Dados
         </h1>
         <p className="text-[12px] lg:text-[14px] mt-1" style={{ color: "var(--ink-soft)" }}>
-          Status das integrações · BigQuery é a fonte primária
+          {allSources.length} integracoes mapeadas - BigQuery e a fonte primaria; Supermetrics apenas fallback
         </p>
+        <div className="flex items-center gap-3 mt-3">
+          <span className="badge" style={{ background: "var(--positive-soft)", color: "var(--positive)" }}>
+            {counts.ok} ativas
+          </span>
+          {counts.partial > 0 && (
+            <span className="badge" style={{ background: "var(--warning-soft)", color: "var(--warning)" }}>
+              {counts.partial} parciais
+            </span>
+          )}
+          {counts.missing > 0 && (
+            <span className="badge" style={{ background: "var(--negative-soft)", color: "var(--negative)" }}>
+              {counts.missing} faltam
+            </span>
+          )}
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        {sources.map((s) => {
-          const icon = s.status === "ok"
-            ? <CheckCircle2 className="w-5 h-5" style={{ color: "var(--positive)" }} />
-            : s.status === "partial"
-            ? <Clock className="w-5 h-5" style={{ color: "var(--warning)" }} />
-            : <XCircle className="w-5 h-5" style={{ color: "var(--negative)" }} />;
-          return (
-            <div key={s.name} className="card flex items-start gap-3">
-              <div
-                className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
-                style={{ background: "var(--paper)" }}
+      <div className="space-y-8">
+        {sections.map((section) => (
+          <section key={section.title}>
+            <div className="section-marker mb-3">
+              <span
+                className="text-[11px] font-semibold uppercase tracking-wider"
+                style={{ color: "var(--ink-muted)", letterSpacing: "0.06em" }}
               >
-                <Database className="w-4 h-4" style={{ color: "var(--ink-muted)" }} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  {icon}
-                  <h3 className="text-[14px] font-semibold" style={{ color: "var(--ink)" }}>
-                    {s.name}
-                  </h3>
-                </div>
-                <p className="text-[12px] mt-1" style={{ color: "var(--ink-soft)" }}>
-                  {s.desc}
-                </p>
-              </div>
+                {section.title}
+              </span>
             </div>
-          );
-        })}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              {section.sources.map((s) => (
+                <SourceCard key={s.name} source={s} />
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+
+      <div className="mt-10 card text-[12px]" style={{ color: "var(--ink-soft)" }}>
+        <div className="flex items-center gap-2 mb-2">
+          <Database className="w-4 h-4" style={{ color: "var(--pink-deep)" }} />
+          <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--pink-deep)" }}>
+            Como configurar no Vercel
+          </span>
+        </div>
+        <p className="mb-2">
+          Cole os valores em <strong>Settings - Environment Variables</strong> (Production + Preview).
+          As env vars do C:\Projects\.env sao a fonte canonica - reusar nesse projeto.
+        </p>
+        <p style={{ color: "var(--ink-muted)" }}>
+          Proximo passo: configurar <code>GCP_SA_KEY_BASE64</code> (BQ) e <code>ANTHROPIC_API_KEY</code> (Ask Claude) - destrava o sistema inteiro.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function SourceCard({ source }: { source: Source }) {
+  const cfg = source.status === "ok"
+    ? { icon: <CheckCircle2 className="w-5 h-5" />, color: "var(--positive)" }
+    : source.status === "partial"
+    ? { icon: <Clock className="w-5 h-5" />, color: "var(--warning)" }
+    : { icon: <XCircle className="w-5 h-5" />, color: "var(--negative)" };
+
+  return (
+    <div className="card flex items-start gap-3">
+      <div
+        className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+        style={{ background: "var(--paper)", color: "var(--ink-muted)" }}
+      >
+        {ICONS[source.iconCategory]}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-1">
+          <span style={{ color: cfg.color }}>{cfg.icon}</span>
+          <h3 className="text-[14px] font-semibold" style={{ color: "var(--ink)" }}>
+            {source.name}
+          </h3>
+        </div>
+        <p className="text-[12px] mb-2" style={{ color: "var(--ink-soft)" }}>
+          {source.desc}
+        </p>
+        <div className="flex flex-wrap gap-1 mb-2">
+          {source.envVars.map((env) => (
+            <span
+              key={env}
+              className="font-num"
+              style={{
+                fontSize: 10,
+                padding: "2px 6px",
+                borderRadius: 4,
+                background: "var(--paper)",
+                color: "var(--ink-muted)",
+                border: "1px solid var(--border-soft)",
+              }}
+            >
+              {env}
+            </span>
+          ))}
+        </div>
+        {source.notes && (
+          <p className="text-[11px] italic" style={{ color: "var(--ink-muted)" }}>
+            {source.notes}
+          </p>
+        )}
       </div>
     </div>
   );
