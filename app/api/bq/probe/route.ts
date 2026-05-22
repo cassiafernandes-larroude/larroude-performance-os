@@ -1,77 +1,40 @@
 import { NextResponse } from "next/server";
 import { runQuery, hasBigQueryCredentials } from "@/lib/bigquery/client";
-import { ordersAggregateSQL, adsSpendSQL } from "@/lib/bigquery/queries/metrics";
 
 export const dynamic = "force-dynamic";
 
-type ProbeResult = {
-  query: string;
-  ok: boolean;
-  rows?: number;
-  sample?: unknown;
-  error?: string;
-  ms: number;
-};
-
-async function probe(name: string, sql: string, params: Record<string, unknown> = {}): Promise<ProbeResult> {
+async function probe(name: string, sql: string, params: Record<string, unknown> = {}) {
   const t0 = Date.now();
   try {
     const rows = await runQuery(sql, params);
-    return { query: name, ok: true, rows: rows.length, sample: rows.slice(0, 2), ms: Date.now() - t0 };
+    return { query: name, ok: true, rows: rows.length, sample: rows.slice(0, 3), ms: Date.now() - t0 };
   } catch (err) {
-    return { query: name, ok: false, error: String(err).slice(0, 800), ms: Date.now() - t0 };
+    return { query: name, ok: false, error: String(err).slice(0, 600), ms: Date.now() - t0 };
   }
 }
 
 export async function GET() {
-  if (!hasBigQueryCredentials()) {
-    return NextResponse.json({ error: "GCP_SA_KEY_BASE64 missing" }, { status: 500 });
-  }
+  if (!hasBigQueryCredentials()) return NextResponse.json({ error: "no creds" }, { status: 500 });
 
-  const today = new Date();
-  const fromDate = new Date(today.getTime() - 28 * 86400000).toISOString().slice(0, 10);
-  const toDate = today.toISOString().slice(0, 10);
+  const results = [];
 
-  const results: ProbeResult[] = [];
-
-  results.push(await probe("auth_check", "SELECT 1 AS ok"));
-
-  // Schema check: ver colunas da shopify_us.orders
+  // Todas colunas da fct_ads_spend_daily
   results.push(await probe(
-    "schema_us_orders",
-    "SELECT column_name, data_type FROM `larroude-data-platform.shopify_us.INFORMATION_SCHEMA.COLUMNS` WHERE table_name = 'orders' LIMIT 30"
+    "ads_cols",
+    "SELECT column_name, data_type FROM `larroude-data-platform.gold_marketing.INFORMATION_SCHEMA.COLUMNS` WHERE table_name = 'fct_ads_spend_daily' ORDER BY ordinal_position"
   ));
 
-  // Testar a query real de orders aggregate
+  // Amostra de fct_ads_spend_daily
   results.push(await probe(
-    "orders_aggregate_us",
-    ordersAggregateSQL("US"),
-    { from: fromDate, to: toDate }
+    "ads_sample",
+    "SELECT * FROM `larroude-data-platform.gold_marketing.fct_ads_spend_daily` ORDER BY date DESC LIMIT 3"
   ));
 
+  // Amostra de shopify_us.orders.customer (JSON type)
   results.push(await probe(
-    "orders_aggregate_br",
-    ordersAggregateSQL("BR"),
-    { from: fromDate, to: toDate }
+    "orders_customer_sample",
+    "SELECT JSON_EXTRACT_SCALAR(customer, '$.numberOfOrders') AS num_orders, JSON_EXTRACT_SCALAR(customer, '$.id') AS cust_id FROM `larroude-data-platform.shopify_us.orders` WHERE customer IS NOT NULL LIMIT 5"
   ));
 
-  // Testar ads spend
-  results.push(await probe(
-    "ads_spend_us",
-    adsSpendSQL("US"),
-    { market: "us", from: fromDate, to: toDate }
-  ));
-
-  // Schema check fct_ads_spend_daily
-  results.push(await probe(
-    "schema_ads",
-    "SELECT column_name FROM `larroude-data-platform.gold_marketing.INFORMATION_SCHEMA.COLUMNS` WHERE table_name = 'fct_ads_spend_daily' LIMIT 30"
-  ));
-
-  return NextResponse.json({
-    project: process.env.GCP_PROJECT_ID,
-    date_range: { from: fromDate, to: toDate },
-    timestamp: new Date().toISOString(),
-    results,
-  });
+  return NextResponse.json({ timestamp: new Date().toISOString(), results });
 }
