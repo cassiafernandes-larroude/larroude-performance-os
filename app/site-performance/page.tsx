@@ -25,7 +25,7 @@ export default async function SitePerformancePage({
         <div className="text-[12px]" style={{ color: "var(--ink)", fontWeight: 500 }}>Site Performance</div>
         <div className="flex items-center gap-2 text-[11px]" style={{ color: "var(--ink-muted)" }}>
           <div className="pulse-dot" />
-          <span>PageSpeed Insights {us.source === "PageSpeed" ? "ao vivo" : "(mock)"}</span>
+          <span>PageSpeed Insights {us.source === "PageSpeed" ? "live" : "(mock)"}</span>
         </div>
       </header>
 
@@ -33,11 +33,11 @@ export default async function SitePerformancePage({
         <div className="mb-6">
           <h1 className="font-display text-[26px] lg:text-[36px]" style={{ color: "var(--ink)" }}>Site Performance</h1>
           <p className="text-[12px] lg:text-[14px] mt-1" style={{ color: "var(--ink-soft)" }}>
-            Core Web Vitals, lab + field (CrUX), recursos, third-parties, auditorias - via Google PageSpeed Insights
+            Core Web Vitals, lab + field (CrUX), resources, audits - via Google PageSpeed Insights
           </p>
           <div className="flex items-center justify-between gap-3 flex-wrap mt-2">
             <p className="text-[11px]" style={{ color: "var(--ink-muted)" }}>
-              Atualizado em {new Date(us.fetched_at).toLocaleString("pt-BR")} - cache 1h
+              Updated at {new Date(us.fetched_at).toLocaleString("pt-BR")} - cache 1h
             </p>
             <div className="flex items-center gap-2">
               <StrategyToggle current={strategy} />
@@ -75,7 +75,7 @@ function SitePerformanceSection({ bundle, flag, label }: {
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--ink-muted)" }}>{flag} {label}</span>
           <a href={bundle.url} target="_blank" rel="noopener noreferrer" className="text-[11px] flex items-center gap-1" style={{ color: "var(--pink-deep)" }}>
-            visitar site <ExternalLink className="w-3 h-3" />
+            visit site <ExternalLink className="w-3 h-3" />
           </a>
         </div>
       </div>
@@ -96,7 +96,7 @@ function SitePerformanceSection({ bundle, flag, label }: {
             <div className="flex-1">
               <div className="label-meta mb-1">PERFORMANCE SCORE</div>
               <div className="text-[13px] mb-1" style={{ color: "var(--ink)" }}>
-                {bundle.performance_score >= 90 ? "Excelente" : bundle.performance_score >= 50 ? "Precisa melhorar" : "Critico"}
+                {bundle.performance_score >= 90 ? "Excellent" : bundle.performance_score >= 50 ? "Needs improvement" : "Critical"}
               </div>
               <div className="text-[11px]" style={{ color: "var(--ink-muted)" }}>
                 {bundle.strategy === "mobile" ? "📱 Mobile" : "🖥️ Desktop"} - {(bundle.total_byte_weight / 1_000_000).toFixed(1)} MB total
@@ -112,7 +112,7 @@ function SitePerformanceSection({ bundle, flag, label }: {
       {/* Core Web Vitals (Lab) */}
       <div className="mb-3 label-meta flex items-center gap-2" style={{ letterSpacing: "0.06em" }}>
         <span>CORE WEB VITALS (LAB)</span>
-        <span className="text-[9px] opacity-60">simulado pelo Lighthouse</span>
+        <span className="text-[9px] opacity-60">simulated by Lighthouse</span>
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         <VitalCard icon={<Eye className="w-4 h-4" />} tag="LCP" value={`${(bundle.lcp_ms / 1000).toFixed(1)}s`} hint="Largest Contentful Paint" threshold={lcpH === "positive" ? "<= 2.5s" : lcpH === "warning" ? "2.5 - 4s" : "> 4s"} health={lcpH} cMap={cMap} bMap={bMap} />
@@ -122,12 +122,12 @@ function SitePerformanceSection({ bundle, flag, label }: {
       </div>
 
       {/* Diagnostics adicionais */}
-      <div className="mb-3 label-meta" style={{ letterSpacing: "0.06em" }}>DIAGNOSTICOS ADICIONAIS</div>
+      <div className="mb-3 label-meta" style={{ letterSpacing: "0.06em" }}>ADDITIONAL DIAGNOSTICS</div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         <MiniStat icon={<Clock className="w-3.5 h-3.5" />} label="FCP" value={`${(bundle.fcp_ms / 1000).toFixed(1)}s`} hint="First Contentful Paint" />
         <MiniStat icon={<Zap className="w-3.5 h-3.5" />} label="TBT" value={`${bundle.tbt_ms}ms`} hint="Total Blocking Time" />
-        <MiniStat icon={<Activity className="w-3.5 h-3.5" />} label="Speed Index" value={`${(bundle.si_ms / 1000).toFixed(1)}s`} hint="Velocidade visual" />
-        <MiniStat icon={<Code className="w-3.5 h-3.5" />} label="DOM Size" value={bundle.dom_size.toLocaleString("pt-BR")} hint="Elementos no DOM" />
+        <MiniStat icon={<Activity className="w-3.5 h-3.5" />} label="Speed Index" value={`${(bundle.si_ms / 1000).toFixed(1)}s`} hint="Visual speed" />
+        <MiniStat icon={<Code className="w-3.5 h-3.5" />} label="DOM Size" value={bundle.dom_size.toLocaleString("pt-BR")} hint="DOM elements" />
       </div>
 
       {/* Field Data CrUX */}
@@ -135,7 +135,7 @@ function SitePerformanceSection({ bundle, flag, label }: {
         <>
           <div className="mb-3 label-meta flex items-center gap-2" style={{ letterSpacing: "0.06em" }}>
             <Users className="w-3 h-3" />
-            <span>FIELD DATA - CrUX (usuarios reais ultimos 28d)</span>
+            <span>FIELD DATA - CrUX (real users last 28d)</span>
             {bundle.field.overall_category && (
               <span className="badge ml-1" style={{
                 background: bundle.field.overall_category === "FAST" ? "var(--positive-soft)" :
@@ -150,13 +150,13 @@ function SitePerformanceSection({ bundle, flag, label }: {
           <div className="card mb-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {bundle.field.lcp_distributions && (
-                <FieldVital label="LCP (real)" value={bundle.field.lcp_ms ? `${(bundle.field.lcp_ms / 1000).toFixed(1)}s` : "n/d"} dist={bundle.field.lcp_distributions} />
+                <FieldVital label="LCP (real)" value={bundle.field.lcp_ms ? `${(bundle.field.lcp_ms / 1000).toFixed(1)}s` : "n/a"} dist={bundle.field.lcp_distributions} />
               )}
               {bundle.field.cls_distributions && (
-                <FieldVital label="CLS (real)" value={bundle.field.cls != null ? bundle.field.cls.toFixed(3) : "n/d"} dist={bundle.field.cls_distributions} />
+                <FieldVital label="CLS (real)" value={bundle.field.cls != null ? bundle.field.cls.toFixed(3) : "n/a"} dist={bundle.field.cls_distributions} />
               )}
               {bundle.field.inp_distributions && (
-                <FieldVital label="INP (real)" value={bundle.field.inp_ms ? `${bundle.field.inp_ms}ms` : "n/d"} dist={bundle.field.inp_distributions} />
+                <FieldVital label="INP (real)" value={bundle.field.inp_ms ? `${bundle.field.inp_ms}ms` : "n/a"} dist={bundle.field.inp_distributions} />
               )}
             </div>
           </div>
@@ -164,12 +164,12 @@ function SitePerformanceSection({ bundle, flag, label }: {
       )}
 
       {/* Resource breakdown */}
-      <div className="mb-3 label-meta" style={{ letterSpacing: "0.06em" }}>RECURSOS ({bundle.resources.total_requests} requests - {(bundle.resources.total_bytes / 1_000_000).toFixed(1)}MB)</div>
+      <div className="mb-3 label-meta" style={{ letterSpacing: "0.06em" }}>RESOURCES ({bundle.resources.total_requests} requests - {(bundle.resources.total_bytes / 1_000_000).toFixed(1)}MB)</div>
       <div className="card mb-6">
         {bundle.resources.by_type.map((r) => (
           <div key={r.type} className="flex items-center gap-3 mb-2 last:mb-0">
             <div className="w-32 text-[12px] flex items-center gap-2" style={{ color: "var(--ink-soft)" }}>
-              {r.type === "Imagens" ? <ImageIcon className="w-3.5 h-3.5" /> :
+              {r.type === "Images" ? <ImageIcon className="w-3.5 h-3.5" /> :
                r.type === "JavaScript" ? <Code className="w-3.5 h-3.5" /> :
                r.type === "CSS" ? <FileText className="w-3.5 h-3.5" /> :
                <Package className="w-3.5 h-3.5" />}
@@ -178,7 +178,7 @@ function SitePerformanceSection({ bundle, flag, label }: {
             <div className="flex-1 h-6 rounded relative" style={{ background: "var(--paper)" }}>
               <div className="h-full rounded flex items-center justify-end px-2" style={{
                 width: `${Math.min(100, r.pct)}%`,
-                background: r.type === "Imagens" ? "#FFE0EC" : r.type === "JavaScript" ? "var(--meta-bg)" : r.type === "CSS" ? "var(--klaviyo-bg)" : "var(--google-bg)",
+                background: r.type === "Images" ? "#FFE0EC" : r.type === "JavaScript" ? "var(--meta-bg)" : r.type === "CSS" ? "var(--klaviyo-bg)" : "var(--google-bg)",
               }}>
                 <span className="text-[10px] font-num font-semibold" style={{ color: "var(--ink)" }}>{r.pct}%</span>
               </div>
@@ -193,7 +193,7 @@ function SitePerformanceSection({ bundle, flag, label }: {
       {/* Opportunities */}
       {bundle.opportunities.length > 0 && (
         <>
-          <div className="mb-3 label-meta" style={{ letterSpacing: "0.06em" }}>OPORTUNIDADES PRIORITIZADAS ({bundle.opportunities.length})</div>
+          <div className="mb-3 label-meta" style={{ letterSpacing: "0.06em" }}>PRIORITIZED OPPORTUNITIES ({bundle.opportunities.length})</div>
           <div className="card mb-6">
             <div className="space-y-3">
               {bundle.opportunities.map((opp, i) => {
@@ -225,7 +225,7 @@ function SitePerformanceSection({ bundle, flag, label }: {
       {/* Audits failed (não-opportunities) */}
       {bundle.audits_failed.length > 0 && (
         <>
-          <div className="mb-3 label-meta" style={{ letterSpacing: "0.06em" }}>AUDITORIAS COM FALHA ({bundle.audits_failed.length})</div>
+          <div className="mb-3 label-meta" style={{ letterSpacing: "0.06em" }}>FAILED AUDITS ({bundle.audits_failed.length})</div>
           <div className="card mb-2">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               {bundle.audits_failed.map((a, i) => (

@@ -24,7 +24,7 @@ export default async function NorthStarPage() {
           <span>Sync</span>
           <span className="font-num">{new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
           <span>-</span>
-          <span>BigQuery Larroude OS - janela 12 meses</span>
+          <span>BigQuery Larroude OS - janelto 12 meses</span>
         </div>
       </header>
 
@@ -32,10 +32,10 @@ export default async function NorthStarPage() {
         <div className="mb-6">
           <h1 className="font-display text-[26px] lg:text-[36px]" style={{ color: "var(--ink)" }}>North Star</h1>
           <p className="text-[12px] lg:text-[14px] mt-1" style={{ color: "var(--ink-soft)" }}>
-            4 metricas-ancora da Larroude - mesma logica do LTV Dashboard oficial
+            4 anchor metrics for Larroude - same logic as the official LTV Dashboard
           </p>
           <p className="text-[11px] mt-1" style={{ color: "var(--ink-muted)" }}>
-            Janela: {us.period.from} a {us.period.to} - {us.source === "BQ" ? "BigQuery Larroude OS" : "Mock"}
+            Window: {us.period.from} to {us.period.to} - {us.source === "BQ" ? "BigQuery Larroude OS" : "Mock"}
           </p>
         </div>
 
@@ -76,60 +76,60 @@ function MarketSection({ bundle, flag, label, currency }: {
         {/* 1. LTV Preditivo */}
         <NorthStarCard
           icon={<TrendingUp className="w-5 h-5" />}
-          tag="LTV PREDITIVO"
+          tag="PREDICTIVE LTV"
           title="Lifetime Value"
           value={formatCurrency(bundle.ltv_predictive, currency, false)}
-          subtitle="Receita media estimada por cliente (12m)"
+          subtitle="Receitto medito estimadto por cliente (12m)"
           drivers={[
             { label: "AOV", value: formatCurrency(bundle.aov, currency, false) },
-            { label: "Frequencia", value: `${bundle.purchase_frequency.toFixed(2)}x/ano` },
+            { label: "Frequency", value: `${bundle.purchase_frequency.toFixed(2)}x/year` },
             { label: "Lifetime", value: `${bundle.customer_lifetime.toFixed(2)}x` },
           ]}
-          formula="AOV × Frequencia × Lifetime"
+          formula="AOV × Frequencito × Lifetime"
         />
 
         {/* 2. LTV:CAC */}
         <NorthStarCard
           icon={<Coins className="w-5 h-5" />}
           tag="LTV : CAC"
-          title="Eficiencia de Aquisicao"
+          title="Eficiencito de Aquisicao"
           value={formatMultiplier(bundle.ltv_cac)}
-          subtitle={ratio >= 3 ? "Saudavel" : ratio >= 1.5 ? "Atencao" : "Critico"}
+          subtitle={ratio >= 3 ? "Healthy" : ratio >= 1.5 ? "Warning" : "Critical"}
           highlight={ratioColor}
           highlightBg={ratioSoft}
           drivers={[
             { label: "LTV", value: formatCurrency(bundle.ltv_predictive, currency, false) },
             { label: "CAC", value: formatCurrency(bundle.cac, currency, false) },
-            { label: "Novos clientes", value: formatNumber(bundle.new_customers) },
+            { label: "New customers", value: formatNumber(bundle.new_customers) },
           ]}
-          formula="LTV / CAC (saudavel >= 3:1)"
+          formula="LTV / CAC (healthy >= 3:1)"
         />
 
         {/* 3. Returning Customer Rate */}
         <NorthStarCard
           icon={<Repeat className="w-5 h-5" />}
           tag="RETURNING RATE"
-          title="Taxa de Recompra (12m)"
+          title="Taxto de Recomprto (12m)"
           value={`${bundle.returning_rate.toFixed(1)}%`}
-          subtitle="% de clientes que voltaram a comprar"
+          subtitle="% de clientes que voltaram to comprar"
           drivers={[
-            { label: "Total clientes", value: formatNumber(bundle.total_customers) },
-            { label: "Voltaram", value: formatNumber(bundle.returning_customers) },
-            { label: "So 1 compra", value: formatNumber(bundle.total_customers - bundle.returning_customers) },
+            { label: "Total customers", value: formatNumber(bundle.total_customers) },
+            { label: "Returned", value: formatNumber(bundle.returning_customers) },
+            { label: "Only 1 purchase", value: formatNumber(bundle.total_customers - bundle.returning_customers) },
           ]}
-          formula="customers com >=2 pedidos / total"
+          formula="customers with >=2 orders / total"
         />
 
         {/* 4. Net Revenue total */}
         <NorthStarCard
           icon={<Users className="w-5 h-5" />}
           tag="NET REVENUE 12M"
-          title="Receita Liquida"
+          title="Receitto Liquida"
           value={formatCurrency(bundle.total_net_sales, currency)}
-          subtitle="Gross - descontos - refunds"
+          subtitle="Gross - discounts - refunds"
           drivers={[
-            { label: "LTV historico", value: formatCurrency(bundle.ltv_historical, currency, false) },
-            { label: "Spend total", value: formatCurrency(bundle.total_ad_spend, currency) },
+            { label: "Historical LTV", value: formatCurrency(bundle.ltv_historical, currency, false) },
+            { label: "Total spend", value: formatCurrency(bundle.total_ad_spend, currency) },
             { label: "Net : Spend", value: bundle.total_ad_spend > 0 ? formatMultiplier(bundle.total_net_sales / bundle.total_ad_spend) : "-" },
           ]}
           formula="net_sales = gross - discounts - refunds"

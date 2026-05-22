@@ -61,9 +61,9 @@ export default async function DailyBriefingPage({
           </p>
           <p className="text-[11px] lg:text-[12px] mt-1" style={{ color: "var(--ink-muted)" }}>
             <span className="hidden lg:inline">
-              Dados de <strong style={{ color: "var(--ink-soft)" }}>{us.date_range.from} - {us.date_range.to}</strong> -{" "}
+              Data from <strong style={{ color: "var(--ink-soft)" }}>{us.date_range.from} - {us.date_range.to}</strong> -{" "}
             </span>
-            Atualizado em {new Date(us.generated_at).toLocaleString("pt-BR")}
+            Updated at {new Date(us.generated_at).toLocaleString("pt-BR")}
           </p>
         </div>
 
@@ -72,7 +72,7 @@ export default async function DailyBriefingPage({
         {/* ===== US Section ===== */}
         <div className="section-marker mb-3">
           <div className="flex items-center gap-2">
-            <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--ink-muted)" }}>🇺🇸 ESTADOS UNIDOS</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--ink-muted)" }}>🇺🇸 UNITED STATES</span>
             <span className="badge" style={{ background: "var(--pink-soft)", color: "var(--pink-deep)" }}>USD</span>
           </div>
         </div>
@@ -92,7 +92,7 @@ export default async function DailyBriefingPage({
         {/* ===== BR Section (logo abaixo do US) ===== */}
         <div className="section-marker mb-3">
           <div className="flex items-center gap-2">
-            <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--ink-muted)" }}>🇧🇷 BRASIL</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--ink-muted)" }}>🇧🇷 BRAZIL</span>
             <span className="badge" style={{ background: "var(--pink-soft)", color: "var(--pink-deep)" }}>BRL</span>
           </div>
         </div>
@@ -112,9 +112,9 @@ export default async function DailyBriefingPage({
         {/* ===== Diagnósticos ===== */}
         <div className="section-marker mb-3">
           <div className="flex items-baseline gap-2 lg:gap-3 flex-wrap">
-            <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--ink-muted)" }}>🔬 DIAGNOSTICOS</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--ink-muted)" }}>🔬 DIAGNOSTICS</span>
             <span className="text-[11px]" style={{ color: "var(--ink-muted)" }}>
-              {diagnostics.length} insights - cruzando 4 fontes
+              {diagnostics.length} insights - cross-source (4 sources)
             </span>
           </div>
         </div>
@@ -134,7 +134,7 @@ export default async function DailyBriefingPage({
           </div>
         ) : (
           <div className="card mb-7 text-center py-8" style={{ color: "var(--ink-muted)" }}>
-            <p className="text-[13px]">Nenhum diagnostico critico no periodo.</p>
+            <p className="text-[13px]">No critical diagnostics in this period.</p>
           </div>
         )}
 
@@ -144,7 +144,7 @@ export default async function DailyBriefingPage({
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4" style={{ color: "var(--pink-deep)" }} />
               <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--pink-deep)" }}>
-                Analise - cross-source
+                Analysis - cross-source
               </span>
             </div>
             <span className="text-[10px]" style={{ color: "var(--ink-muted)" }}>

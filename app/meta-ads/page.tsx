@@ -4,7 +4,7 @@ export default function MetaAdsPage() {
   return (
     <Placeholder
       title="Meta Ads"
-      subtitle="US (Main + Pre-Order) e BR (3 contas) · ROAS, CTR, frequência"
+      subtitle="US (Main + Pre-Order) and BR (3 accounts) · ROAS, CTR, frequência"
       phase="Fase 2"
     />
   );

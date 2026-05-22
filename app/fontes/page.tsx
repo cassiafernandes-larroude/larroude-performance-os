@@ -33,12 +33,12 @@ const ICONS: Record<Source["iconCategory"], React.ReactNode> = {
 export default function FontesPage() {
   const sections: Array<{ title: string; sources: Source[] }> = [
     {
-      title: "Analytics (fonte da verdade)",
+      title: "Analytics (source of truth)",
       sources: [
         {
           name: "BigQuery - larroude-data-platform",
           status: check("GCP_SA_KEY_BASE64"),
-          desc: "Service Account JSON (base64) com role BigQuery Data Viewer + Job User",
+          desc: "Service Account JSON (base64) with BigQuery Data Viewer + Job User role",
           envVars: ["GCP_PROJECT_ID", "GCP_SA_KEY_BASE64"],
           iconCategory: "bq",
           notes: "Datasets: shopify_us.orders, shopify_br.orders, gold_marketing.fct_ads_spend_daily, gold.unite_economics_*",
@@ -46,7 +46,7 @@ export default function FontesPage() {
       ],
     },
     {
-      title: "Midia paga - Meta Ads",
+      title: "Paid Media - Meta Ads",
       sources: [
         {
           name: "Meta App credentials",
@@ -54,19 +54,19 @@ export default function FontesPage() {
           desc: "Long-lived access token + App ID + App Secret",
           envVars: ["META_ACCESS_TOKEN", "META_APP_ID", "META_APP_SECRET"],
           iconCategory: "meta",
-          notes: "Token expira em 60 dias - refresh via API",
+          notes: "Token expires in 60 days - refresh via API",
         },
         {
           name: "Meta US - Larroude",
           status: "ok",
-          desc: "act_2047856822417350 - campanhas regulares US",
+          desc: "act_2047856822417350 - regular US campaigns",
           envVars: ["META_US_MAIN_ACCOUNT_ID"],
           iconCategory: "meta",
         },
         {
           name: "Meta US - Pre-Order",
           status: "ok",
-          desc: "act_929449929417505 - campanhas de pre-venda US",
+          desc: "act_929449929417505 - pre-sale US campaigns",
           envVars: ["META_US_PREORDER_ACCOUNT_ID"],
           iconCategory: "meta",
         },
@@ -76,12 +76,12 @@ export default function FontesPage() {
           desc: "act_1735567560524487 - Larroude Brasil",
           envVars: ["META_BR_ACCOUNT_PRINCIPAL"],
           iconCategory: "meta",
-          notes: "Reporta em USD - multiplicador META_USD_TO_BRL aplicado no codigo",
+          notes: "Reports in USD - META_USD_TO_BRL multiplier applied in code",
         },
       ],
     },
     {
-      title: "Midia paga - Google",
+      title: "Paid Media - Google",
       sources: [
         {
           name: "Google Ads API",
@@ -89,12 +89,12 @@ export default function FontesPage() {
           desc: "Developer Token + OAuth (client_id, secret, refresh)",
           envVars: ["GADS_DEVELOPER_TOKEN", "GADS_CLIENT_ID", "GADS_CLIENT_SECRET", "GADS_REFRESH_TOKEN", "GADS_CUSTOMER_ID"],
           iconCategory: "google",
-          notes: "GADS_REFRESH_TOKEN ainda pendente - usar fallback BQ ate resolver OAuth flow",
+          notes: "GADS_REFRESH_TOKEN still pending - using BQ fallback until OAuth flow resolved",
         },
         {
           name: "Google Merchant Center US",
           status: check("GMC_ID_US"),
-          desc: "ID 5747976495 - catalogo de produtos US",
+          desc: "ID 5747976495 - US product catalog",
           envVars: ["GMC_ID_US"],
           iconCategory: "google",
         },
@@ -109,7 +109,7 @@ export default function FontesPage() {
           desc: "larroude-com.myshopify.com",
           envVars: ["SHOPIFY_US_STORE_DOMAIN", "SHOPIFY_US_ADMIN_API_TOKEN"],
           iconCategory: "shopify",
-          notes: "Admin API Token cobre orders, customers, products, abandoned checkouts",
+          notes: "Admin API Token covers orders, customers, products, abandoned checkouts",
         },
         {
           name: "Shopify BR - Admin API",
@@ -136,33 +136,33 @@ export default function FontesPage() {
           desc: "pk_U6TmNp_... - flows, campaigns, segments BR",
           envVars: ["KLAVIYO_PRIVATE_API_KEY_BR"],
           iconCategory: "klaviyo",
-          notes: "Welcome Series BR superando benchmark moda (CVR 4.2%)",
+          notes: "Welcome Series BR outperforming fashion benchmark (CVR 4.2%)",
         },
       ],
     },
     {
-      title: "Conectores auxiliares",
+      title: "Auxiliary connectors",
       sources: [
         {
           name: "Supermetrics",
           status: check("SUPERMETRICS_API_KEY"),
-          desc: "Fallback para Meta + Google + Shopify quando API direta indisponivel",
+          desc: "Fallback for Meta + Google + Shopify when direct API unavailable",
           envVars: ["SUPERMETRICS_API_KEY", "SUPERMETRICS_KEY_AD"],
           iconCategory: "tool",
-          notes: "Conforme CLAUDE.md: priorizar APIs diretas, Supermetrics so fallback",
+          notes: "Per CLAUDE.md: prioritize direct APIs, Supermetrics fallback only",
         },
       ],
     },
     {
-      title: "IA - Ask Claude + narrativa",
+      title: "AI - Ask Claude + narrative",
       sources: [
         {
           name: "Anthropic API",
           status: check("ANTHROPIC_API_KEY"),
-          desc: "Claude Opus 4.6 para Ask Claude chat + narrativa diaria",
+          desc: "Claude Opus 4.6 for Ask Claude chat + daily narrative",
           envVars: ["ANTHROPIC_API_KEY"],
           iconCategory: "ai",
-          notes: "Criar chave em console.anthropic.com/settings/keys",
+          notes: "Create key at console.anthropic.com/settings/keys",
         },
       ],
     },
@@ -179,7 +179,7 @@ export default function FontesPage() {
     <div className="px-4 lg:px-8 py-5 lg:py-8 max-w-[1500px] mx-auto">
       <div className="mb-6">
         <h1 className="font-display text-[26px] lg:text-[36px]" style={{ color: "var(--ink)" }}>
-          Fontes de Dados
+          Data Sources
         </h1>
         <p className="text-[12px] lg:text-[14px] mt-1" style={{ color: "var(--ink-soft)" }}>
           {counts.ok} de {allSources.length} integracoes conectadas - BigQuery e a fonte primaria

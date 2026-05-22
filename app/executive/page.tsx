@@ -29,10 +29,10 @@ export default async function ExecutivePage() {
         <div className="mb-6">
           <h1 className="font-display text-[26px] lg:text-[36px]" style={{ color: "var(--ink)" }}>Executive View</h1>
           <p className="text-[12px] lg:text-[14px] mt-1" style={{ color: "var(--ink-soft)" }}>
-            Saude financeira - margem, burn rate, payback period, eficiencia por canal
+            Financial health - margin, burn rate, payback period, channel efficiency
           </p>
           <p className="text-[11px] mt-1" style={{ color: "var(--ink-muted)" }}>
-            Periodo: {us.period.from} a {us.period.to} - {us.source === "BQ" ? "BigQuery Larroude OS" : "Mock data"}
+            Period: {us.period.from} a {us.period.to} - {us.source === "BQ" ? "BigQuery Larroude OS" : "Mock data"}
           </p>
         </div>
 
@@ -74,12 +74,12 @@ function ExecutiveMarketSection({ bundle, flag, label, currency }: {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         <HealthCard
           icon={<DollarSign className="w-5 h-5" />}
-          tag="MARGEM (PROXY)"
+          tag="MARGIN (PROXY)"
           value={`${bundle.contribution_margin_pct.toFixed(1)}%`}
           sub={`${formatCurrency(bundle.contribution_margin, currency)}`}
           health={marginHealth}
           colorMap={colorMap} bgMap={bgMap}
-          hint="Net Rev − Ad Spend"
+          hint="Net Rev - Ad Spend"
         />
         <HealthCard
           icon={<Activity className="w-5 h-5" />}
@@ -88,13 +88,13 @@ function ExecutiveMarketSection({ bundle, flag, label, currency }: {
           sub={`Ad Spend / Net Rev`}
           health={burnHealth}
           colorMap={colorMap} bgMap={bgMap}
-          hint={burnHealth === "positive" ? "Saudavel <40%" : burnHealth === "warning" ? "Atencao 40-60%" : "Critico >60%"}
+          hint={burnHealth === "positive" ? "Healthy <40%" : burnHealth === "warning" ? "Warning 40-60%" : "Critical >60%"}
         />
         <HealthCard
           icon={<Clock className="w-5 h-5" />}
           tag="PAYBACK"
           value={`${bundle.payback_period_months.toFixed(1)}m`}
-          sub={`CAC ${formatCurrency(bundle.cac, currency, false)} / LTV mensal`}
+          sub={`CAC ${formatCurrency(bundle.cac, currency, false)} / monthly LTV`}
           health={paybackHealth}
           colorMap={colorMap} bgMap={bgMap}
           hint={paybackHealth === "positive" ? "<6m" : paybackHealth === "warning" ? "6-12m" : ">12m"}
@@ -106,16 +106,16 @@ function ExecutiveMarketSection({ bundle, flag, label, currency }: {
           sub={`Net Rev / Ad Spend`}
           health={effHealth}
           colorMap={colorMap} bgMap={bgMap}
-          hint={effHealth === "positive" ? "Saudavel >=3x" : effHealth === "warning" ? "Atencao 1.5-3x" : "Critico <1.5x"}
+          hint={effHealth === "positive" ? "Healthy >=3x" : effHealth === "warning" ? "Warning 1.5-3x" : "Critical <1.5x"}
         />
       </div>
 
       {/* Eficiência por canal */}
       <div className="card mb-6">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold text-[15px]" style={{ color: "var(--ink)" }}>Receita por canal (28d)</h3>
+          <h3 className="font-semibold text-[15px]" style={{ color: "var(--ink)" }}>Revenue by channel (28d)</h3>
           <span className="text-[11px]" style={{ color: "var(--ink-muted)" }}>
-            Top {bundle.channels.length} canais
+            Top {bundle.channels.length} channels
           </span>
         </div>
         {bundle.channels.length > 0 ? (
@@ -152,7 +152,7 @@ function ExecutiveMarketSection({ bundle, flag, label, currency }: {
           </div>
         ) : (
           <p className="text-[12px] text-center py-4" style={{ color: "var(--ink-muted)" }}>
-            Sem dados de canal disponiveis.
+            No channel data available.
           </p>
         )}
       </div>

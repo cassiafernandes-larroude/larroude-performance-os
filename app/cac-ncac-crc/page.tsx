@@ -5,7 +5,7 @@ export default function CacPage() {
     <DashboardEmbed
       src="https://larroude-cac-dashboard-app.vercel.app/"
       title="CAC"
-      subtitle="Custo de aquisicao, novo cliente e retencao - US e BR"
+      subtitle="Acquisition cost, new customer and retention - US and BR"
       externalUrl="https://larroude-cac-dashboard-app.vercel.app/"
     />
   );

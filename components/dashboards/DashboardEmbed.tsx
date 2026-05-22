@@ -39,10 +39,10 @@ export function DashboardEmbed({
           <button
             onClick={() => setIframeKey((k) => k + 1)}
             className="pill pill-ghost px-3 py-1.5 text-[12px] flex items-center gap-1.5"
-            title="Recarregar"
+            title="Reload"
           >
             <RefreshCw className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Recarregar</span>
+            <span className="hidden sm:inline">Reload</span>
           </button>
           {externalUrl && (
             <a
@@ -52,7 +52,7 @@ export function DashboardEmbed({
               className="pill pill-pink px-3 py-1.5 text-[12px] flex items-center gap-1.5 font-medium"
             >
               <ExternalLink className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Abrir em nova aba</span>
+              <span className="hidden sm:inline">Open in new tab</span>
             </a>
           )}
         </div>

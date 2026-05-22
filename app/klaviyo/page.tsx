@@ -5,7 +5,7 @@ export default function KlaviyoPage() {
     <DashboardEmbed
       src="https://larroude-klaviyo-dashboard.vercel.app/"
       title="Jornada Klaviyo"
-      subtitle="Flows, campanhas, segmentacao e receita atribuida"
+      subtitle="Flows, campaigns, segmentation and attributed revenue"
       externalUrl="https://larroude-klaviyo-dashboard.vercel.app/"
     />
   );

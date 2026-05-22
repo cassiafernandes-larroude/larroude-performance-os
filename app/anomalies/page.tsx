@@ -28,16 +28,16 @@ export default async function AnomaliesPage() {
   return (
     <div className="px-4 lg:px-8 py-5 lg:py-8 max-w-[1500px] mx-auto">
       <div className="mb-6">
-        <h1 className="font-display text-[26px] lg:text-[36px]" style={{ color: "var(--ink)" }}>Anomalias</h1>
+        <h1 className="font-display text-[26px] lg:text-[36px]" style={{ color: "var(--ink)" }}>Anomalies</h1>
         <p className="text-[12px] lg:text-[14px] mt-1" style={{ color: "var(--ink-soft)" }}>
-          Deteccao via z-score (|z| {">"} 1.5) - {rows.length} anomalias detectadas
+          Detection via z-score (|z| {">"} 1.5) - {rows.length} anomalies detected
         </p>
       </div>
 
       {rows.length === 0 ? (
         <div className="card text-center py-12" style={{ color: "var(--ink-muted)" }}>
           <Activity className="w-8 h-8 mx-auto mb-3 opacity-50" />
-          <p>Nenhuma anomalia detectada no periodo.</p>
+          <p>No anomalies detected in this period.</p>
         </div>
       ) : (
         <div className="card">
@@ -68,7 +68,7 @@ export default async function AnomaliesPage() {
                         background: Math.abs(r.z) > 2 ? "var(--negative-soft)" : "var(--warning-soft)",
                         color: Math.abs(r.z) > 2 ? "var(--negative)" : "var(--warning)",
                       }}>
-                        {Math.abs(r.z) > 2 ? "ALTA" : "MEDIA"}
+                        {Math.abs(r.z) > 2 ? "HIGH" : "MEDIUM"}
                       </span>
                     </td>
                   </tr>

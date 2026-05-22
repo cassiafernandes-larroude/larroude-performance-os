@@ -79,7 +79,7 @@ export function ChatDrawer({
             className="text-[10px] font-semibold uppercase tracking-wider px-1"
             style={{ color: "var(--ink-muted)" }}
           >
-            Sugestoes (preview)
+            Suggestions (preview)
           </div>
           <button className="chip-suggestion">
             <CornerDownRight
@@ -114,7 +114,7 @@ export function ChatDrawer({
           style={{ background: "var(--paper)", border: "1px solid var(--border)" }}
         >
           <textarea
-            placeholder="Pergunte sobre performance... (em breve)"
+            placeholder="Ask about performance... (coming soon)"
             disabled
             className="w-full bg-transparent text-[13px] resize-none focus:outline-none opacity-50"
             style={{ color: "var(--ink)", minHeight: 36 }}

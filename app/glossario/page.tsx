@@ -1,26 +1,26 @@
 export default function GlossarioPage() {
   const kpis = [
-    { sigla: "CAC", nome: "Customer Acquisition Cost", formula: "total_marketing_spend / new_customers", notas: "Inclui todos os canais pagos" },
-    { sigla: "nCAC", nome: "New Customer Acquisition Cost", formula: "paid_ads_spend / new_customers_from_paid", notas: "Só tráfego pago atribuído" },
-    { sigla: "CRC", nome: "Customer Retention Cost", formula: "(Klaviyo + Meta retargeting) / retained_customers", notas: "Cliente que comprou ≥ 2×" },
-    { sigla: "LTV", nome: "Customer Lifetime Value", formula: "Receita acumulada média por cliente, janela 12m", notas: "—" },
-    { sigla: "LTV:CAC", nome: "Razão de eficiência", formula: "LTV / CAC", notas: "Saudável ≥ 3:1" },
-    { sigla: "ROAS", nome: "Return on Ad Spend", formula: "revenue / spend", notas: "Pode ser gross ou order" },
+    { sigla: "CAC", nome: "Customer Acquisition Cost", formula: "total_marketing_spend / new_customers", notas: "Includes all paid channels" },
+    { sigla: "nCAC", nome: "New Customer Acquisition Cost", formula: "paid_ads_spend / new_customers_from_paid", notas: "Paid traffic attribution only" },
+    { sigla: "CRC", nome: "Customer Retention Cost", formula: "(Klaviyo + Meta retargeting) / retained_customers", notas: "Customer who purchased >= 2x" },
+    { sigla: "LTV", nome: "Customer Lifetime Value", formula: "Average accumulated revenue per customer, 12m window", notas: "—" },
+    { sigla: "LTV:CAC", nome: "Efficiency ratio", formula: "LTV / CAC", notas: "Healthy >= 3:1" },
+    { sigla: "ROAS", nome: "Return on Ad Spend", formula: "revenue / spend", notas: "Can be gross or order" },
     { sigla: "AOV", nome: "Average Order Value", formula: "revenue / orders", notas: "—" },
     { sigla: "CVR", nome: "Conversion Rate", formula: "purchases / sessions", notas: "—" },
     { sigla: "CTR", nome: "Click-Through Rate", formula: "clicks / impressions", notas: "Meta / Google" },
     { sigla: "CPO", nome: "Cost Per Order", formula: "spend / orders", notas: "—" },
-    { sigla: "CPA", nome: "Cost Per Acquisition", formula: "spend / conversions (pixel)", notas: "Atribuição Meta" },
+    { sigla: "CPA", nome: "Cost Per Acquisition", formula: "spend / conversions (pixel)", notas: "Meta attribution" },
   ];
 
   return (
     <div className="px-4 lg:px-8 py-5 lg:py-8 max-w-[1500px] mx-auto">
       <div className="mb-6">
         <h1 className="font-display text-[26px] lg:text-[36px]" style={{ color: "var(--ink)" }}>
-          Glossário de KPIs
+          KPI Glossary
         </h1>
         <p className="text-[12px] lg:text-[14px] mt-1" style={{ color: "var(--ink-soft)" }}>
-          Definições canônicas usadas em todos os dashboards
+          Canonical definitions used across all dashboards
         </p>
       </div>
 

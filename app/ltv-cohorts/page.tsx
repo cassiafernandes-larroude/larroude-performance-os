@@ -5,7 +5,7 @@ export default function LtvPage() {
     <DashboardEmbed
       src="https://larroude-ltv-dashboard-app.vercel.app"
       title="LTV"
-      subtitle="Lifetime value, coortes e razao LTV:CAC"
+      subtitle="Lifetime value, cohorts and LTV:CAC ratio"
       externalUrl="https://larroude-ltv-dashboard-app.vercel.app"
     />
   );

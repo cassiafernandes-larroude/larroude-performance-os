@@ -45,13 +45,13 @@ export function Placeholder({
           className="font-display text-[18px] lg:text-[20px] mb-2"
           style={{ color: "var(--ink)" }}
         >
-          Em construção
+          Under construction
         </h2>
         <p
           className="text-[13px] max-w-md"
           style={{ color: "var(--ink-soft)" }}
         >
-          Esta página será implementada {phase ? `na ${phase}` : "em breve"}.
+          This page will be implemented {phase ? `in ${phase}` : "soon"}.
         </p>
         {children && <div className="mt-6 w-full max-w-2xl">{children}</div>}
       </div>

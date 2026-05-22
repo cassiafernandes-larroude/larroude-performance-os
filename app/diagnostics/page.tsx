@@ -39,7 +39,7 @@ export default async function DiagnosticsPage({
           Diagnosticos
         </h1>
         <p className="text-[12px] lg:text-[14px] mt-1" style={{ color: "var(--ink-soft)" }}>
-          Engine de regras cross-source - {all.length} diagnosticos no periodo {period}
+          Cross-source rule engine - {all.length} diagnostics in this period {period}
         </p>
       </div>
 
@@ -60,7 +60,7 @@ export default async function DiagnosticsPage({
         </div>
       ) : (
         <div className="card text-center py-12" style={{ color: "var(--ink-muted)" }}>
-          <p className="text-[14px]">Nenhum diagnostico para os filtros selecionados.</p>
+          <p className="text-[14px]">No diagnostics for the selected filters.</p>
         </div>
       )}
     </div>

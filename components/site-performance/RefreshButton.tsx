@@ -32,7 +32,7 @@ export function RefreshButton() {
       className="pill pill-pink px-4 py-1.5 text-[12px] font-medium flex items-center gap-1.5 disabled:opacity-60"
     >
       <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
-      <span>{loading ? "Atualizando..." : "Atualizar agora"}</span>
+      <span>{loading ? "Refreshing..." : "Refresh now"}</span>
     </button>
   );
 }

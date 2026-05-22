@@ -28,10 +28,10 @@ export function DiagnosticsFilters({ counts }: {
     <div className="flex flex-wrap items-center gap-2 mb-6">
       <div className="flex items-center gap-1.5">
         <span className="text-[11px] font-semibold mr-1" style={{ color: "var(--ink-muted)", letterSpacing: "0.06em" }}>SEVERIDADE</span>
-        <FilterPill label={`Todos (${Object.values(counts).reduce((a, b) => a + b, 0)})`} active={!severity} onClick={() => setParam("severity", null)} />
-        <FilterPill label={`Critico (${counts.critical})`} active={severity === "critical"} onClick={() => setParam("severity", "critical")} color="negative" />
-        <FilterPill label={`Atencao (${counts.warning})`} active={severity === "warning"} onClick={() => setParam("severity", "warning")} color="warning" />
-        <FilterPill label={`Positivo (${counts.positive})`} active={severity === "positive"} onClick={() => setParam("severity", "positive")} color="positive" />
+        <FilterPill label={`All (${Object.values(counts).reduce((a, b) => a + b, 0)})`} active={!severity} onClick={() => setParam("severity", null)} />
+        <FilterPill label={`Critical (${counts.critical})`} active={severity === "critical"} onClick={() => setParam("severity", "critical")} color="negative" />
+        <FilterPill label={`Warning (${counts.warning})`} active={severity === "warning"} onClick={() => setParam("severity", "warning")} color="warning" />
+        <FilterPill label={`Positive (${counts.positive})`} active={severity === "positive"} onClick={() => setParam("severity", "positive")} color="positive" />
         <FilterPill label={`Gap (${counts.info})`} active={severity === "info"} onClick={() => setParam("severity", "info")} color="info" />
       </div>
 
@@ -39,7 +39,7 @@ export function DiagnosticsFilters({ counts }: {
 
       <div className="flex items-center gap-1.5">
         <span className="text-[11px] font-semibold mr-1" style={{ color: "var(--ink-muted)", letterSpacing: "0.06em" }}>MERCADO</span>
-        <FilterPill label="Todos" active={!market} onClick={() => setParam("market", null)} />
+        <FilterPill label="All" active={!market} onClick={() => setParam("market", null)} />
         <FilterPill label="US" active={market === "US"} onClick={() => setParam("market", "US")} />
         <FilterPill label="BR" active={market === "BR"} onClick={() => setParam("market", "BR")} />
       </div>
