@@ -3,6 +3,7 @@ import { dateRangeForPeriod, previousPeriodRange, periodToDays } from "@/lib/uti
 import { formatCurrency, formatMultiplier, formatNumber, formatPercent } from "@/lib/utils/format";
 import { hasBigQueryCredentials, runQuery } from "@/lib/bigquery/client";
 import { aggregatedKpisSQL } from "@/lib/bigquery/queries/metrics";
+import { getMetaSpendApi, hasMetaCredentials } from "@/lib/meta-api";
 import { cached } from "@/lib/cache";
 
 type AggRow = {
@@ -89,7 +90,7 @@ const MOCK_BR: AggRow = {
 };
 
 export async function getMetricBundle(market: Market, period: Period): Promise<MetricBundle> {
-  const cacheKey = `metrics-v3:${market}:${period}`;
+  const cacheKey = `metrics-v4:${market}:${period}`;
   return cached(cacheKey, 300, async () => {
     const range = dateRangeCompleted(period);
     const prevRange = previousDateRangeCompleted(period);
@@ -122,14 +123,24 @@ export async function getMetricBundle(market: Market, period: Period): Promise<M
       hint: m.hint,
     });
 
-    // Alinhado com dashboard principal: meta_spend = (total BQ) - google_spend
-    // Pega TUDO que nao e Google (Meta + TikTok + Pinterest + etc)
+    // Meta API direto = fonte de verdade (igual ao dashboard principal)
+    // Soma todas as contas Meta US ou BR, com FX dinamico por conta para BR
     const cGoogleSpend = num(c.google_spend);
     const pGoogleSpend = num(p.google_spend);
-    const cTotalSpendBQ = num(c.spend);
-    const pTotalSpendBQ = num(p.spend);
-    const cMetaSpend = Math.max(0, cTotalSpendBQ - cGoogleSpend);
-    const pMetaSpend = Math.max(0, pTotalSpendBQ - pGoogleSpend);
+    let cMetaSpend = Math.max(0, num(c.spend) - cGoogleSpend);
+    let pMetaSpend = Math.max(0, num(p.spend) - pGoogleSpend);
+    if (hasMetaCredentials()) {
+      try {
+        const [metaCurr, metaPrev] = await Promise.all([
+          getMetaSpendApi(market, range.from, range.to),
+          getMetaSpendApi(market, prevRange.from, prevRange.to),
+        ]);
+        if (metaCurr > 0) cMetaSpend = metaCurr;
+        if (metaPrev > 0) pMetaSpend = metaPrev;
+      } catch (err) {
+        console.warn("Meta API fallback to BQ:", err);
+      }
+    }
     const cSpend = cMetaSpend + cGoogleSpend;
     const pSpend = pMetaSpend + pGoogleSpend;
     const cGross = num(c.gross_sales), pGross = num(p.gross_sales);
