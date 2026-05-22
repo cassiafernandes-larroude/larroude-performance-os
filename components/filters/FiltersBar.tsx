@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
@@ -28,7 +28,7 @@ function granularityLabel(days: number): string {
   return "mensal";
 }
 
-export function FiltersBar() {
+export function FiltersBar({ hidePeriod = false, hideDateRange = false }: { hidePeriod?: boolean; hideDateRange?: boolean } = {}) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();

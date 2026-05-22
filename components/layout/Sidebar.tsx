@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -22,7 +22,6 @@ import {
   BookOpen,
   Database,
   Bell,
-  Settings2,
   X,
 } from "lucide-react";
 
@@ -193,34 +192,6 @@ export function Sidebar({
           </div>
         ))}
       </nav>
-
-      {/* User */}
-      <div
-        className="px-4 py-3 flex items-center gap-2.5"
-        style={{ borderTop: "1px solid var(--border)" }}
-      >
-        <div
-          className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-semibold"
-          style={{ background: "var(--pink)", color: "white" }}
-        >
-          CL
-        </div>
-        <div className="flex-1 min-w-0">
-          <div
-            className="text-[12px]"
-            style={{ color: "var(--ink)", fontWeight: 500 }}
-          >
-            Cássia L.
-          </div>
-          <div className="text-[10px]" style={{ color: "var(--ink-muted)" }}>
-            Performance Coord.
-          </div>
-        </div>
-        <Settings2
-          className="w-4 h-4 cursor-pointer"
-          style={{ color: "var(--ink-muted)" }}
-        />
-      </div>
-    </aside>
+</aside>
   );
 }
