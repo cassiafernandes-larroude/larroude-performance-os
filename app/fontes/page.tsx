@@ -221,21 +221,6 @@ export default function FontesPage() {
         ))}
       </div>
 
-      <div className="mt-10 card text-[12px]" style={{ color: "var(--ink-soft)" }}>
-        <div className="flex items-center gap-2 mb-2">
-          <Database className="w-4 h-4" style={{ color: "var(--pink-deep)" }} />
-          <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--pink-deep)" }}>
-            Como configurar no Vercel
-          </span>
-        </div>
-        <p className="mb-2">
-          Cole os valores em <strong>Settings - Environment Variables</strong> (Production + Preview).
-          As env vars do C:\Projects\.env sao a fonte canonica - reusar nesse projeto.
-        </p>
-        <p style={{ color: "var(--ink-muted)" }}>
-          Proximo passo: configurar <code>GCP_SA_KEY_BASE64</code> (BQ) e <code>ANTHROPIC_API_KEY</code> (Ask Claude) - destrava o sistema inteiro.
-        </p>
-      </div>
     </div>
   );
 }
