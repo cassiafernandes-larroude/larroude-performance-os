@@ -182,43 +182,41 @@ export default function FontesPage() {
           Fontes de Dados
         </h1>
         <p className="text-[12px] lg:text-[14px] mt-1" style={{ color: "var(--ink-soft)" }}>
-          {allSources.length} integracoes mapeadas - BigQuery e a fonte primaria; Supermetrics apenas fallback
+          {counts.ok} de {allSources.length} integracoes conectadas - BigQuery e a fonte primaria
         </p>
         <div className="flex items-center gap-3 mt-3">
           <span className="badge" style={{ background: "var(--positive-soft)", color: "var(--positive)" }}>
-            {counts.ok} ativas
+            {counts.ok} conectadas
           </span>
-          {counts.partial > 0 && (
-            <span className="badge" style={{ background: "var(--warning-soft)", color: "var(--warning)" }}>
-              {counts.partial} parciais
-            </span>
-          )}
-          {counts.missing > 0 && (
-            <span className="badge" style={{ background: "var(--negative-soft)", color: "var(--negative)" }}>
-              {counts.missing} faltam
-            </span>
-          )}
         </div>
       </div>
 
       <div className="space-y-8">
-        {sections.map((section) => (
-          <section key={section.title}>
-            <div className="section-marker mb-3">
-              <span
-                className="text-[11px] font-semibold uppercase tracking-wider"
-                style={{ color: "var(--ink-muted)", letterSpacing: "0.06em" }}
-              >
-                {section.title}
-              </span>
-            </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              {section.sources.map((s) => (
-                <SourceCard key={s.name} source={s} />
-              ))}
-            </div>
-          </section>
-        ))}
+        {sections
+          .map((section) => ({ ...section, sources: section.sources.filter((s) => s.status === "ok") }))
+          .filter((section) => section.sources.length > 0)
+          .map((section) => (
+            <section key={section.title}>
+              <div className="section-marker mb-3">
+                <span
+                  className="text-[11px] font-semibold uppercase tracking-wider"
+                  style={{ color: "var(--ink-muted)", letterSpacing: "0.06em" }}
+                >
+                  {section.title}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                {section.sources.map((s) => (
+                  <SourceCard key={s.name} source={s} />
+                ))}
+              </div>
+            </section>
+          ))}
+        {sections.flatMap((s) => s.sources).filter((s) => s.status === "ok").length === 0 && (
+          <div className="card text-center py-12" style={{ color: "var(--ink-muted)" }}>
+            <p className="text-[14px]">Nenhuma fonte conectada ainda. Configure as env vars no Vercel para ativar.</p>
+          </div>
+        )}
       </div>
 
     </div>
