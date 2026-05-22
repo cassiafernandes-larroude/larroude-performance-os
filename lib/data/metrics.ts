@@ -1,73 +1,67 @@
 import type { Market, Period, MetricBundle, Metric, MetricSource } from "@/types/metric";
-import { dateRangeForPeriod, previousPeriodRange } from "@/lib/utils/periods";
+import { dateRangeForPeriod, previousPeriodRange, periodToDays } from "@/lib/utils/periods";
 import { formatCurrency, formatMultiplier, formatNumber, formatPercent } from "@/lib/utils/format";
 import { hasBigQueryCredentials, runQuery } from "@/lib/bigquery/client";
-import { ordersAggregateSQL, adsSpendSQL } from "@/lib/bigquery/queries/metrics";
+import { aggregatedKpisSQL } from "@/lib/bigquery/queries/metrics";
 import { cached } from "@/lib/cache";
 
 type AggRow = {
+  gross_sales: number | string;
+  discounts: number | string;
+  order_revenue: number | string;
+  total_sales: number | string;
   orders: number;
-  gross_sales: number;
-  total_sales: number;
+  aov: number | string;
+  spend: number | string;
+  meta_spend: number | string;
+  google_spend: number | string;
+  roas_gross: number;
+  roas_order: number;
+  roas_total: number;
   new_customers: number;
-  aov: number;
+  cac: number;
 };
 
-type AdsRow = {
-  meta_spend: number;
-  google_spend: number;
-  total_spend: number;
-};
+// Periodo: ultimos N dias COMPLETOS (sem hoje), igual ao dashboard principal
+function dateRangeCompleted(period: Period, today = new Date()): { from: string; to: string } {
+  const days = periodToDays(period);
+  // "to" = ontem
+  const to = new Date(today.getTime() - 24 * 3600 * 1000);
+  const from = new Date(to.getTime() - (days - 1) * 24 * 3600 * 1000);
+  return {
+    from: from.toISOString().slice(0, 10),
+    to: to.toISOString().slice(0, 10),
+  };
+}
 
-async function fetchOrdersBQ(market: Market, range: { from: string; to: string }): Promise<AggRow | null> {
+function previousDateRangeCompleted(period: Period, today = new Date()): { from: string; to: string } {
+  const days = periodToDays(period);
+  const to = new Date(today.getTime() - (days + 1) * 24 * 3600 * 1000);
+  const from = new Date(to.getTime() - (days - 1) * 24 * 3600 * 1000);
+  return {
+    from: from.toISOString().slice(0, 10),
+    to: to.toISOString().slice(0, 10),
+  };
+}
+
+async function fetchKpis(market: Market, range: { from: string; to: string }): Promise<AggRow | null> {
   if (!hasBigQueryCredentials()) return null;
   try {
-    const rows = await runQuery<AggRow>(ordersAggregateSQL(market), {
-      from: range.from,
-      to: range.to,
+    const rows = await runQuery<AggRow>(aggregatedKpisSQL(market), {
+      market_lower: market.toLowerCase(),
+      start: range.from,
+      end: range.to,
     });
     return rows[0] ?? null;
-  } catch {
+  } catch (err) {
+    console.error(`fetchKpis(${market}) failed:`, err);
     return null;
   }
 }
 
-async function fetchAdsBQ(market: Market, range: { from: string; to: string }): Promise<AdsRow | null> {
-  if (!hasBigQueryCredentials()) return null;
-  try {
-    const rows = await runQuery<AdsRow>(adsSpendSQL(market), {
-      market: market.toLowerCase(),
-      from: range.from,
-      to: range.to,
-    });
-    return rows[0] ?? null;
-  } catch {
-    return null;
-  }
-}
-
-function mockOrders(market: Market): AggRow {
-  return market === "US"
-    ? { orders: 9_870, gross_sales: 3_460_000, total_sales: 2_800_000, new_customers: 6_240, aov: 284 }
-    : { orders: 3_847, gross_sales: 2_140_000, total_sales: 1_950_000, new_customers: 2_390, aov: 556 };
-}
-
-function mockAds(market: Market): AdsRow {
-  return market === "US"
-    ? { meta_spend: 946_000, google_spend: 137_000, total_spend: 1_083_000 }
-    : { meta_spend: 412_000, google_spend: 72_000, total_spend: 484_000 };
-}
-
-function mockOrdersPrev(market: Market): AggRow {
-  return market === "US"
-    ? { orders: 6_120, gross_sales: 2_145_000, total_sales: 1_730_000, new_customers: 3_870, aov: 282 }
-    : { orders: 3_170, gross_sales: 1_807_000, total_sales: 1_645_000, new_customers: 2_005, aov: 519 };
-}
-
-function mockAdsPrev(market: Market): AdsRow {
-  return market === "US"
-    ? { meta_spend: 569_000, google_spend: 99_000, total_spend: 568_000 }
-    : { meta_spend: 365_000, google_spend: 64_000, total_spend: 429_000 };
+function num(v: number | string | null | undefined): number {
+  if (v == null) return 0;
+  return typeof v === "string" ? Number(v) : v;
 }
 
 function pct(curr: number, prev: number): number | null {
@@ -75,33 +69,33 @@ function pct(curr: number, prev: number): number | null {
   return ((curr - prev) / prev) * 100;
 }
 
-export async function getMetricBundle(market: Market, period: Period): Promise<MetricBundle> {
-  const cacheKey = `metrics:${market}:${period}`;
-  return cached(cacheKey, 300, async () => {
-    const range = dateRangeForPeriod(period);
-    const prevRange = previousPeriodRange(period);
+const MOCK_US: AggRow = {
+  gross_sales: 3_252_000, discounts: 313_000, order_revenue: 3_135_000, total_sales: 2_820_000,
+  orders: 10_296, aov: 333, spend: 1_100_000, meta_spend: 945_000, google_spend: 151_000,
+  roas_gross: 3.21, roas_order: 3.13, roas_total: 2.57, new_customers: 4_754, cac: 231,
+};
 
-    const [ordersBQ, adsBQ, prevOrdersBQ, prevAdsBQ] = await Promise.all([
-      fetchOrdersBQ(market, range),
-      fetchAdsBQ(market, range),
-      fetchOrdersBQ(market, prevRange),
-      fetchAdsBQ(market, prevRange),
+const MOCK_BR: AggRow = {
+  gross_sales: 9_250_000, discounts: 800_000, order_revenue: 9_400_000, total_sales: 9_530_000,
+  orders: 12_500, aov: 760, spend: 695_000, meta_spend: 442_000, google_spend: 241_000,
+  roas_gross: 13.29, roas_order: 13.70, roas_total: 13.70, new_customers: 7_700, cac: 90,
+};
+
+export async function getMetricBundle(market: Market, period: Period): Promise<MetricBundle> {
+  const cacheKey = `metrics-v2:${market}:${period}`;
+  return cached(cacheKey, 300, async () => {
+    const range = dateRangeCompleted(period);
+    const prevRange = previousDateRangeCompleted(period);
+
+    const [curr, prev] = await Promise.all([
+      fetchKpis(market, range),
+      fetchKpis(market, prevRange),
     ]);
 
-    const source: MetricSource = ordersBQ || adsBQ ? "BQ" : "Mock";
-    const orders = ordersBQ ?? mockOrders(market);
-    const ads = adsBQ ?? mockAds(market);
-    const prevOrders = prevOrdersBQ ?? mockOrdersPrev(market);
-    const prevAds = prevAdsBQ ?? mockAdsPrev(market);
-
+    const source: MetricSource = curr ? "BQ" : "Mock";
+    const c = curr ?? (market === "US" ? MOCK_US : MOCK_BR);
+    const p = prev ?? (market === "US" ? MOCK_US : MOCK_BR);
     const currency = market === "US" ? "USD" : "BRL";
-
-    const roasGross = ads.total_spend ? orders.gross_sales / ads.total_spend : 0;
-    const roasOrder = ads.total_spend ? orders.total_sales / ads.total_spend : 0;
-    const prevRoasGross = prevAds.total_spend ? prevOrders.gross_sales / prevAds.total_spend : 0;
-    const cvr = orders.orders ? (orders.orders / 1_000_000) * 100 : 0; // placeholder
-    const cac = orders.new_customers ? ads.total_spend / orders.new_customers : 0;
-    const prevCac = prevOrders.new_customers ? prevAds.total_spend / prevOrders.new_customers : 0;
 
     const fresh_until = new Date(Date.now() + 5 * 60 * 1000).toISOString();
     const generated_at = new Date().toISOString();
@@ -121,97 +115,100 @@ export async function getMetricBundle(market: Market, period: Period): Promise<M
       hint: m.hint,
     });
 
+    const cSpend = num(c.spend), pSpend = num(p.spend);
+    const cMetaSpend = num(c.meta_spend), pMetaSpend = num(p.meta_spend);
+    const cGoogleSpend = num(c.google_spend), pGoogleSpend = num(p.google_spend);
+    const cGross = num(c.gross_sales), pGross = num(p.gross_sales);
+    const cOrderRev = num(c.order_revenue), pOrderRev = num(p.order_revenue);
+    const cTotal = num(c.total_sales), pTotal = num(p.total_sales);
+    const cAov = num(c.aov);
+    const cCac = num(c.cac), pCac = num(p.cac);
+
     const metrics: Metric[] = [
       baseMetric({
         key: "amount_spent",
         label: "AMOUNT SPENT",
-        value: ads.total_spend,
-        formatted: formatCurrency(ads.total_spend, currency),
-        delta_pct: pct(ads.total_spend, prevAds.total_spend),
+        value: cSpend,
+        formatted: formatCurrency(cSpend, currency),
+        delta_pct: pct(cSpend, pSpend),
       }),
       baseMetric({
         key: "meta_spend",
         label: "META SPEND",
-        value: ads.meta_spend,
-        formatted: formatCurrency(ads.meta_spend, currency),
-        delta_pct: pct(ads.meta_spend, prevAds.meta_spend),
+        value: cMetaSpend,
+        formatted: formatCurrency(cMetaSpend, currency),
+        delta_pct: pct(cMetaSpend, pMetaSpend),
       }),
       baseMetric({
         key: "google_spend",
         label: "GOOGLE SPEND",
-        value: ads.google_spend,
-        formatted: formatCurrency(ads.google_spend, currency),
-        delta_pct: pct(ads.google_spend, prevAds.google_spend),
-        hint: market === "US" ? "Google US" : "Google BR",
+        value: cGoogleSpend,
+        formatted: formatCurrency(cGoogleSpend, currency),
+        delta_pct: pct(cGoogleSpend, pGoogleSpend),
+        hint: market === "US" ? "Google Ads US" : "Google Ads BR",
       }),
       baseMetric({
         key: "roas_gross",
         label: "ROAS GROSS",
-        value: roasGross,
-        formatted: formatMultiplier(roasGross),
+        value: c.roas_gross,
+        formatted: formatMultiplier(c.roas_gross),
         currency: null,
-        delta_pct: pct(roasGross, prevRoasGross),
+        delta_pct: pct(c.roas_gross, p.roas_gross),
       }),
       baseMetric({
         key: "roas_order",
         label: "ROAS ORDER",
-        value: roasOrder,
-        formatted: formatMultiplier(roasOrder),
+        value: c.roas_order,
+        formatted: formatMultiplier(c.roas_order),
         currency: null,
-        hint: "Rev / Spend",
+        hint: "Order Revenue / Spend",
       }),
       baseMetric({
         key: "cac",
         label: "CAC",
-        value: cac,
-        formatted: formatCurrency(cac, currency, false),
-        delta_pct: pct(cac, prevCac),
+        value: cCac,
+        formatted: formatCurrency(cCac, currency, false),
+        delta_pct: pct(cCac, pCac),
       }),
       baseMetric({
         key: "gross_sales",
         label: "GROSS SALES",
-        value: orders.gross_sales,
-        formatted: formatCurrency(orders.gross_sales, currency),
-        delta_pct: pct(orders.gross_sales, prevOrders.gross_sales),
+        value: cGross,
+        formatted: formatCurrency(cGross, currency),
+        delta_pct: pct(cGross, pGross),
       }),
       baseMetric({
         key: "total_sales",
         label: "TOTAL SALES",
-        value: orders.total_sales,
-        formatted: formatCurrency(orders.total_sales, currency),
-        delta_pct: pct(orders.total_sales, prevOrders.total_sales),
+        value: cTotal,
+        formatted: formatCurrency(cTotal, currency),
+        delta_pct: pct(cTotal, pTotal),
       }),
       baseMetric({
         key: "orders",
         label: "ORDERS",
-        value: orders.orders,
-        formatted: formatNumber(orders.orders),
+        value: c.orders,
+        formatted: formatNumber(c.orders),
         currency: null,
-        delta_pct: pct(orders.orders, prevOrders.orders),
+        delta_pct: pct(c.orders, p.orders),
       }),
       baseMetric({
         key: "aov",
         label: "AOV",
-        value: orders.aov,
-        formatted: formatCurrency(orders.aov, currency, false),
-        hint: market === "US" ? "United States" : "Brasil",
+        value: cAov,
+        formatted: formatCurrency(cAov, currency, false),
+        hint: market === "US" ? "Order Rev / Orders" : "Order Rev / Orders",
       }),
       baseMetric({
         key: "new_customers",
         label: "NEW CUSTOMERS",
-        value: orders.new_customers,
-        formatted: formatNumber(orders.new_customers),
+        value: c.new_customers,
+        formatted: formatNumber(c.new_customers),
         currency: null,
-        delta_pct: pct(orders.new_customers, prevOrders.new_customers),
+        delta_pct: pct(c.new_customers, p.new_customers),
       }),
     ];
 
-    return {
-      market,
-      period,
-      date_range: range,
-      metrics,
-      generated_at,
-    };
+    return { market, period, date_range: range, metrics, generated_at };
   });
 }

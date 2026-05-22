@@ -1,56 +1,109 @@
 import type { Market } from "@/types/metric";
 
-const TABLE: Record<Market, string> = {
-  US: "larroude-data-platform.shopify_us.orders",
-  BR: "larroude-data-platform.shopify_br.orders",
+const TZ: Record<Market, string> = {
+  US: "America/New_York",
+  BR: "America/Sao_Paulo",
 };
 
-// Query de orders + new customers via CTE first_order_date (Shopify Reports compatible)
-export function ordersAggregateSQL(market: Market) {
+const DATASET: Record<Market, string> = {
+  US: "stg_shopify",
+  BR: "stg_shopify_br",
+};
+
+// Query oficial replicada do larroude-dashboard-geral (lib/queries.ts:queryAggregatedKpis)
+// Project: larroude-data-prod
+export function aggregatedKpisSQL(market: Market) {
+  const dataset = DATASET[market];
+  const tz = TZ[market];
+
+  const spendExpr = market === "BR"
+    ? `CASE WHEN LOWER(ad.channel) LIKE 'meta%' THEN ad.spend * IFNULL(fx.avg_rate_brl_usd, 5.0) ELSE ad.spend END`
+    : `ad.spend`;
+
+  const fxJoinSql = market === "BR"
+    ? `LEFT JOIN \`larroude-data-prod.gold.fx_rates_monthly\` fx ON fx.month = FORMAT_DATE('%Y-%m', ad.date)`
+    : "";
+
   return `
-    WITH first_order AS (
+    WITH
+    sales AS (
       SELECT
-        JSON_EXTRACT_SCALAR(customer, '$.id') AS customer_id,
-        MIN(DATE(created_at)) AS first_date
-      FROM \`${TABLE[market]}\`
-      WHERE cancelled_at IS NULL
-        AND test = FALSE
-        AND customer IS NOT NULL
-      GROUP BY 1
+        SUM(CAST(total_line_items_price AS NUMERIC)) AS gross_sales,
+        SUM(CAST(total_discounts AS NUMERIC)) AS discounts,
+        SUM(CAST(total_price AS NUMERIC)) AS order_revenue,
+        SUM(CAST(total_tax AS NUMERIC)) AS tax,
+        COUNT(*) AS orders
+      FROM \`larroude-data-prod.${dataset}.orders\`
+      WHERE DATE(created_at, '${tz}') BETWEEN @start AND @end
+        AND financial_status NOT IN ('voided','refunded')
     ),
-    period AS (
+    units_t AS (
+      SELECT SUM(CAST(JSON_VALUE(li,'$.quantity') AS INT64)) AS units
+      FROM \`larroude-data-prod.${dataset}.orders\` o,
+           UNNEST(JSON_QUERY_ARRAY(line_items)) li
+      WHERE DATE(o.created_at) BETWEEN @start AND @end
+        AND o.financial_status NOT IN ('voided','refunded')
+    ),
+    refunds_raw AS (
       SELECT
-        o.id,
-        o.total_line_items_price,
-        o.total_discounts,
-        o.total_price,
-        JSON_EXTRACT_SCALAR(o.customer, '$.id') AS customer_id,
-        DATE(o.created_at) AS order_date
-      FROM \`${TABLE[market]}\` o
-      WHERE DATE(o.created_at) BETWEEN @from AND @to
-        AND o.cancelled_at IS NULL
-        AND o.test = FALSE
+        DATE(created_at, '${tz}') AS d,
+        (SELECT SUM(CAST(JSON_VALUE(t,'$.amount') AS NUMERIC))
+         FROM UNNEST(JSON_QUERY_ARRAY(transactions)) t
+         WHERE JSON_VALUE(t,'$.kind') = 'refund') AS refund_amount
+      FROM \`larroude-data-prod.${dataset}.order_refunds\`
+      WHERE DATE(created_at, '${tz}') BETWEEN @start AND @end
+    ),
+    returns_t AS (
+      SELECT SUM(IFNULL(refund_amount, 0)) AS refund_value
+      FROM refunds_raw
+    ),
+    ads AS (
+      SELECT
+        SUM(${spendExpr}) AS spend,
+        SUM(IF(LOWER(ad.channel) LIKE 'meta%', ${spendExpr}, 0)) AS meta_spend,
+        SUM(IF(LOWER(ad.channel) LIKE 'google%', ad.spend, 0)) AS google_spend,
+        SUM(ad.impressions) AS impressions,
+        SUM(ad.clicks) AS clicks,
+        SUM(ad.conversions) AS pixel_purchases
+      FROM \`larroude-data-prod.gold.all_channels_daily\` ad
+      ${fxJoinSql}
+      WHERE LOWER(ad.market) = @market_lower
+        AND ad.date BETWEEN @start AND @end
+    ),
+    first_order_per_customer AS (
+      SELECT JSON_VALUE(customer, '$.id') AS cust_id,
+             MIN(DATE(created_at, '${tz}')) AS first_dt
+      FROM \`larroude-data-prod.${dataset}.orders\`
+      WHERE customer IS NOT NULL AND financial_status NOT IN ('voided','refunded')
+      GROUP BY cust_id
+    ),
+    customer_split AS (
+      SELECT
+        COUNTIF(DATE(o.created_at) = fo.first_dt) AS new_customer_orders,
+        SUM(IF(DATE(o.created_at) = fo.first_dt, CAST(o.total_price AS NUMERIC), 0)) AS new_customer_revenue
+      FROM \`larroude-data-prod.${dataset}.orders\` o
+      JOIN first_order_per_customer fo ON JSON_VALUE(o.customer, '$.id') = fo.cust_id
+      WHERE DATE(o.created_at) BETWEEN @start AND @end
+        AND o.financial_status NOT IN ('voided','refunded')
     )
     SELECT
-      COUNT(DISTINCT p.id) AS orders,
-      SUM(p.total_line_items_price - COALESCE(p.total_discounts, 0)) AS gross_sales,
-      SUM(p.total_price) AS total_sales,
-      COUNT(DISTINCT IF(f.first_date = p.order_date, p.customer_id, NULL)) AS new_customers,
-      SAFE_DIVIDE(SUM(p.total_price), COUNT(DISTINCT p.id)) AS aov
-    FROM period p
-    LEFT JOIN first_order f ON p.customer_id = f.customer_id
-  `;
-}
-
-// Query de ads spend — channel (não platform), market lowercase
-export function adsSpendSQL(market: Market) {
-  return `
-    SELECT
-      SUM(IF(channel = 'meta_ads', spend, 0)) AS meta_spend,
-      SUM(IF(channel = 'google_ads', spend, 0)) AS google_spend,
-      SUM(spend) AS total_spend
-    FROM \`larroude-data-platform.gold_marketing.fct_ads_spend_daily\`
-    WHERE LOWER(market) = LOWER(@market)
-      AND DATE(date) BETWEEN @from AND @to
+      s.gross_sales,
+      s.discounts,
+      s.order_revenue,
+      (s.order_revenue - IFNULL(r.refund_value, 0)) AS total_sales,
+      s.orders,
+      SAFE_DIVIDE(s.order_revenue, NULLIF(s.orders, 0)) AS aov,
+      a.spend,
+      a.meta_spend,
+      a.google_spend,
+      a.impressions,
+      a.clicks,
+      SAFE_DIVIDE(s.gross_sales, NULLIF(a.spend, 0)) AS roas_gross,
+      SAFE_DIVIDE(s.order_revenue, NULLIF(a.spend, 0)) AS roas_order,
+      SAFE_DIVIDE(s.order_revenue - IFNULL(r.refund_value, 0), NULLIF(a.spend, 0)) AS roas_total,
+      cs.new_customer_orders AS new_customers,
+      SAFE_DIVIDE(a.spend, NULLIF(cs.new_customer_orders, 0)) AS cac,
+      cs.new_customer_revenue
+    FROM sales s, units_t u, returns_t r, ads a, customer_split cs
   `;
 }
