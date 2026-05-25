@@ -82,6 +82,30 @@ async function fetchInsights(accountId: string, start: string, end: string): Pro
   }
 }
 
+// Ajustes manuais de spend (off-platform / historico nao trackeado pela API)
+// Aplicado quando o range solicitado intersecta o mes do ajuste.
+// Ajustes manuais de spend (off-platform / historico nao trackeado pela API)
+// Aplicado quando o range solicitado intersecta o mes do ajuste.
+type SpendAdjustment = { market: Market; yyyymm: string; amount: number; note: string };
+const SPEND_ADJUSTMENTS: SpendAdjustment[] = [
+  { market: "US", yyyymm: "2025-09", amount: 400_000, note: "Ajuste manual Meta US Set/2025 (+$400k)" },
+];
+
+function adjustmentForRange(market: Market, start: string, end: string): number {
+  let total = 0;
+  for (const adj of SPEND_ADJUSTMENTS) {
+    if (adj.market !== market) continue;
+    const monthStart = `${adj.yyyymm}-01`;
+    const [y, m] = adj.yyyymm.split("-").map(Number);
+    const monthEndDate = new Date(Date.UTC(y, m, 0));
+    const monthEnd = monthEndDate.toISOString().slice(0, 10);
+    if (start <= monthEnd && end >= monthStart) {
+      total += adj.amount;
+    }
+  }
+  return total;
+}
+
 export async function getMetaSpendApi(market: Market, start: string, end: string): Promise<number> {
   const accountIds = META_ACCOUNT_IDS[market];
   const targetCurrency = market === "BR" ? "BRL" : "USD";
@@ -94,6 +118,8 @@ export async function getMetaSpendApi(market: Market, start: string, end: string
       total += r.spend * fx;
     }
   }
+  // Aplica ajustes manuais de spend (off-platform / historico) que tocam o range
+  total += adjustmentForRange(market, start, end);
   return total;
 }
 
