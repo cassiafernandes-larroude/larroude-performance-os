@@ -5,6 +5,7 @@ import { hasBigQueryCredentials, runQuery } from "@/lib/bigquery/client";
 import { aggregatedKpisSQL } from "@/lib/bigquery/queries/metrics";
 import { getMetaSpendApi, hasMetaCredentials } from "@/lib/meta-api";
 import { cached } from "@/lib/cache";
+import { getFixedToolsCostInRange, getAgentShopCost } from "@/lib/channel-costs";
 
 type AggRow = {
   gross_sales: number | string;
@@ -95,8 +96,8 @@ export async function getMetricBundle(
   customRange?: { from: string; to: string }
 ): Promise<MetricBundle> {
   const cacheKey = customRange
-    ? `metrics-v9:${market}:custom:${customRange.from}:${customRange.to}`
-    : `metrics-v9:${market}:${period}`;
+    ? `metrics-v10:${market}:custom:${customRange.from}:${customRange.to}`
+    : `metrics-v10:${market}:${period}`;
   return cached(cacheKey, 1800, async () => {
     const range = customRange ?? dateRangeCompleted(period);
     const prevRange = customRange
@@ -149,8 +150,46 @@ export async function getMetricBundle(
         console.warn("Meta API fallback to BQ:", err);
       }
     }
-    const cSpend = cMetaSpend + cGoogleSpend;
-    const pSpend = pMetaSpend + pGoogleSpend;
+    // Tools cost (Klaviyo, Attentive, Criteo, Agent.shop) â soma no AMOUNT SPENT
+    // para que ROAS / CAC / CPO reflitam o custo total (ads + ferramentas).
+    const cFixedTools = getFixedToolsCostInRange(market, range.from, range.to);
+    const pFixedTools = getFixedToolsCostInRange(market, prevRange.from, prevRange.to);
+    // Agent.shop BR = 10% da receita atribuida ao canal Agent.shop (via UTM landing_site).
+    let cAgent = 0, pAgent = 0;
+    if (market === "BR" && hasBigQueryCredentials()) {
+      try {
+        const agentSQL = `
+          SELECT SUM(CAST(total_price AS NUMERIC)) AS rev
+          FROM \`larroude-data-prod.stg_shopify_br.orders\`
+          WHERE DATE(created_at, 'America/Sao_Paulo') BETWEEN @start AND @end
+            AND financial_status NOT IN ('voided','refunded')
+            AND LOWER(IFNULL(financial_status, '')) NOT IN ('pending', 'expired', 'authorized')
+            AND (
+              JSON_VALUE(customer, '$.tags') IS NULL
+              OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(customer, '$.tags')), r'b2b|wholesale')
+            )
+            AND NOT REGEXP_CONTAINS(LOWER(IFNULL(tags, '')), r'b2b|wholesale')
+            AND (
+              REGEXP_CONTAINS(LOWER(IFNULL(landing_site, '')), r'agent[._-]?shop|utm_source=agent')
+              OR REGEXP_CONTAINS(LOWER(IFNULL(referring_site, '')), r'agent[._-]?shop')
+            )
+        `;
+        const [cAgentRows, pAgentRows] = await Promise.all([
+          runQuery<{ rev: number | string }>(agentSQL, { start: range.from, end: range.to }),
+          runQuery<{ rev: number | string }>(agentSQL, { start: prevRange.from, end: prevRange.to }),
+        ]);
+        const cAgentRev = num(cAgentRows[0]?.rev);
+        const pAgentRev = num(pAgentRows[0]?.rev);
+        cAgent = getAgentShopCost("BR", cAgentRev);
+        pAgent = getAgentShopCost("BR", pAgentRev);
+      } catch (err) {
+        console.warn("Agent.shop revenue query failed:", err);
+      }
+    }
+    const cToolsCost = cFixedTools + cAgent;
+    const pToolsCost = pFixedTools + pAgent;
+    const cSpend = cMetaSpend + cGoogleSpend + cToolsCost;
+    const pSpend = pMetaSpend + pGoogleSpend + pToolsCost;
     const cGross = num(c.gross_sales), pGross = num(p.gross_sales);
     // Recalcular ROAS, CAC com spend Meta API real (substitui valores do BQ que usavam spend incompleto)
     const recalcRoasGross = cSpend > 0 ? cGross / cSpend : 0;
