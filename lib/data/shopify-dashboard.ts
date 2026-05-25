@@ -167,13 +167,7 @@ const MOCK_BR: Omit<ShopifyBundle, "market" | "period" | "source"> = {
 function commonFiltersShopify(market: Market, alias: string = ""): string {
   const a = alias; // "" ou "o."
   const pix = market === "BR" ? `
-    AND NOT (
-      LOWER(IFNULL(${a}financial_status, '')) IN ('pending', 'expired', 'authorized')
-      AND (
-        LOWER(IFNULL(${a}gateway, '')) LIKE '%pix%'
-        OR LOWER(IFNULL(${a}payment_gateway_names, '')) LIKE '%pix%'
-      )
-    )
+    AND LOWER(IFNULL(${a}financial_status, '')) NOT IN ('pending', 'expired', 'authorized')
   ` : "";
   return `
     ${a}cancelled_at IS NULL AND ${a}test = FALSE
@@ -189,7 +183,7 @@ function commonFiltersShopify(market: Market, alias: string = ""): string {
 }
 
 export async function getShopifyBundle(market: Market, period: { from: string; to: string }): Promise<ShopifyBundle> {
-  return cached(`shopify-v1:${market}:${period.from}:${period.to}`, 1800, async () => {
+  return cached(`shopify-v2:${market}:${period.from}:${period.to}`, 1800, async () => {
     const range = period;
 
     if (!hasBigQueryCredentials()) {
@@ -274,13 +268,7 @@ export async function getShopifyBundle(market: Market, period: { from: string; t
             )
             AND NOT REGEXP_CONTAINS(LOWER(IFNULL(o.tags, '')), r'b2b|wholesale')
             ${market === "BR" ? `
-            AND NOT (
-              LOWER(IFNULL(o.financial_status, '')) IN ('pending', 'expired', 'authorized')
-              AND (
-                LOWER(IFNULL(o.gateway, '')) LIKE '%pix%'
-                OR LOWER(IFNULL(o.payment_gateway_names, '')) LIKE '%pix%'
-              )
-            )` : ""}
+            AND LOWER(IFNULL(o.financial_status, '')) NOT IN ('pending', 'expired', 'authorized')` : ""}
         )
         SELECT
           COALESCE(sku_root, 'sem-sku') AS sku,
@@ -322,13 +310,7 @@ export async function getShopifyBundle(market: Market, period: { from: string; t
           )
           AND NOT REGEXP_CONTAINS(LOWER(IFNULL(o.tags, '')), r'b2b|wholesale')
           ${market === "BR" ? `
-          AND NOT (
-            LOWER(IFNULL(o.financial_status, '')) IN ('pending', 'expired', 'authorized')
-            AND (
-              LOWER(IFNULL(o.gateway, '')) LIKE '%pix%'
-              OR LOWER(IFNULL(o.payment_gateway_names, '')) LIKE '%pix%'
-            )
-          )` : ""}
+          AND LOWER(IFNULL(o.financial_status, '')) NOT IN ('pending', 'expired', 'authorized')` : ""}
         GROUP BY title
         ORDER BY units DESC
         LIMIT 8
@@ -354,13 +336,7 @@ export async function getShopifyBundle(market: Market, period: { from: string; t
           )
           AND NOT REGEXP_CONTAINS(LOWER(IFNULL(o.tags, '')), r'b2b|wholesale')
           ${market === "BR" ? `
-          AND NOT (
-            LOWER(IFNULL(o.financial_status, '')) IN ('pending', 'expired', 'authorized')
-            AND (
-              LOWER(IFNULL(o.gateway, '')) LIKE '%pix%'
-              OR LOWER(IFNULL(o.payment_gateway_names, '')) LIKE '%pix%'
-            )
-          )` : ""}
+          AND LOWER(IFNULL(o.financial_status, '')) NOT IN ('pending', 'expired', 'authorized')` : ""}
         GROUP BY collection
         ORDER BY revenue DESC
         LIMIT 8

@@ -39,13 +39,7 @@ const ORDERS_TABLE: Record<Market, string> = {
 // + filtros tag B2B/wholesale na order + PIX nao pago (so BR)
 function commonFilters(market: Market): string {
   const pixFilter = market === "BR" ? `
-    AND NOT (
-      LOWER(IFNULL(financial_status, '')) IN ('pending', 'expired', 'authorized')
-      AND (
-        LOWER(IFNULL(gateway, '')) LIKE '%pix%'
-        OR LOWER(IFNULL(payment_gateway_names, '')) LIKE '%pix%'
-      )
-    )
+    AND LOWER(IFNULL(financial_status, '')) NOT IN ('pending', 'expired', 'authorized')
   ` : "";
 
   return `
@@ -101,7 +95,7 @@ const MOCK_BR: Omit<NorthStarBundle, "market" | "period" | "source"> = {
 };
 
 export async function getNorthStarBundle(market: Market): Promise<NorthStarBundle> {
-  return cached(`northstar-v5:${market}`, 1800, async () => {
+  return cached(`northstar-v6:${market}`, 1800, async () => {
     // Janela 12 meses, terminando ontem
     const today = new Date();
     const to = new Date(today.getTime() - 24 * 3600 * 1000);

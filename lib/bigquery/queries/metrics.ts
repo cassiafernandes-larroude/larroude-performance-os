@@ -46,13 +46,7 @@ export function aggregatedKpisSQL(market: Market) {
   // Filtro PIX nao pago (so BR): exclui orders com gateway PIX em status pending/expired
   const PIX_FILTER = market === "BR"
     ? `
-    AND NOT (
-      LOWER(IFNULL(financial_status, '')) IN ('pending', 'expired', 'authorized')
-      AND (
-        LOWER(IFNULL(gateway, '')) LIKE '%pix%'
-        OR LOWER(IFNULL(payment_gateway_names, '')) LIKE '%pix%'
-      )
-    )
+    AND LOWER(IFNULL(financial_status, '')) NOT IN ('pending', 'expired', 'authorized')
   `
     : "";
 
@@ -84,13 +78,7 @@ export function aggregatedKpisSQL(market: Market) {
         )
         AND NOT REGEXP_CONTAINS(LOWER(IFNULL(o.tags, '')), r'b2b|wholesale')
         ${market === "BR" ? `
-        AND NOT (
-          LOWER(IFNULL(o.financial_status, '')) IN ('pending', 'expired', 'authorized')
-          AND (
-            LOWER(IFNULL(o.gateway, '')) LIKE '%pix%'
-            OR LOWER(IFNULL(o.payment_gateway_names, '')) LIKE '%pix%'
-          )
-        )
+        AND LOWER(IFNULL(o.financial_status, '')) NOT IN ('pending', 'expired', 'authorized')
         ` : ""}
     ),
     refunds_raw AS (
@@ -141,13 +129,7 @@ export function aggregatedKpisSQL(market: Market) {
         )
         AND NOT REGEXP_CONTAINS(LOWER(IFNULL(o.tags, '')), r'b2b|wholesale')
         ${market === "BR" ? `
-        AND NOT (
-          LOWER(IFNULL(o.financial_status, '')) IN ('pending', 'expired', 'authorized')
-          AND (
-            LOWER(IFNULL(o.gateway, '')) LIKE '%pix%'
-            OR LOWER(IFNULL(o.payment_gateway_names, '')) LIKE '%pix%'
-          )
-        )
+        AND LOWER(IFNULL(o.financial_status, '')) NOT IN ('pending', 'expired', 'authorized')
         ` : ""}
     )
     SELECT
