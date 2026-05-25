@@ -163,25 +163,27 @@ const MOCK_BR: Omit<ShopifyBundle, "market" | "period" | "source"> = {
 };
 
 // Filtros: exclui canceladas/test/B2B/wholesale; para BR exclui tambem PIX nao pago
-function commonFiltersShopify(market: Market): string {
+// alias = prefixo da tabela (ex: "" ou "o.") - usado quando filtros aparecem dentro de JOIN/UNNEST
+function commonFiltersShopify(market: Market, alias: string = ""): string {
+  const a = alias; // "" ou "o."
   const pix = market === "BR" ? `
     AND NOT (
-      LOWER(IFNULL(financial_status, '')) IN ('pending', 'expired', 'authorized')
+      LOWER(IFNULL(${a}financial_status, '')) IN ('pending', 'expired', 'authorized')
       AND (
-        LOWER(IFNULL(gateway, '')) LIKE '%pix%'
-        OR LOWER(IFNULL(payment_gateway_names, '')) LIKE '%pix%'
+        LOWER(IFNULL(${a}gateway, '')) LIKE '%pix%'
+        OR LOWER(IFNULL(${a}payment_gateway_names, '')) LIKE '%pix%'
       )
     )
   ` : "";
   return `
-    cancelled_at IS NULL AND test = FALSE
-    AND financial_status NOT IN ('voided','refunded')
-    AND JSON_VALUE(customer, '$.id') != '5025734230182'
+    ${a}cancelled_at IS NULL AND ${a}test = FALSE
+    AND ${a}financial_status NOT IN ('voided','refunded')
+    AND JSON_VALUE(${a}customer, '$.id') != '5025734230182'
     AND (
-      JSON_VALUE(customer, '$.tags') IS NULL
-      OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(customer, '$.tags')), r'b2b|wholesale')
+      JSON_VALUE(${a}customer, '$.tags') IS NULL
+      OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(${a}customer, '$.tags')), r'b2b|wholesale')
     )
-    AND NOT REGEXP_CONTAINS(LOWER(IFNULL(tags, '')), r'b2b|wholesale')
+    AND NOT REGEXP_CONTAINS(LOWER(IFNULL(${a}tags, '')), r'b2b|wholesale')
     ${pix}
   `;
 }
@@ -216,7 +218,7 @@ export async function getShopifyBundle(market: Market, period: { from: string; t
           FROM \`larroude-data-prod.${dataset}.orders\` o,
             UNNEST(JSON_QUERY_ARRAY(line_items)) li
           WHERE DATE(o.created_at, '${tz}') BETWEEN @from AND @to
-            AND ${commonFiltersShopify(market).replace(/(?<!o\.)cancelled_at/g, 'o.cancelled_at').replace(/(?<!o\.)test = FALSE/g, 'o.test = FALSE').replace(/(?<!o\.)financial_status/g, 'o.financial_status').replace(/JSON_VALUE\(customer/g, 'JSON_VALUE(o.customer').replace(/(?<!o\.)tags/g, 'o.tags').replace(/(?<!o\.)gateway/g, 'o.gateway').replace(/(?<!o\.)payment_gateway_names/g, 'o.payment_gateway_names')}
+            AND ${commonFiltersShopify(market, "o.")}
         ),
         refunds AS (
           SELECT IFNULL(SUM((SELECT SUM(CAST(JSON_VALUE(t,'$.amount') AS NUMERIC))

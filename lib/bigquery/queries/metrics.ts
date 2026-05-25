@@ -58,7 +58,6 @@ export function aggregatedKpisSQL(market: Market) {
 
   // Combinacao dos filtros padrao para CTEs sobre orders
   const ORDER_FILTERS = `financial_status NOT IN ('voided','refunded') ${B2B_FILTER} ${PIX_FILTER}`;
-  const ORDER_FILTERS_NO_DATE = `(cancelled_at IS NULL OR cancelled_at = '') AND ${ORDER_FILTERS}`;
 
   return `
     WITH

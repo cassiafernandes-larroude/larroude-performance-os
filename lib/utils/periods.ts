@@ -4,6 +4,7 @@ export type Granularity = "day" | "week" | "month";
 
 export function periodToDays(period: Period): number {
   switch (period) {
+    case "today": return 1;
     case "7d": return 7;
     case "14d": return 14;
     case "28d": return 28;
@@ -70,8 +71,9 @@ export function daysBetween(from: string, to: string): number {
 
 export function formatPeriodLabel(period: Period): string {
   const map: Record<Period, string> = {
-    "7d": "7 dias", "14d": "14 dias", "28d": "28 dias",
-    "3M": "3 meses", "6M": "6 meses", "12M": "12 meses",
+    "today": "today",
+    "7d": "7 days", "14d": "14 days", "28d": "28 days",
+    "3M": "3 months", "6M": "6 months", "12M": "12 months",
   };
   return map[period];
 }
