@@ -457,65 +457,42 @@ export async function getShopifyBundle(market: Market, period: { from: string; t
       const returnRate = orders > 0 ? (refundOrders / orders) * 100 : 0;
       if (returnRate > 15) {
         suggestions.push({
-          priority: "high",
+               priority: "high",
           type: "underperforming",
-          title: "Return rate elevado",
-          detail: `${returnRate.toFixed(1)}% dos pedidos foram devolvidos. Top devolvido: ${topReturned[0]?.sku || "?"}.`,
-          metric: `${refundOrders} refunds em ${orders} pedidos`,
-        });
-      }
-      // Checkout abandon alto
-      if (checkoutCvr < 60 && totalCheckouts > 0) {
-        suggestions.push({
-          priority: "high",
-          type: "underperforming",
-          title: "Checkout CVR baixa",
-          detail: `Apenas ${checkoutCvr.toFixed(1)}% dos checkouts completam. ${abandoned.toLocaleString("pt-BR")} abandonos no periodo.`,
-          metric: `${checkoutCvr.toFixed(1)}% checkout CVR`,
-        });
-      }
-      // Top colecao
-      if (collections[0]) {
-        suggestions.push({
-          priority: "medium",
-          type: "high-aov",
-          title: `Colecao top: ${collections[0].collection}`,
-          detail: `Lider em revenue (${(collections[0].revenue / 1000).toFixed(0)}K). Considerar expandir linha.`,
-          metric: `${collections[0].units} unidades`,
-        });
-      }
-      // High AOV product
-      const highAovProduct = topProducts.find((p) => p.avg_price > (revenue / units) * 1.15);
-      if (highAovProduct) {
-        suggestions.push({
-          priority: "medium",
-          type: "high-aov",
-          title: `${highAovProduct.name} - AOV alto`,
-          detail: `Preco medio acima da media. Bundle ou cross-sell para aumentar ticket.`,
-          metric: `${highAovProduct.avg_price.toFixed(0)} avg price`,
+          title: `Return rate alto: ${returnRate.toFixed(1)}%`,
+          detail: "Acima do benchmark da industria (10-12%). Revisar qualidade ou fit dos produtos top devolvidos.",
+          metric: `${returnRate.toFixed(1)}% return rate`,
         });
       }
 
       return {
         market, period: range, source: "BQ" as const,
-        orders, gross_sales: gross, net_sales: netSales,
-        aov: orders > 0 ? revenue / orders : 0,
+        orders, gross_sales: gross, net_sales: netSales, aov: orders > 0 ? revenue / orders : 0,
         units_sold: units,
-        conversion_rate_pct: totalCheckouts > 0 ? checkoutCvr : 0,
-        return_rate_pct: returnRate,
-        discount_pct: discountPct,
+        conversion_rate_pct: 0, // sem session data ainda
+        return_rate_pct: orders > 0 ? (refundOrders / orders) * 100 : 0,
+        discount_pct: gross > 0 ? (discounts / gross) * 100 : 0,
         avg_discount_per_order: orders > 0 ? discounts / orders : 0,
-        funnel: { abandoned_checkouts: abandoned, completed_orders: orders, checkout_cvr_pct: checkoutCvr },
+        funnel: {
+          abandoned_checkouts: abandoned,
+          completed_orders: orders,
+          checkout_cvr_pct: checkoutCvr,
+        },
         top_products: topProducts,
         top_variants: topVariants,
         collections,
-        returns: { total_refund_value: refundVal, refund_orders: refundOrders, return_rate_pct: returnRate, top_returned: topReturned },
+        returns: {
+          total_refund_value: refundVal,
+          refund_orders: refundOrders,
+          return_rate_pct: orders > 0 ? (refundOrders / orders) * 100 : 0,
+          top_returned: topReturned,
+        },
         weekday_perf,
         suggestions,
       };
     } catch (err) {
-      console.error("shopify query failed:", err);
-      return { market, period: range, source: "Mock" as const, ...(market === "US" ? MOCK_US : MOCK_BR) };
+      console.error("shopify dashboard failed:", err);
+      return { market, period: range, source: "Mock", ...(market === "US" ? MOCK_US : MOCK_BR) };
     }
   });
 }
