@@ -5,8 +5,17 @@ import { runQuery, hasBigQueryCredentials } from "@/lib/bigquery/client";
 
 const META_GRAPH_API = "https://graph.facebook.com/v20.0";
 
+// Contas Meta Ads:
+//   US:
+//     - 2047856822417350 = Larroude (US Main)
+//     - 929449929417505  = Larroude PRE-ORDER (US)
+//     - 312869193575906  = Larroude New (US) [adicionado 2026-05-25]
+//   BR:
+//     - 1735567560524487 = Larroude BR (principal, em USD - precisa FX)
+//     - 1975682443187483 = Larroude BR Pre-Order (em BRL)
+//     - 756931007040325  = (em BRL)
 const META_ACCOUNT_IDS: Record<Market, string[]> = {
-  US: ["2047856822417350", "929449929417505"],
+  US: ["2047856822417350", "929449929417505", "312869193575906"],
   BR: ["1735567560524487", "1975682443187483", "756931007040325"],
 };
 

@@ -14,7 +14,8 @@ export function RefreshBar() {
     setTimeout(() => setRefreshing(false), 900);
   };
 
-  const today = new Date().toLocaleDateString("en-US", {
+  // D-1: dados sao sempre do dia de ontem (ultimo dia completo)
+  const yesterday = new Date(Date.now() - 24 * 3600 * 1000).toLocaleDateString("en-US", {
     year: "numeric",
     month: "short",
     day: "numeric",
@@ -30,10 +31,10 @@ export function RefreshBar() {
           className="text-[10px] font-semibold uppercase tracking-wider"
           style={{ color: "var(--ink-muted)" }}
         >
-          Today
+          Yesterday (D-1)
         </span>
         <span className="text-[12px] font-num" style={{ color: "var(--ink)", fontWeight: 500 }}>
-          {today}
+          {yesterday}
         </span>
       </div>
       <button

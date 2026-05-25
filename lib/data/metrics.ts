@@ -95,8 +95,8 @@ export async function getMetricBundle(
   customRange?: { from: string; to: string }
 ): Promise<MetricBundle> {
   const cacheKey = customRange
-    ? `metrics-v7:${market}:custom:${customRange.from}:${customRange.to}`
-    : `metrics-v7:${market}:${period}`;
+    ? `metrics-v8:${market}:custom:${customRange.from}:${customRange.to}`
+    : `metrics-v8:${market}:${period}`;
   return cached(cacheKey, 1800, async () => {
     const range = customRange ?? dateRangeCompleted(period);
     const prevRange = customRange
