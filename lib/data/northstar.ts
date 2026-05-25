@@ -36,28 +36,43 @@ const ORDERS_TABLE: Record<Market, string> = {
 };
 
 // Filtros exatos do LTV Dashboard (lib/queries.ts COMMON_FILTERS)
-const COMMON_FILTERS = `
-  cancelled_at IS NULL
-  AND test = FALSE
-  AND JSON_VALUE(customer, '$.id') IS NOT NULL
-  AND JSON_VALUE(customer, '$.id') != '5025734230182'
-  AND (
-    JSON_VALUE(customer, '$.tags') IS NULL
-    OR (
-      NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(customer, '$.tags')), r'b2b')
-      AND NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(customer, '$.tags')), r'wholesale')
+// + filtros tag B2B/wholesale na order + PIX nao pago (so BR)
+function commonFilters(market: Market): string {
+  const pixFilter = market === "BR" ? `
+    AND NOT (
+      LOWER(IFNULL(financial_status, '')) IN ('pending', 'expired', 'authorized')
+      AND (
+        LOWER(IFNULL(gateway, '')) LIKE '%pix%'
+        OR LOWER(IFNULL(payment_gateway_names, '')) LIKE '%pix%'
+      )
     )
-  )
-  AND NOT (
-    LOWER(IFNULL(tags, '')) LIKE '%troquecommerce%'
-    OR LOWER(IFNULL(note, '')) LIKE '%troca direta%'
-    OR LOWER(IFNULL(note, '')) LIKE '%troquecommerce%'
-    OR name LIKE 'EXC-%'
-    OR LOWER(IFNULL(note, '')) LIKE '%new exchange order%'
-    OR LOWER(IFNULL(note, '')) LIKE '%exchange for order%'
-    OR LOWER(IFNULL(tags, '')) LIKE '%loop:%'
-  )
-`;
+  ` : "";
+
+  return `
+    cancelled_at IS NULL
+    AND test = FALSE
+    AND JSON_VALUE(customer, '$.id') IS NOT NULL
+    AND JSON_VALUE(customer, '$.id') != '5025734230182'
+    AND (
+      JSON_VALUE(customer, '$.tags') IS NULL
+      OR (
+        NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(customer, '$.tags')), r'b2b')
+        AND NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(customer, '$.tags')), r'wholesale')
+      )
+    )
+    AND NOT REGEXP_CONTAINS(LOWER(IFNULL(tags, '')), r'b2b|wholesale')
+    AND NOT (
+      LOWER(IFNULL(tags, '')) LIKE '%troquecommerce%'
+      OR LOWER(IFNULL(note, '')) LIKE '%troca direta%'
+      OR LOWER(IFNULL(note, '')) LIKE '%troquecommerce%'
+      OR name LIKE 'EXC-%'
+      OR LOWER(IFNULL(note, '')) LIKE '%new exchange order%'
+      OR LOWER(IFNULL(note, '')) LIKE '%exchange for order%'
+      OR LOWER(IFNULL(tags, '')) LIKE '%loop:%'
+    )
+    ${pixFilter}
+  `;
+}
 
 // net_sales exato do LTV Dashboard
 const NET_SALES_EXPR = `
@@ -86,7 +101,7 @@ const MOCK_BR: Omit<NorthStarBundle, "market" | "period" | "source"> = {
 };
 
 export async function getNorthStarBundle(market: Market): Promise<NorthStarBundle> {
-  return cached(`northstar-v4:${market}`, 1800, async () => {
+  return cached(`northstar-v5:${market}`, 1800, async () => {
     // Janela 12 meses, terminando ontem
     const today = new Date();
     const to = new Date(today.getTime() - 24 * 3600 * 1000);
@@ -114,7 +129,7 @@ export async function getNorthStarBundle(market: Market): Promise<NorthStarBundl
             id AS order_id,
             ${NET_SALES_EXPR} AS net_sales
           FROM \`${table}\`
-          WHERE ${COMMON_FILTERS}
+          WHERE ${commonFilters(market)}
             AND DATE(created_at) BETWEEN @start AND @end
         ),
         period_customers AS (
@@ -166,7 +181,7 @@ export async function getNorthStarBundle(market: Market): Promise<NorthStarBundl
               JSON_VALUE(customer, '$.id') AS customer_id,
               DATE(created_at) AS order_date
             FROM \`${table}\`
-            WHERE ${COMMON_FILTERS}
+            WHERE ${commonFilters(market)}
           )
           GROUP BY customer_id
         )

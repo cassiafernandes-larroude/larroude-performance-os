@@ -1,36 +1,27 @@
-import { FiltersBar } from "@/components/filters/FiltersBar";
+import { Suspense } from "react";
+import { RefreshBar } from "@/components/filters/RefreshBar";
 import { MetricCard } from "@/components/cards/MetricCard";
 import { DiagnosticCard } from "@/components/cards/DiagnosticCard";
-import { Sparkles } from "lucide-react";
+import { NarrativeSection, NarrativeSkeleton } from "@/components/overview/NarrativeSection";
 import { getMetricBundle } from "@/lib/data/metrics";
 import { runDiagnostics } from "@/lib/intelligence/diagnostics";
-import { generateNarrative } from "@/lib/intelligence/narrative";
-import { cached } from "@/lib/cache";
 import type { Period } from "@/types/metric";
 
-export const revalidate = 300;
+// Overview = D-1 (yesterday) with ISR caching for fast loads.
+// Refresh button does router.refresh() to force re-fetch when user wants fresh data.
+export const revalidate = 60;
 
-export default async function DailyBriefingPage({
-  searchParams,
-}: {
-  searchParams: { market?: string; period?: string; from?: string; to?: string };
-}) {
-  const period = (searchParams.period || "28d") as Period;
-  const customRange = searchParams.from && searchParams.to
-    ? { from: searchParams.from, to: searchParams.to }
-    : undefined;
+export default async function DailyBriefingPage() {
+  // D-1 = yesterday (last completed day). Server timezone -> ISO date.
+  const yesterday = new Date(Date.now() - 24 * 3600 * 1000).toISOString().slice(0, 10);
+  const period = "today" as Period; // marker so cache key differs from 28d
+  const customRange = { from: yesterday, to: yesterday };
 
   const [us, br] = await Promise.all([
     getMetricBundle("US", period, customRange),
     getMetricBundle("BR", period, customRange),
   ]);
   const diagnostics = await runDiagnostics({ us, br });
-
-  const narrative = await cached(
-    `narrative:${period}`,
-    1800,
-    () => generateNarrative(us, br, diagnostics)
-  );
 
   const source = us.metrics[0]?.source ?? "Mock";
   const sourceLabel = source === "BQ" ? "BigQuery Larroude OS" : "Mock data (configure GCP_SA_KEY_BASE64)";
@@ -67,7 +58,7 @@ export default async function DailyBriefingPage({
           </p>
         </div>
 
-        <FiltersBar />
+        <RefreshBar />
 
         {/* ===== US Section ===== */}
         <div className="section-marker mb-3">
@@ -138,26 +129,10 @@ export default async function DailyBriefingPage({
           </div>
         )}
 
-        {/* ===== Narrative ===== */}
-        <div className="card card-prose mb-7" style={{ background: "linear-gradient(180deg, #FFFFFF 0%, #FFF8FB 100%)", border: "1px solid var(--pink-soft)" }}>
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4" style={{ color: "var(--pink-deep)" }} />
-              <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--pink-deep)" }}>
-                Analysis - cross-source
-              </span>
-            </div>
-            <span className="text-[10px]" style={{ color: "var(--ink-muted)" }}>
-              {narrative.source === "anthropic" ? "via Claude" : "fallback"}
-            </span>
-          </div>
-          <h2 className="font-display text-[18px] lg:text-[22px] mb-3" style={{ color: "var(--ink)" }}>
-            {narrative.title}
-          </h2>
-          <div className="text-[12px] lg:text-[13px] leading-relaxed whitespace-pre-line" style={{ color: "var(--ink-soft)" }}>
-            {narrative.body}
-          </div>
-        </div>
+        {/* ===== Narrative (Suspense - nao bloqueia render dos cards) ===== */}
+        <Suspense fallback={<NarrativeSkeleton />}>
+          <NarrativeSection us={us} br={br} diagnostics={diagnostics} period={period} />
+        </Suspense>
       </div>
     </>
   );

@@ -95,8 +95,8 @@ export async function getMetricBundle(
   customRange?: { from: string; to: string }
 ): Promise<MetricBundle> {
   const cacheKey = customRange
-    ? `metrics-v6:${market}:custom:${customRange.from}:${customRange.to}`
-    : `metrics-v6:${market}:${period}`;
+    ? `metrics-v7:${market}:custom:${customRange.from}:${customRange.to}`
+    : `metrics-v7:${market}:${period}`;
   return cached(cacheKey, 1800, async () => {
     const range = customRange ?? dateRangeCompleted(period);
     const prevRange = customRange
@@ -162,6 +162,9 @@ export async function getMetricBundle(
     const cTotal = num(c.total_sales), pTotal = num(p.total_sales);
     const cAov = num(c.aov);
     const cCac = num(c.cac), pCac = num(p.cac);
+    // ROAS Total Sales = Total Sales / Spend (Meta API real)
+    const recalcRoasTotal = cSpend > 0 ? cTotal / cSpend : 0;
+    const recalcRoasTotalPrev = pSpend > 0 ? pTotal / pSpend : 0;
 
     const metrics: Metric[] = [
       baseMetric({
@@ -195,12 +198,13 @@ export async function getMetricBundle(
         delta_pct: pct(recalcRoasGross, recalcRoasGrossPrev),
       }),
       baseMetric({
-        key: "roas_order",
-        label: "ROAS ORDER",
-        value: recalcRoasOrder,
-        formatted: formatMultiplier(recalcRoasOrder),
+        key: "roas_total",
+        label: "ROAS TOTAL SALES",
+        value: recalcRoasTotal,
+        formatted: formatMultiplier(recalcRoasTotal),
         currency: null,
-        hint: "Order Revenue / Spend",
+        delta_pct: pct(recalcRoasTotal, recalcRoasTotalPrev),
+        hint: "Total Sales / Spend",
       }),
       baseMetric({
         key: "cac",

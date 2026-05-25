@@ -53,7 +53,7 @@ const MOCK: Record<Market, Omit<ExecutiveBundle, "market" | "period" | "source">
 };
 
 export async function getExecutiveBundle(market: Market): Promise<ExecutiveBundle> {
-  return cached(`executive-v3:${market}`, 1800, async () => {
+  return cached(`executive-v4:${market}`, 1800, async () => {
     // Periodo 28d completo (igual Overview)
     const today = new Date();
     const to = new Date(today.getTime() - 24 * 3600 * 1000);
@@ -93,6 +93,19 @@ export async function getExecutiveBundle(market: Market): Promise<ExecutiveBundl
             FROM \`larroude-data-prod.${dataset}.orders\`
             WHERE DATE(created_at, '${tz}') BETWEEN @from AND @to
               AND financial_status NOT IN ('voided','refunded')
+              AND (
+                JSON_VALUE(customer, '$.tags') IS NULL
+                OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(customer, '$.tags')), r'b2b|wholesale')
+              )
+              AND NOT REGEXP_CONTAINS(LOWER(IFNULL(tags, '')), r'b2b|wholesale')
+              ${market === "BR" ? `
+              AND NOT (
+                LOWER(IFNULL(financial_status, '')) IN ('pending', 'expired', 'authorized')
+                AND (
+                  LOWER(IFNULL(gateway, '')) LIKE '%pix%'
+                  OR LOWER(IFNULL(payment_gateway_names, '')) LIKE '%pix%'
+                )
+              )` : ""}
           ),
           classified AS (
             SELECT revenue,

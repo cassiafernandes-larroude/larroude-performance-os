@@ -162,11 +162,29 @@ const MOCK_BR: Omit<ShopifyBundle, "market" | "period" | "source"> = {
   ],
 };
 
-const COMMON_FILTERS = `
-  cancelled_at IS NULL AND test = FALSE
-  AND financial_status NOT IN ('voided','refunded')
-  AND JSON_VALUE(customer, '$.id') != '5025734230182'
-`;
+// Filtros: exclui canceladas/test/B2B/wholesale; para BR exclui tambem PIX nao pago
+function commonFiltersShopify(market: Market): string {
+  const pix = market === "BR" ? `
+    AND NOT (
+      LOWER(IFNULL(financial_status, '')) IN ('pending', 'expired', 'authorized')
+      AND (
+        LOWER(IFNULL(gateway, '')) LIKE '%pix%'
+        OR LOWER(IFNULL(payment_gateway_names, '')) LIKE '%pix%'
+      )
+    )
+  ` : "";
+  return `
+    cancelled_at IS NULL AND test = FALSE
+    AND financial_status NOT IN ('voided','refunded')
+    AND JSON_VALUE(customer, '$.id') != '5025734230182'
+    AND (
+      JSON_VALUE(customer, '$.tags') IS NULL
+      OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(customer, '$.tags')), r'b2b|wholesale')
+    )
+    AND NOT REGEXP_CONTAINS(LOWER(IFNULL(tags, '')), r'b2b|wholesale')
+    ${pix}
+  `;
+}
 
 export async function getShopifyBundle(market: Market, period: { from: string; to: string }): Promise<ShopifyBundle> {
   return cached(`shopify-v1:${market}:${period.from}:${period.to}`, 1800, async () => {
@@ -191,14 +209,14 @@ export async function getShopifyBundle(market: Market, period: { from: string; t
             SUM(CAST(total_discounts AS NUMERIC)) AS discounts
           FROM \`larroude-data-prod.${dataset}.orders\`
           WHERE DATE(created_at, '${tz}') BETWEEN @from AND @to
-            AND ${COMMON_FILTERS}
+            AND ${commonFiltersShopify(market)}
         ),
         units AS (
           SELECT SUM(CAST(JSON_VALUE(li,'$.quantity') AS INT64)) AS units
           FROM \`larroude-data-prod.${dataset}.orders\` o,
             UNNEST(JSON_QUERY_ARRAY(line_items)) li
           WHERE DATE(o.created_at, '${tz}') BETWEEN @from AND @to
-            AND ${COMMON_FILTERS.replace(/JSON_VALUE\(customer/g, 'JSON_VALUE(o.customer').replace(/cancelled_at IS NULL/, 'o.cancelled_at IS NULL').replace(/test = FALSE/, 'o.test = FALSE').replace(/financial_status/, 'o.financial_status')}
+            AND ${commonFiltersShopify(market).replace(/(?<!o\.)cancelled_at/g, 'o.cancelled_at').replace(/(?<!o\.)test = FALSE/g, 'o.test = FALSE').replace(/(?<!o\.)financial_status/g, 'o.financial_status').replace(/JSON_VALUE\(customer/g, 'JSON_VALUE(o.customer').replace(/(?<!o\.)tags/g, 'o.tags').replace(/(?<!o\.)gateway/g, 'o.gateway').replace(/(?<!o\.)payment_gateway_names/g, 'o.payment_gateway_names')}
         ),
         refunds AS (
           SELECT IFNULL(SUM((SELECT SUM(CAST(JSON_VALUE(t,'$.amount') AS NUMERIC))
@@ -248,6 +266,19 @@ export async function getShopifyBundle(market: Market, period: { from: string; t
           WHERE DATE(o.created_at, '${tz}') BETWEEN @from AND @to
             AND o.cancelled_at IS NULL AND o.test = FALSE
             AND o.financial_status NOT IN ('voided','refunded')
+            AND (
+              JSON_VALUE(o.customer, '$.tags') IS NULL
+              OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(o.customer, '$.tags')), r'b2b|wholesale')
+            )
+            AND NOT REGEXP_CONTAINS(LOWER(IFNULL(o.tags, '')), r'b2b|wholesale')
+            ${market === "BR" ? `
+            AND NOT (
+              LOWER(IFNULL(o.financial_status, '')) IN ('pending', 'expired', 'authorized')
+              AND (
+                LOWER(IFNULL(o.gateway, '')) LIKE '%pix%'
+                OR LOWER(IFNULL(o.payment_gateway_names, '')) LIKE '%pix%'
+              )
+            )` : ""}
         )
         SELECT
           COALESCE(sku_root, 'sem-sku') AS sku,
@@ -282,6 +313,20 @@ export async function getShopifyBundle(market: Market, period: { from: string; t
           UNNEST(JSON_QUERY_ARRAY(line_items)) li
         WHERE DATE(o.created_at, '${tz}') BETWEEN @from AND @to
           AND o.cancelled_at IS NULL AND o.test = FALSE
+          AND o.financial_status NOT IN ('voided','refunded')
+          AND (
+            JSON_VALUE(o.customer, '$.tags') IS NULL
+            OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(o.customer, '$.tags')), r'b2b|wholesale')
+          )
+          AND NOT REGEXP_CONTAINS(LOWER(IFNULL(o.tags, '')), r'b2b|wholesale')
+          ${market === "BR" ? `
+          AND NOT (
+            LOWER(IFNULL(o.financial_status, '')) IN ('pending', 'expired', 'authorized')
+            AND (
+              LOWER(IFNULL(o.gateway, '')) LIKE '%pix%'
+              OR LOWER(IFNULL(o.payment_gateway_names, '')) LIKE '%pix%'
+            )
+          )` : ""}
         GROUP BY title
         ORDER BY units DESC
         LIMIT 8
@@ -300,6 +345,20 @@ export async function getShopifyBundle(market: Market, period: { from: string; t
           UNNEST(JSON_QUERY_ARRAY(line_items)) li
         WHERE DATE(o.created_at, '${tz}') BETWEEN @from AND @to
           AND o.cancelled_at IS NULL AND o.test = FALSE
+          AND o.financial_status NOT IN ('voided','refunded')
+          AND (
+            JSON_VALUE(o.customer, '$.tags') IS NULL
+            OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(o.customer, '$.tags')), r'b2b|wholesale')
+          )
+          AND NOT REGEXP_CONTAINS(LOWER(IFNULL(o.tags, '')), r'b2b|wholesale')
+          ${market === "BR" ? `
+          AND NOT (
+            LOWER(IFNULL(o.financial_status, '')) IN ('pending', 'expired', 'authorized')
+            AND (
+              LOWER(IFNULL(o.gateway, '')) LIKE '%pix%'
+              OR LOWER(IFNULL(o.payment_gateway_names, '')) LIKE '%pix%'
+            )
+          )` : ""}
         GROUP BY collection
         ORDER BY revenue DESC
         LIMIT 8
@@ -321,7 +380,7 @@ export async function getShopifyBundle(market: Market, period: { from: string; t
           SAFE_DIVIDE(SUM(CAST(total_price AS NUMERIC)), COUNT(*)) AS aov
         FROM \`larroude-data-prod.${dataset}.orders\`
         WHERE DATE(created_at, '${tz}') BETWEEN @from AND @to
-          AND ${COMMON_FILTERS}
+          AND ${commonFiltersShopify(market)}
         GROUP BY dow
         ORDER BY dow
       `;

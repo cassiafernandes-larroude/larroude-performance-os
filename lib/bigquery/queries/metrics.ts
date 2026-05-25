@@ -12,6 +12,10 @@ const DATASET: Record<Market, string> = {
 
 // Query oficial replicada do larroude-dashboard-geral (lib/queries.ts:queryAggregatedKpis)
 // Project: larroude-data-prod
+//
+// Ajustes (2026-05-22):
+//   1. Excluir B2B/wholesale em US e BR (via customer.tags e order.tags)
+//   2. Excluir PIX nao pago no BR (gateway LIKE '%pix%' AND financial_status = 'pending')
 export function aggregatedKpisSQL(market: Market) {
   const dataset = DATASET[market];
   const tz = TZ[market];
@@ -30,6 +34,32 @@ export function aggregatedKpisSQL(market: Market) {
     ? `LEFT JOIN \`larroude-data-prod.gold.fx_rates_monthly\` fx ON fx.month = FORMAT_DATE('%Y-%m', ad.date)`
     : "";
 
+  // Filtro B2B/wholesale (US e BR): exclui orders de clientes B2B ou orders tagueadas
+  const B2B_FILTER = `
+    AND (
+      JSON_VALUE(customer, '$.tags') IS NULL
+      OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(customer, '$.tags')), r'b2b|wholesale')
+    )
+    AND NOT REGEXP_CONTAINS(LOWER(IFNULL(tags, '')), r'b2b|wholesale')
+  `;
+
+  // Filtro PIX nao pago (so BR): exclui orders com gateway PIX em status pending/expired
+  const PIX_FILTER = market === "BR"
+    ? `
+    AND NOT (
+      LOWER(IFNULL(financial_status, '')) IN ('pending', 'expired', 'authorized')
+      AND (
+        LOWER(IFNULL(gateway, '')) LIKE '%pix%'
+        OR LOWER(IFNULL(payment_gateway_names, '')) LIKE '%pix%'
+      )
+    )
+  `
+    : "";
+
+  // Combinacao dos filtros padrao para CTEs sobre orders
+  const ORDER_FILTERS = `financial_status NOT IN ('voided','refunded') ${B2B_FILTER} ${PIX_FILTER}`;
+  const ORDER_FILTERS_NO_DATE = `(cancelled_at IS NULL OR cancelled_at = '') AND ${ORDER_FILTERS}`;
+
   return `
     WITH
     sales AS (
@@ -41,7 +71,7 @@ export function aggregatedKpisSQL(market: Market) {
         COUNT(*) AS orders
       FROM \`larroude-data-prod.${dataset}.orders\`
       WHERE DATE(created_at, '${tz}') BETWEEN @start AND @end
-        AND financial_status NOT IN ('voided','refunded')
+        AND ${ORDER_FILTERS}
     ),
     units_t AS (
       SELECT SUM(CAST(JSON_VALUE(li,'$.quantity') AS INT64)) AS units
@@ -49,6 +79,20 @@ export function aggregatedKpisSQL(market: Market) {
            UNNEST(JSON_QUERY_ARRAY(line_items)) li
       WHERE DATE(o.created_at) BETWEEN @start AND @end
         AND o.financial_status NOT IN ('voided','refunded')
+        AND (
+          JSON_VALUE(o.customer, '$.tags') IS NULL
+          OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(o.customer, '$.tags')), r'b2b|wholesale')
+        )
+        AND NOT REGEXP_CONTAINS(LOWER(IFNULL(o.tags, '')), r'b2b|wholesale')
+        ${market === "BR" ? `
+        AND NOT (
+          LOWER(IFNULL(o.financial_status, '')) IN ('pending', 'expired', 'authorized')
+          AND (
+            LOWER(IFNULL(o.gateway, '')) LIKE '%pix%'
+            OR LOWER(IFNULL(o.payment_gateway_names, '')) LIKE '%pix%'
+          )
+        )
+        ` : ""}
     ),
     refunds_raw AS (
       SELECT
@@ -80,7 +124,8 @@ export function aggregatedKpisSQL(market: Market) {
       SELECT JSON_VALUE(customer, '$.id') AS cust_id,
              MIN(DATE(created_at, '${tz}')) AS first_dt
       FROM \`larroude-data-prod.${dataset}.orders\`
-      WHERE customer IS NOT NULL AND financial_status NOT IN ('voided','refunded')
+      WHERE customer IS NOT NULL
+        AND ${ORDER_FILTERS}
       GROUP BY cust_id
     ),
     customer_split AS (
@@ -91,6 +136,20 @@ export function aggregatedKpisSQL(market: Market) {
       JOIN first_order_per_customer fo ON JSON_VALUE(o.customer, '$.id') = fo.cust_id
       WHERE DATE(o.created_at) BETWEEN @start AND @end
         AND o.financial_status NOT IN ('voided','refunded')
+        AND (
+          JSON_VALUE(o.customer, '$.tags') IS NULL
+          OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(o.customer, '$.tags')), r'b2b|wholesale')
+        )
+        AND NOT REGEXP_CONTAINS(LOWER(IFNULL(o.tags, '')), r'b2b|wholesale')
+        ${market === "BR" ? `
+        AND NOT (
+          LOWER(IFNULL(o.financial_status, '')) IN ('pending', 'expired', 'authorized')
+          AND (
+            LOWER(IFNULL(o.gateway, '')) LIKE '%pix%'
+            OR LOWER(IFNULL(o.payment_gateway_names, '')) LIKE '%pix%'
+          )
+        )
+        ` : ""}
     )
     SELECT
       s.gross_sales,

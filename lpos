@@ -1,0 +1,60 @@
+[33mcommit 41a8a274826471e948b0fa5032efa0e327251fbc[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m
+Author: Cassia Larroude <cassia.fernandes@larroude.com>
+Date:   Fri May 22 16:51:47 2026 -0300
+
+    feat: meta-ads embed + overview today-only + ROAS Total Sales
+
+[1mdiff --git a/components/layout/Sidebar.tsx b/components/layout/Sidebar.tsx[m
+[1mindex b139f3c..164e5d0 100755[m
+[1m--- a/components/layout/Sidebar.tsx[m
+[1m+++ b/components/layout/Sidebar.tsx[m
+[36m@@ -1,4 +1,4 @@[m
+[31m-"use client";[m
+[32m+[m[32m﻿"use client";[m
+ [m
+ import Link from "next/link";[m
+ import { usePathname } from "next/navigation";[m
+[36m@@ -22,7 +22,6 @@[m [mimport {[m
+   BookOpen,[m
+   Database,[m
+   Bell,[m
+[31m-  Settings2,[m
+   X,[m
+ } from "lucide-react";[m
+ [m
+[36m@@ -193,34 +192,6 @@[m [mexport function Sidebar({[m
+           </div>[m
+         ))}[m
+       </nav>[m
+[31m-[m
+[31m-      {/* User */}[m
+[31m-      <div[m
+[31m-        className="px-4 py-3 flex items-center gap-2.5"[m
+[31m-        style={{ borderTop: "1px solid var(--border)" }}[m
+[31m-      >[m
+[31m-        <div[m
+[31m-          className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-semibold"[m
+[31m-          style={{ background: "var(--pink)", color: "white" }}[m
+[31m-        >[m
+[31m-          CL[m
+[31m-        </div>[m
+[31m-        <div className="flex-1 min-w-0">[m
+[31m-          <div[m
+[31m-            className="text-[12px]"[m
+[31m-            style={{ color: "var(--ink)", fontWeight: 500 }}[m
+[31m-          >[m
+[31m-            Cássia L.[m
+[31m-          </div>[m
+[31m-          <div className="text-[10px]" style={{ color: "var(--ink-muted)" }}>[m
+[31m-            Performance Coord.[m
+[31m-          </div>[m
+[31m-        </div>[m
+[31m-        <Settings2[m
+[31m-          className="w-4 h-4 cursor-pointer"[m
+[31m-          style={{ color: "var(--ink-muted)" }}[m
+[31m-        />[m
+[31m-      </div>[m
+[31m-    </aside>[m
+[32m+[m[32m</aside>[m
+   );[m
+ }[m
