@@ -11,7 +11,7 @@ const periods: Period[] = ["7d", "14d", "28d", "3M", "6M", "12M"];
 function presetRange(period: Period): { from: string; to: string } {
   const today = new Date();
   const to = new Date(today.getTime() - 24 * 3600 * 1000); // ontem
-  const days = { "7d": 7, "14d": 14, "28d": 28, "3M": 90, "6M": 180, "12M": 365 }[period];
+  const days = { "today": 1, "7d": 7, "14d": 14, "28d": 28, "3M": 90, "6M": 180, "12M": 365 }[period];
   const from = new Date(to.getTime() - (days - 1) * 24 * 3600 * 1000);
   return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
 }
@@ -264,5 +264,5 @@ function CountryPill({ market, active, onClick }: { market: Market; active: bool
       <span className="country-code">{market}</span>
       <span>{label}</span>
     </button>
-  );
+    );
 }
