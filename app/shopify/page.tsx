@@ -62,7 +62,7 @@ export default async function ShopifyPage({
 
         <SectionHeader title="CHECKOUT FUNNEL" />
         <div className="card mb-7">
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <div className="label-meta">STARTED CHECKOUTS</div>
               <div className="font-num text-[24px] font-bold mt-1" style={{ color: "var(--ink)" }}>
@@ -203,8 +203,8 @@ export default async function ShopifyPage({
         </div>
 
         <SectionHeader title="SALES BY WEEKDAY" />
-        <div className="card mb-7">
-          <div className="grid grid-cols-7 gap-2">
+        <div className="card mb-7 overflow-x-auto">
+          <div className="grid grid-cols-7 gap-2 min-w-[480px]">
             {(() => {
               const maxOrders = Math.max(...data.weekday_perf.map((d) => d.orders));
               const bestIdx = data.weekday_perf.indexOf(data.weekday_perf.reduce((a, b) => a.orders > b.orders ? a : b));

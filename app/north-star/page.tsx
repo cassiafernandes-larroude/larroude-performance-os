@@ -170,7 +170,7 @@ function NorthStarCard({ icon, tag, title, value, subtitle, drivers, formula, hi
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-3 pt-4" style={{ borderTop: "1px solid var(--border-soft)" }}>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-4" style={{ borderTop: "1px solid var(--border-soft)" }}>
         {drivers.map((d) => (
           <div key={d.label}>
             <div className="label-meta">{d.label}</div>

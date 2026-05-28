@@ -16,7 +16,7 @@ export default function Loading() {
                 <div className="h-8 rounded w-32" style={{ background: "var(--paper-deep)" }} />
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-3 pt-4 border-t" style={{ borderColor: "var(--border-soft)" }}>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-4 border-t" style={{ borderColor: "var(--border-soft)" }}>
               {[1, 2, 3].map((j) => (
                 <div key={j}>
                   <div className="h-3 rounded w-12 mb-1" style={{ background: "var(--paper-deep)" }} />
