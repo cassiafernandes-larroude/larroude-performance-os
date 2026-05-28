@@ -30,7 +30,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="pt-BR" className={inter.variable}>
+    <html lang="en" className={inter.variable}>
       <body className={`${inter.className} min-h-screen`}>
         <Shell>{children}</Shell>
       </body>

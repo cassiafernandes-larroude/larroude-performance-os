@@ -22,7 +22,7 @@ export default async function NorthStarPage() {
         <div className="flex items-center gap-2 text-[11px]" style={{ color: "var(--ink-muted)" }}>
           <div className="pulse-dot" />
           <span>Sync</span>
-          <span className="font-num">{new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
+          <span className="font-num">{new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false })}</span>
           <span>-</span>
           <span>BigQuery Larroude OS - 12-month window</span>
         </div>
@@ -163,6 +163,7 @@ function NorthStarCard({ icon, tag, title, value, subtitle, drivers, formula, hi
           <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--ink-muted)", letterSpacing: "0.06em" }}>
             {tag}
           </div>
+          <div className="text-[13px] font-medium mt-0.5" style={{ color: "var(--ink)" }}>{title}</div>
           <div className="font-display text-[28px] lg:text-[32px] mt-1 font-num" style={{ color: highlight || "var(--ink)" }}>
             {value}
           </div>

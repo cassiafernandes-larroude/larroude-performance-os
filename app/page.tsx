@@ -38,7 +38,7 @@ export default async function DailyBriefingPage() {
         <div className="flex items-center gap-2 text-[11px]" style={{ color: "var(--ink-muted)" }}>
           <div className="pulse-dot" />
           <span>Sync</span>
-          <span className="font-num">{new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
+          <span className="font-num">{new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false })}</span>
           <span>-</span>
           <span>{sourceLabel}</span>
         </div>
@@ -54,7 +54,7 @@ export default async function DailyBriefingPage() {
             <span className="hidden lg:inline">
               Data from <strong style={{ color: "var(--ink-soft)" }}>{us.date_range.from} - {us.date_range.to}</strong> -{" "}
             </span>
-            Updated at {new Date(us.generated_at).toLocaleString("pt-BR")}
+            Updated at {new Date(us.generated_at).toLocaleString("en-US")}
           </p>
         </div>
 

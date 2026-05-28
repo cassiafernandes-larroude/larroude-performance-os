@@ -37,7 +37,7 @@ export default async function SitePerformancePage({
           </p>
           <div className="flex items-center justify-between gap-3 flex-wrap mt-2">
             <p className="text-[11px]" style={{ color: "var(--ink-muted)" }}>
-              Updated at {new Date(us.fetched_at).toLocaleString("pt-BR")} - cache 1h
+              Updated at {new Date(us.fetched_at).toLocaleString("en-US")} - cache 1h
             </p>
             <div className="flex items-center gap-2">
               <StrategyToggle current={strategy} />
@@ -127,7 +127,7 @@ function SitePerformanceSection({ bundle, flag, label }: {
         <MiniStat icon={<Clock className="w-3.5 h-3.5" />} label="FCP" value={`${(bundle.fcp_ms / 1000).toFixed(1)}s`} hint="First Contentful Paint" />
         <MiniStat icon={<Zap className="w-3.5 h-3.5" />} label="TBT" value={`${bundle.tbt_ms}ms`} hint="Total Blocking Time" />
         <MiniStat icon={<Activity className="w-3.5 h-3.5" />} label="Speed Index" value={`${(bundle.si_ms / 1000).toFixed(1)}s`} hint="Visual speed" />
-        <MiniStat icon={<Code className="w-3.5 h-3.5" />} label="DOM Size" value={bundle.dom_size.toLocaleString("pt-BR")} hint="DOM elements" />
+        <MiniStat icon={<Code className="w-3.5 h-3.5" />} label="DOM Size" value={bundle.dom_size.toLocaleString("en-US")} hint="DOM elements" />
       </div>
 
       {/* Field Data CrUX */}

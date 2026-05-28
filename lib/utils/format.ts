@@ -7,7 +7,7 @@ const COMPACT_USD = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 2,
 });
 
-const COMPACT_BRL = new Intl.NumberFormat("pt-BR", {
+const COMPACT_BRL = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "BRL",
   notation: "compact",
@@ -20,13 +20,13 @@ const FULL_USD = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0,
 });
 
-const FULL_BRL = new Intl.NumberFormat("pt-BR", {
+const FULL_BRL = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "BRL",
   maximumFractionDigits: 0,
 });
 
-const NUMBER = new Intl.NumberFormat("pt-BR");
+const NUMBER = new Intl.NumberFormat("en-US");
 
 export function formatCurrency(value: number, currency: Currency, compact = true): string {
   if (currency === "USD") return (compact ? COMPACT_USD : FULL_USD).format(value);
@@ -35,7 +35,7 @@ export function formatCurrency(value: number, currency: Currency, compact = true
 }
 
 export function formatNumber(value: number, opts?: { decimals?: number }): string {
-  return new Intl.NumberFormat("pt-BR", {
+  return new Intl.NumberFormat("en-US", {
     minimumFractionDigits: opts?.decimals ?? 0,
     maximumFractionDigits: opts?.decimals ?? 0,
   }).format(value);
