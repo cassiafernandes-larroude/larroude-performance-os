@@ -24,7 +24,7 @@ export default async function NorthStarPage() {
           <span>Sync</span>
           <span className="font-num">{new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
           <span>-</span>
-          <span>BigQuery Larroude OS - janelto 12 meses</span>
+          <span>BigQuery Larroude OS - 12-month window</span>
         </div>
       </header>
 
@@ -40,11 +40,11 @@ export default async function NorthStarPage() {
         </div>
 
         {/* US */}
-        <MarketSection bundle={us} flag="🇺🇸" label="ESTADOS UNIDOS" currency="USD" />
+        <MarketSection bundle={us} flag="🇺🇸" label="UNITED STATES" currency="USD" />
 
         {/* BR */}
         <div className="mt-10">
-          <MarketSection bundle={br} flag="🇧🇷" label="BRASIL" currency="BRL" />
+          <MarketSection bundle={br} flag="🇧🇷" label="BRAZIL" currency="BRL" />
         </div>
       </div>
     </>
@@ -79,20 +79,20 @@ function MarketSection({ bundle, flag, label, currency }: {
           tag="PREDICTIVE LTV"
           title="Lifetime Value"
           value={formatCurrency(bundle.ltv_predictive, currency, false)}
-          subtitle="Receitto medito estimadto por cliente (12m)"
+          subtitle="Estimated average revenue per customer (12m)"
           drivers={[
             { label: "AOV", value: formatCurrency(bundle.aov, currency, false) },
             { label: "Frequency", value: `${bundle.purchase_frequency.toFixed(2)}x/year` },
             { label: "Lifetime", value: `${bundle.customer_lifetime.toFixed(2)}x` },
           ]}
-          formula="AOV × Frequencito × Lifetime"
+          formula="AOV × Frequency × Lifetime"
         />
 
         {/* 2. LTV:CAC */}
         <NorthStarCard
           icon={<Coins className="w-5 h-5" />}
           tag="LTV : CAC"
-          title="Eficiencito de Aquisicao"
+          title="Acquisition Efficiency"
           value={formatMultiplier(bundle.ltv_cac)}
           subtitle={ratio >= 3 ? "Healthy" : ratio >= 1.5 ? "Warning" : "Critical"}
           highlight={ratioColor}
@@ -109,9 +109,9 @@ function MarketSection({ bundle, flag, label, currency }: {
         <NorthStarCard
           icon={<Repeat className="w-5 h-5" />}
           tag="RETURNING RATE"
-          title="Taxto de Recomprto (12m)"
+          title="Repurchase Rate (12m)"
           value={`${bundle.returning_rate.toFixed(1)}%`}
-          subtitle="% de clientes que voltaram to comprar"
+          subtitle="% of customers who came back to purchase"
           drivers={[
             { label: "Total customers", value: formatNumber(bundle.total_customers) },
             { label: "Returned", value: formatNumber(bundle.returning_customers) },
@@ -124,7 +124,7 @@ function MarketSection({ bundle, flag, label, currency }: {
         <NorthStarCard
           icon={<Users className="w-5 h-5" />}
           tag="NET REVENUE 12M"
-          title="Receitto Liquida"
+          title="Net Revenue"
           value={formatCurrency(bundle.total_net_sales, currency)}
           subtitle="Gross - discounts - refunds"
           drivers={[
