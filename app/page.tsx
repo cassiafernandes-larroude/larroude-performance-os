@@ -6,6 +6,7 @@ import { NarrativeSection, NarrativeSkeleton } from "@/components/overview/Narra
 import { getMetricBundle } from "@/lib/data/metrics";
 import { runDiagnostics } from "@/lib/intelligence/diagnostics";
 import type { Period } from "@/types/metric";
+import { DashboardActions } from "@/components/shared/DashboardActions";
 
 // Overview = D-1 (yesterday) with ISR caching for fast loads.
 // Refresh button does router.refresh() to force re-fetch when user wants fresh data.
@@ -45,17 +46,20 @@ export default async function DailyBriefingPage() {
       </header>
 
       <div className="px-4 lg:px-8 py-5 lg:py-8 max-w-[1500px] mx-auto">
-        <div className="mb-4 lg:mb-5">
-          <h1 className="font-display text-[26px] lg:text-[36px]" style={{ color: "var(--ink)" }}>Overview</h1>
-          <p className="text-[12px] lg:text-[14px] mt-1" style={{ color: "var(--ink-soft)" }}>
-            Meta + Google + Shopify + Klaviyo - via {sourceLabel}
-          </p>
-          <p className="text-[11px] lg:text-[12px] mt-1" style={{ color: "var(--ink-muted)" }}>
-            <span className="hidden lg:inline">
-              Data from <strong style={{ color: "var(--ink-soft)" }}>{us.date_range.from} - {us.date_range.to}</strong> -{" "}
-            </span>
-            Updated at {new Date(us.generated_at).toLocaleString("en-US")}
-          </p>
+        <div className="mb-4 lg:mb-5 flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <h1 className="font-display text-[26px] lg:text-[36px]" style={{ color: "var(--ink)" }}>Overview</h1>
+            <p className="text-[12px] lg:text-[14px] mt-1" style={{ color: "var(--ink-soft)" }}>
+              Meta + Google + Shopify + Klaviyo - via {sourceLabel}
+            </p>
+            <p className="text-[11px] lg:text-[12px] mt-1" style={{ color: "var(--ink-muted)" }}>
+              <span className="hidden lg:inline">
+                Data from <strong style={{ color: "var(--ink-soft)" }}>{us.date_range.from} - {us.date_range.to}</strong> -{" "}
+              </span>
+              Updated at {new Date(us.generated_at).toLocaleString("en-US")}
+            </p>
+          </div>
+          <DashboardActions />
         </div>
 
         <RefreshBar />

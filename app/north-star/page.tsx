@@ -1,6 +1,7 @@
 import { getNorthStarBundle } from "@/lib/data/northstar";
 import { formatCurrency, formatNumber, formatMultiplier, formatPercent } from "@/lib/utils/format";
 import { Sparkles, TrendingUp, Users, Repeat, Coins } from "lucide-react";
+import { DashboardActions } from "@/components/shared/DashboardActions";
 
 export const revalidate = 300;
 
@@ -29,14 +30,17 @@ export default async function NorthStarPage() {
       </header>
 
       <div className="px-4 lg:px-8 py-5 lg:py-8 max-w-[1500px] mx-auto">
-        <div className="mb-6">
-          <h1 className="font-display text-[26px] lg:text-[36px]" style={{ color: "var(--ink)" }}>North Star</h1>
-          <p className="text-[12px] lg:text-[14px] mt-1" style={{ color: "var(--ink-soft)" }}>
-            4 anchor metrics for Larroude - same logic as the official LTV Dashboard
-          </p>
-          <p className="text-[11px] mt-1" style={{ color: "var(--ink-muted)" }}>
-            Window: {us.period.from} to {us.period.to} - {us.source === "BQ" ? "BigQuery Larroude OS" : "Mock"}
-          </p>
+        <div className="mb-6 flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <h1 className="font-display text-[26px] lg:text-[36px]" style={{ color: "var(--ink)" }}>North Star</h1>
+            <p className="text-[12px] lg:text-[14px] mt-1" style={{ color: "var(--ink-soft)" }}>
+              4 anchor metrics for Larroude - same logic as the official LTV Dashboard
+            </p>
+            <p className="text-[11px] mt-1" style={{ color: "var(--ink-muted)" }}>
+              Window: {us.period.from} to {us.period.to} - {us.source === "BQ" ? "BigQuery Larroude OS" : "Mock"}
+            </p>
+          </div>
+          <DashboardActions />
         </div>
 
         {/* US */}

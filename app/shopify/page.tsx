@@ -5,6 +5,7 @@ import { dateRangeCompleted } from "@/lib/utils/periods";
 import type { Market, Period } from "@/types/metric";
 import { RotateCcw, TrendingUp, Tag, AlertCircle, Lightbulb, ArrowDown, ArrowUp, Calendar } from "lucide-react";
 import { FiltersBar } from "@/components/filters/FiltersBar";
+import { DashboardActions } from "@/components/shared/DashboardActions";
 
 export const revalidate = 300;
 
@@ -37,15 +38,18 @@ export default async function ShopifyPage({
       </header>
 
       <div className="px-4 lg:px-8 py-5 lg:py-8 max-w-[1500px] mx-auto">
-        <div className="mb-6">
-          <h1 className="font-display text-[26px] lg:text-[36px]" style={{ color: "var(--ink)" }}>Shopify</h1>
-          <p className="text-[12px] lg:text-[14px] mt-1" style={{ color: "var(--ink-soft)" }}>
-            Sales, products, collections, returns, checkout funnel, automated suggestions
-          </p>
-          <p className="text-[11px] mt-1" style={{ color: "var(--ink-muted)" }}>
-            <Calendar className="inline w-3 h-3 mr-1" />
-            {data.period.from} to {data.period.to} - via {data.source === "BQ" ? "BigQuery Larroude OS" : "Mock"}
-          </p>
+        <div className="mb-6 flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <h1 className="font-display text-[26px] lg:text-[36px]" style={{ color: "var(--ink)" }}>Shopify</h1>
+            <p className="text-[12px] lg:text-[14px] mt-1" style={{ color: "var(--ink-soft)" }}>
+              Sales, products, collections, returns, checkout funnel, automated suggestions
+            </p>
+            <p className="text-[11px] mt-1" style={{ color: "var(--ink-muted)" }}>
+              <Calendar className="inline w-3 h-3 mr-1" />
+              {data.period.from} to {data.period.to} - via {data.source === "BQ" ? "BigQuery Larroude OS" : "Mock"}
+            </p>
+          </div>
+          <DashboardActions />
         </div>
 
         <FiltersBar />
