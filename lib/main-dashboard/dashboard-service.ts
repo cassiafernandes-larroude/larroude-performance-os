@@ -285,7 +285,12 @@ export async function getDashboardPayload(
   const proxyTotalSessionsPrev = (sessionsPrev as any[]).reduce((s, r) => s + num(r.sessions), 0);
 
   // ENV-based calibração (mais alta prioridade — sempre bate com Shopify se setado)
-  const envCvrTarget = num(process.env[`SHOPIFY_CVR_TARGET_${market}`]);
+  // Fallback hardcoded com valores documentados em lgeral/.env.local.example
+  // (US 1.10%, BR 1.31% - alinhado com Shopify Admin "Taxa de conversao").
+  // Pode ser sobreescrito setando SHOPIFY_CVR_TARGET_{US|BR} no Vercel.
+  const CVR_TARGET_FALLBACK: Record<Market, number> = { US: 0.011, BR: 0.0131 };
+  const envCvrTarget = num(process.env[`SHOPIFY_CVR_TARGET_${market}`])
+                     || CVR_TARGET_FALLBACK[market];
   const envSessionsRatio = num(process.env[`SHOPIFY_SESSIONS_RATIO_${market}`]);
   const calibratedCvr = envCvrTarget > 0 ? envCvrTarget
                       : envSessionsRatio > 0 ? 1 / envSessionsRatio
