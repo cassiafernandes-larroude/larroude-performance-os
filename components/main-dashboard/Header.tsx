@@ -86,7 +86,7 @@ export default function Header({
   return (
     <header className="mb-6 no-print-bg">
       {/* Row 1: title (left) + PDF/Refresh (right) - same style as Overview */}
-      <div className="px-6 lg:px-8 pt-8 pb-2 flex items-start justify-between gap-4 flex-wrap">
+      <div className="pt-8 pb-2 flex items-start justify-between gap-4 flex-wrap">
         <h1 className="font-display text-[32px] lg:text-[40px] font-bold leading-tight" style={{ color: 'var(--ink)', letterSpacing: '-0.025em' }}>
           Larroudé - Dashboard
         </h1>
@@ -124,7 +124,7 @@ export default function Header({
       </div>
 
       {/* Row 2: market toggle (US/BR) - below the title, aligned left */}
-      <div className="px-6 lg:px-8 pb-3 flex items-center gap-2 no-print">
+      <div className="pb-3 flex items-center gap-2 no-print">
         {(['US', 'BR'] as const).map((m) => {
           const active = market === m;
           return (
@@ -141,7 +141,7 @@ export default function Header({
       </div>
 
       {/* Row 3: subtitle + period range */}
-      <div className="px-6 lg:px-8 pb-4">
+      <div className="pb-4">
         <p className="text-sm" style={{ color: 'var(--ink-soft)' }}>
           Meta Ads + Google Ads + Shopify + Klaviyo - dados de{' '}
           <span className="font-semibold" style={{ color: 'var(--ink)' }}>
@@ -153,7 +153,7 @@ export default function Header({
 
       {/* Row 4: filter card (rounded white card) - PERIODO + presets + dates + label */}
       <div
-        className="mx-6 lg:mx-8 px-5 py-3 rounded-2xl flex flex-wrap items-center gap-3 no-print"
+        className="px-5 py-3 rounded-2xl flex flex-wrap items-center gap-3 no-print"
         style={{ background: 'white', border: '0.8px solid #e5e3de' }}
       >
         <span className="text-[11px] uppercase tracking-[0.12em] font-semibold mr-1" style={{ color: '#9ca3af' }}>
