@@ -136,7 +136,9 @@ export default function DailyBarChart({
             if (hasContextBars && data[idx]?.inPeriod === false) return;
             ctx.fillStyle = '#0F2237';
             const txt = fmtValue(v, unit, market, true);
-            const { x, y } = bar.tooltipPosition(false);
+            const pos = bar.tooltipPosition(false);
+            const x = (pos as { x: number; y: number }).x ?? 0;
+            const y = (pos as { x: number; y: number }).y ?? 0;
             ctx.fillText(txt, x, y - 4);
           });
           ctx.restore();
