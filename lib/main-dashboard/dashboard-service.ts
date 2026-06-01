@@ -662,8 +662,19 @@ export async function getDashboardPayload(
   const cutoffMs = Date.parse(dataLatestDay + 'T00:00:00Z') - (periodDaysCount === 1 ? 0 : 1) * 86400000;
   const activeCutoffStr = new Date(cutoffMs).toISOString().slice(0, 10);
 
-  // Campanhas Meta + Google direto de BQ (mesma query, coluna platform)
-  const allCampaigns: CampaignRow[] = (campaigns as any[])
+  // ----- Campanhas: MERGE Meta Graph API + BQ (Google + Meta fallback) -----
+  // BQ (queryCampaigns) tem Meta + Google, mas Meta vem incompleto em algumas datas.
+  // Meta Graph API (queryMetaCampaigns) e direto/fonte de verdade para Meta.
+  // Strategy:
+  //   - Google: from BQ (campaigns filtered by platform=Google)
+  //   - Meta: from Meta Graph API (metaApiCampaigns) - more reliable than BQ
+  //   - Fallback: if Meta API returned nothing, use BQ Meta rows
+  const bqGoogleRows = (campaigns as any[]).filter((c) => c.platform === 'Google');
+  const bqMetaRows = (campaigns as any[]).filter((c) => c.platform === 'Meta');
+  const useMetaApi = Array.isArray(metaApiCampaigns) && metaApiCampaigns.length > 0;
+
+  // 1) Google campaigns (from BQ)
+  const googleCampaignsRows: CampaignRow[] = bqGoogleRows
     .filter((c) => {
       const spend = num(c.spend);
       if (spend < MIN_ACTIVE_SPEND) return false;
@@ -672,10 +683,9 @@ export async function getDashboardPayload(
     })
     .map((c) => {
       const roas = c.roas == null ? null : Number(c.roas);
-      const platform = c.platform === 'Google' ? 'Google' as const : 'Meta' as const;
       return {
         campaign: String(c.campaign || '(sem nome)'),
-        platform,
+        platform: 'Google' as const,
         spend: num(c.spend),
         roas,
         purchases: c.purchases == null ? null : Number(c.purchases),
@@ -684,8 +694,60 @@ export async function getDashboardPayload(
         lpv: c.impressions == null ? null : Number(c.impressions),
         status: classifyCampaign(c.campaign, roas, num(c.spend)),
       };
-    })
-    .sort((a, b) => b.spend - a.spend);
+    });
+
+  // 2) Meta campaigns: prefer Meta Graph API, fallback to BQ
+  const metaCampaignsRows: CampaignRow[] = useMetaApi
+    ? (metaApiCampaigns as any[])
+        .filter((c) => {
+          const spend = num(c.spend);
+          if (spend < MIN_ACTIVE_SPEND) return false;
+          const lastDate = dateStr(c.last_spend_date);
+          // Meta API returns last_spend_date per campaign - same cutoff as BQ
+          return lastDate !== null && lastDate >= activeCutoffStr;
+        })
+        .map((c) => {
+          const roas = c.roas == null ? null : Number(c.roas);
+          const spend = num(c.spend);
+          const purchases = c.purchases == null ? null : Number(c.purchases);
+          const cpo = purchases && purchases > 0 ? spend / purchases : null;
+          return {
+            campaign: String(c.campaign_name || '(sem nome)'),
+            platform: 'Meta' as const,
+            spend,
+            roas,
+            purchases,
+            cpo,
+            atc: null, // Meta API doesn't return link_clicks here (only via daily insights)
+            lpv: null, // Meta API doesn't return impressions here
+            status: classifyCampaign(c.campaign_name, roas, spend),
+          };
+        })
+    : bqMetaRows
+        .filter((c) => {
+          const spend = num(c.spend);
+          if (spend < MIN_ACTIVE_SPEND) return false;
+          const lastDate = dateStr(c.last_spend_date);
+          return lastDate !== null && lastDate >= activeCutoffStr;
+        })
+        .map((c) => {
+          const roas = c.roas == null ? null : Number(c.roas);
+          return {
+            campaign: String(c.campaign || '(sem nome)'),
+            platform: 'Meta' as const,
+            spend: num(c.spend),
+            roas,
+            purchases: c.purchases == null ? null : Number(c.purchases),
+            cpo: c.cpo == null ? null : Number(c.cpo),
+            atc: c.link_clicks == null ? null : Number(c.link_clicks),
+            lpv: c.impressions == null ? null : Number(c.impressions),
+            status: classifyCampaign(c.campaign, roas, num(c.spend)),
+          };
+        });
+
+  const allCampaigns: CampaignRow[] = [...googleCampaignsRows, ...metaCampaignsRows].sort(
+    (a, b) => b.spend - a.spend
+  );
 
   // TOP 10 ROAS — Meta + Google, filtra ativas (já filtrado acima)
   const topCampaigns: TopCampaignRoas[] = allCampaigns

@@ -43,18 +43,18 @@ function activePeriodLabel(p: PeriodKey, isCustom: boolean, days?: number): stri
   }
 }
 
-function fmtBR(iso?: string): string {
-  if (!iso) return '—';
+function fmtEN(iso?: string): string {
+  if (!iso) return '-';
   const d = new Date(iso);
-  return d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+  return d.toLocaleString('en-US', { timeZone: 'America/New_York' });
 }
 
-function fmtRangeBR(start?: string, end?: string): string {
+function fmtRangeEN(start?: string, end?: string): string {
   if (!start || !end) return '';
   const s = new Date(start + 'T00:00:00Z');
   const e = new Date(end + 'T00:00:00Z');
   const opts: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' };
-  return `${s.toLocaleDateString('pt-BR', opts)} – ${e.toLocaleDateString('pt-BR', opts)}`;
+  return `${s.toLocaleDateString('en-US', opts)} - ${e.toLocaleDateString('en-US', opts)}`;
 }
 
 export default function Header({
@@ -73,31 +73,30 @@ export default function Header({
   }, [periodRange?.start, periodRange?.end]);
 
   function applyDates() {
-    if (!draftStart || !draftEnd) { alert('Selecione data inicial e final.'); return; }
-    if (draftStart > draftEnd) { alert('Data inicial deve ser anterior ou igual à data final.'); return; }
+    if (!draftStart || !draftEnd) { alert('Select a start and end date.'); return; }
+    if (draftStart > draftEnd) { alert('Start date must be before or equal to end date.'); return; }
     onCustomRange(draftStart, draftEnd);
   }
 
   return (
     <header className="mb-6 no-print-bg">
-      {/* Título — system font 32px weight 600 (igual CAC) */}
-      <div className="px-6 lg:px-8 pt-8 pb-4">
-        <h1 className="text-[32px] font-semibold text-ink leading-tight">
-          Larroudé · Dashboard
-        </h1>
-        <p className="text-sm text-steel mt-2">
-          Meta Ads + Google Ads + Shopify + Klaviyo · via BigQuery · dados de{' '}
-          <span className="font-semibold text-ink">{fmtRangeBR(periodRange?.start, periodRange?.end)}</span>
-        </p>
-        <p className="text-xs text-gray-400 mt-1">
-          Atualizado em {fmtBR(generatedAt)}
-        </p>
-      </div>
+      {/* Title row - market toggle on the right */}
+      <div className="px-6 lg:px-8 pt-8 pb-4 flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-[32px] font-semibold text-ink leading-tight">
+            Larroude - Dashboard
+          </h1>
+          <p className="text-sm text-steel mt-2">
+            Meta Ads + Google Ads + Shopify + Klaviyo - via BigQuery - data from{' '}
+            <span className="font-semibold text-ink">{fmtRangeEN(periodRange?.start, periodRange?.end)}</span>
+          </p>
+          <p className="text-xs text-gray-400 mt-1">
+            Updated at {fmtEN(generatedAt)}
+          </p>
+        </div>
 
-      {/* Tabs market + período + refresh */}
-      <div className="px-6 lg:px-8 py-4 flex flex-wrap items-center gap-3 no-print">
-        {/* Tabs US / BR — pílulas */}
-        <div className="flex items-center gap-2">
+        {/* Market toggle (US / BR) - moved out of the filter bar to match design spec */}
+        <div className="flex items-center gap-2 no-print">
           {(['US', 'BR'] as const).map((m) => {
             const active = market === m;
             return (
@@ -107,16 +106,16 @@ export default function Header({
                 className={active ? 'pill pill-active-accent' : 'pill pill-inactive'}
               >
                 <span className="text-[11px] font-bold opacity-70 mr-0.5">{m}</span>
-                {m === 'US' ? 'United States' : 'Brasil'}
+                {m === 'US' ? 'United States' : 'Brazil'}
               </button>
             );
           })}
         </div>
+      </div>
 
-        {/* Separador visual */}
-        <div className="hidden lg:block w-px h-6 bg-card-border mx-2"></div>
-
-        {/* Period */}
+      {/* Filter bar - period only (market is in the title row above) */}
+      <div className="px-6 lg:px-8 py-4 flex flex-wrap items-center gap-3 no-print">
+        {/* Period presets */}
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-[10px] uppercase tracking-wider font-semibold text-gray-400 mr-1">Period</span>
           {PERIODS.map((p) => {
