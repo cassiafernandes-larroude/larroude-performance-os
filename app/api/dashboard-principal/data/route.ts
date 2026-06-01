@@ -15,7 +15,7 @@ const CACHE = new Map<string, CacheEntry>();
 const TTL_MS = 3 * 60 * 60 * 1000; // 3h
 
 function isValidMarket(m: any): m is Market { return m === 'US' || m === 'BR'; }
-function isValidPeriod(p: any): p is PeriodKey { return ['1d', '7d', '14d', '28d', '3M', '6M', '12M'].includes(p); }
+function isValidPeriod(p: any): p is PeriodKey { return ['1d', '7d', '14d', '28d', '60d', '90d', '3M', '6M', '12M'].includes(p); }
 function isValidDate(s: any): boolean { return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s); }
 
 export async function GET(req: Request) {

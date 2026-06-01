@@ -1,7 +1,7 @@
 // Types compartilhados entre server (BigQuery) e client (componentes)
 
 export type Market = 'US' | 'BR';
-export type PeriodKey = '1d' | '7d' | '14d' | '28d' | '3M' | '6M' | '12M';
+export type PeriodKey = '1d' | '7d' | '14d' | '28d' | '60d' | '90d' | '3M' | '6M' | '12M';
 export type Granularity = 'day' | 'week' | 'month';
 
 export interface PeriodRange {

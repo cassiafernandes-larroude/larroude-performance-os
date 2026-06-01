@@ -46,6 +46,8 @@ export function calcPeriod(periodKey: PeriodKey, endDate?: string): PeriodRange 
     case '7d': days = 7; break;
     case '14d': days = 14; break;
     case '28d': days = 28; break;
+    case '60d': days = 60; break;
+    case '90d': days = 90; break;
     case '3M': days = 90; break;
     case '6M': days = 180; break;
     case '12M': days = 365; break;
