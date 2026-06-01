@@ -19,8 +19,8 @@ interface Props {
   periodRange?: PeriodRange;
 }
 
-// Presets per design spec: 7D / 28D / 60D / 90D
-const PERIODS: PeriodKey[] = ['7d', '28d', '60d', '90d'];
+// Presets per design spec: 7D / 14D / 28D / 3M / 6M / 12M
+const PERIODS: PeriodKey[] = ['7d', '14d', '28d', '3M', '6M', '12M'];
 
 function periodLabel(p: PeriodKey): string {
   return p.toUpperCase();
