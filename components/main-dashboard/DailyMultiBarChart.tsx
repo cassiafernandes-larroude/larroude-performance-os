@@ -56,7 +56,7 @@ export default function DailyMultiBarChart({ title, series, market, height = 240
         plugins: {
           legend: { position: 'top', align: 'start',
             labels: { font: { size: 11, weight: '600' }, color: '#3a4a63', boxWidth: 12, boxHeight: 12 } },
-          tooltip: { mode: 'index', intersect: false, callbacks: { label: (c) => `${c.dataset.label}: ${fmtNumber(c.parsed.y)}` } },
+          tooltip: { mode: 'index', intersect: false, callbacks: { label: (c) => `${c.dataset.label}: ${fmtNumber(c.parsed.y ?? 0)}` } },
         },
         scales: {
           x: { grid: { display: false }, ticks: { font: { size: 9 }, color: '#64748b', maxRotation: 45, minRotation: 45 } },

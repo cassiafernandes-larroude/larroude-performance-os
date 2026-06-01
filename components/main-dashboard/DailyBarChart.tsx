@@ -90,7 +90,7 @@ export default function DailyBarChart({
           legend: { display: false }, // título já mostrado acima do gráfico
           tooltip: {
             callbacks: {
-              label: (c) => `${title}: ${fmtValue(c.parsed.y, unit, market)}`,
+              label: (c) => `${title}: ${fmtValue(c.parsed.y ?? 0, unit, market)}`,
             },
           },
         },
