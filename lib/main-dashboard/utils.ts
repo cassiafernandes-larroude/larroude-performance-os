@@ -42,6 +42,7 @@ export function calcPeriod(periodKey: PeriodKey, endDate?: string): PeriodRange 
   const end = endDate ? parseISO(endDate) : shiftDays(parseISO(todayISO()), -1);
   let days = 28;
   switch (periodKey) {
+    case '1d': days = 1; break;
     case '7d': days = 7; break;
     case '14d': days = 14; break;
     case '28d': days = 28; break;

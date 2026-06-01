@@ -19,7 +19,29 @@ interface Props {
   periodRange?: PeriodRange;
 }
 
-const PERIODS: PeriodKey[] = ['7d', '14d', '28d', '3M', '6M', '12M'];
+const PERIODS: PeriodKey[] = ['1d', '7d', '14d', '28d', '3M', '6M', '12M'];
+
+// Display label uppercase ("1D" instead of "1d") to match design spec
+function periodLabel(p: PeriodKey): string {
+  return p.toUpperCase();
+}
+
+// Short human readable label for the active period (shown right of Apply)
+function activePeriodLabel(p: PeriodKey, isCustom: boolean, days?: number): string {
+  if (isCustom) {
+    if (days && days > 0) return `Last ${days} day${days === 1 ? '' : 's'}`;
+    return 'Custom range';
+  }
+  switch (p) {
+    case '1d': return 'Yesterday';
+    case '7d': return 'Last 7 days';
+    case '14d': return 'Last 14 days';
+    case '28d': return 'Last 28 days';
+    case '3M': return 'Last 3 months';
+    case '6M': return 'Last 6 months';
+    case '12M': return 'Last 12 months';
+  }
+}
 
 function fmtBR(iso?: string): string {
   if (!iso) return '—';
@@ -94,9 +116,9 @@ export default function Header({
         {/* Separador visual */}
         <div className="hidden lg:block w-px h-6 bg-card-border mx-2"></div>
 
-        {/* Período */}
+        {/* Period */}
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[10px] uppercase tracking-wider font-semibold text-gray-400 mr-1">Período</span>
+          <span className="text-[10px] uppercase tracking-wider font-semibold text-gray-400 mr-1">Period</span>
           {PERIODS.map((p) => {
             const active = period === p && !isCustom;
             return (
@@ -105,15 +127,14 @@ export default function Header({
                 onClick={() => onPeriodChange(p)}
                 className={active ? 'pill pill-active' : 'pill pill-inactive'}
               >
-                {p}
+                {periodLabel(p)}
               </button>
             );
           })}
         </div>
 
-        {/* Calendário */}
+        {/* Calendar range */}
         <div className="flex items-center gap-1.5 ml-1">
-          <span className="text-xs text-steel">De</span>
           <input
             type="date"
             value={draftStart}
@@ -123,7 +144,7 @@ export default function Header({
               isCustom ? 'border-accent ring-1 ring-accent/30' : 'border-card-border'
             }`}
           />
-          <span className="text-xs text-steel">até</span>
+          <span className="text-xs text-steel">to</span>
           <input
             type="date"
             value={draftEnd}
@@ -136,10 +157,14 @@ export default function Header({
           <button
             onClick={applyDates}
             className="pill pill-active"
-            title="Aplicar intervalo"
+            title="Apply date range"
           >
-            Aplicar
+            Apply
           </button>
+          {/* Active window label - italic gray, matches design spec */}
+          <span className="ml-2 text-xs italic text-steel">
+            {activePeriodLabel(period, !!isCustom, periodRange?.days)}
+          </span>
         </div>
 
         {/* PDF + Refresh */}
@@ -147,7 +172,7 @@ export default function Header({
           <button
             onClick={onExportPdf}
             className="pill pill-inactive"
-            title="Exportar dashboard em PDF"
+            title="Export dashboard as PDF"
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -161,7 +186,7 @@ export default function Header({
             onClick={onRefresh}
             disabled={refreshing}
             className="pill pill-active-accent disabled:opacity-60 disabled:cursor-not-allowed"
-            title="Atualiza dados do BigQuery"
+            title="Refresh BigQuery data"
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={refreshing ? 'animate-spin' : ''}>
               <path d="M3 12a9 9 0 0 1 9-9 9 9 0 0 1 6.7 3" />
@@ -169,7 +194,7 @@ export default function Header({
               <path d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-6.7-3" />
               <polyline points="3 21 3 15 9 15" />
             </svg>
-            {refreshing ? 'Atualizando…' : 'Atualizar agora'}
+            {refreshing ? 'Refreshing...' : 'Refresh now'}
           </button>
         </div>
       </div>

@@ -15,7 +15,7 @@ const CACHE = new Map<string, CacheEntry>();
 const TTL_MS = 3 * 60 * 60 * 1000; // 3h
 
 function isValidMarket(m: any): m is Market { return m === 'US' || m === 'BR'; }
-function isValidPeriod(p: any): p is PeriodKey { return ['7d', '14d', '28d', '3M', '6M', '12M'].includes(p); }
+function isValidPeriod(p: any): p is PeriodKey { return ['1d', '7d', '14d', '28d', '3M', '6M', '12M'].includes(p); }
 function isValidDate(s: any): boolean { return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s); }
 
 export async function GET(req: Request) {
@@ -48,7 +48,8 @@ export async function GET(req: Request) {
       // dashboard-service.ts aplica override por days quando hasCustom=true:
       //   <=60d=day, <=180d=week, >180d=month
       let derivedPeriod: PeriodKey = '28d';
-      if (days <= 7) derivedPeriod = '7d';
+      if (days <= 1) derivedPeriod = '1d';
+      else if (days <= 7) derivedPeriod = '7d';
       else if (days <= 14) derivedPeriod = '14d';
       else if (days <= 28) derivedPeriod = '28d';
       else if (days <= 90) derivedPeriod = '3M';
