@@ -34,13 +34,17 @@ export function aggregatedKpisSQL(market: Market) {
     ? `LEFT JOIN \`larroude-data-prod.gold.fx_rates_monthly\` fx ON fx.month = FORMAT_DATE('%Y-%m', ad.date)`
     : "";
 
-  // Filtro B2B/wholesale (US e BR): exclui orders de clientes B2B ou orders tagueadas
+  // Filtro de exclusao (US e BR):
+  //   - B2B/wholesale/marketplace/redo: orders com essas tags na order OU no customer
+  //   - Cap de valor: orders com total_price > $30k US ou > R$25k BR (atacado/marketplace)
+  const MAX_VALUE = market === "US" ? 30000 : 25000;
   const B2B_FILTER = `
     AND (
       JSON_VALUE(customer, '$.tags') IS NULL
-      OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(customer, '$.tags')), r'b2b|wholesale')
+      OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(customer, '$.tags')), r'b2b|wholesale|marketplace|redo')
     )
-    AND NOT REGEXP_CONTAINS(LOWER(IFNULL(tags, '')), r'b2b|wholesale')
+    AND NOT REGEXP_CONTAINS(LOWER(IFNULL(tags, '')), r'b2b|wholesale|marketplace|redo')
+    AND CAST(total_price AS NUMERIC) < ${MAX_VALUE}
   `;
 
   // Filtro PIX nao pago (so BR): exclui orders com gateway PIX em status pending/expired
@@ -74,9 +78,10 @@ export function aggregatedKpisSQL(market: Market) {
         AND o.financial_status NOT IN ('voided','refunded')
         AND (
           JSON_VALUE(o.customer, '$.tags') IS NULL
-          OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(o.customer, '$.tags')), r'b2b|wholesale')
+          OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(o.customer, '$.tags')), r'b2b|wholesale|marketplace|redo')
         )
-        AND NOT REGEXP_CONTAINS(LOWER(IFNULL(o.tags, '')), r'b2b|wholesale')
+        AND NOT REGEXP_CONTAINS(LOWER(IFNULL(o.tags, '')), r'b2b|wholesale|marketplace|redo')
+        AND CAST(o.total_price AS NUMERIC) < ${MAX_VALUE}
         ${market === "BR" ? `
         AND LOWER(IFNULL(o.financial_status, '')) NOT IN ('pending', 'expired', 'authorized')
         ` : ""}
@@ -125,9 +130,10 @@ export function aggregatedKpisSQL(market: Market) {
         AND o.financial_status NOT IN ('voided','refunded')
         AND (
           JSON_VALUE(o.customer, '$.tags') IS NULL
-          OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(o.customer, '$.tags')), r'b2b|wholesale')
+          OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(o.customer, '$.tags')), r'b2b|wholesale|marketplace|redo')
         )
-        AND NOT REGEXP_CONTAINS(LOWER(IFNULL(o.tags, '')), r'b2b|wholesale')
+        AND NOT REGEXP_CONTAINS(LOWER(IFNULL(o.tags, '')), r'b2b|wholesale|marketplace|redo')
+        AND CAST(o.total_price AS NUMERIC) < ${MAX_VALUE}
         ${market === "BR" ? `
         AND LOWER(IFNULL(o.financial_status, '')) NOT IN ('pending', 'expired', 'authorized')
         ` : ""}

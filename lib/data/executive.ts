@@ -95,9 +95,9 @@ export async function getExecutiveBundle(market: Market): Promise<ExecutiveBundl
               AND financial_status NOT IN ('voided','refunded')
               AND (
                 JSON_VALUE(customer, '$.tags') IS NULL
-                OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(customer, '$.tags')), r'b2b|wholesale')
+                OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(customer, '$.tags')), r'b2b|wholesale|marketplace|redo')
               )
-              AND NOT REGEXP_CONTAINS(LOWER(IFNULL(tags, '')), r'b2b|wholesale')
+              AND NOT REGEXP_CONTAINS(LOWER(IFNULL(tags, '')), r'b2b|wholesale|marketplace|redo')
               ${market === "BR" ? `
               AND LOWER(IFNULL(financial_status, '')) NOT IN ('pending', 'expired', 'authorized')` : ""}
           ),

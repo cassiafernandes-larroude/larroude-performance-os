@@ -22,6 +22,21 @@ const TZ: Record<Market, string> = {
   BR: 'America/Sao_Paulo',
 };
 
+// ----- Filtros de exclusao por requisicao da Cassia -----
+// 1) Tags B2B / wholesale / marketplace / redo (na order OU no customer)
+// 2) Orders com total_price acima do cap por mercado (US > $30k, BR > R$25k)
+//    Pedidos acima desse valor sao tipicamente atacado/marketplace/redo
+const MAX_ORDER_VALUE: Record<Market, number> = { US: 30000, BR: 25000 };
+const EXCLUDED_TAGS_REGEX = 'b2b|wholesale|marketplace|redo';
+
+function shopifyOrderFilters(market: Market, alias = ''): string {
+  const a = alias ? `${alias}.` : '';
+  return `
+    AND NOT REGEXP_CONTAINS(LOWER(IFNULL(${a}tags, '')), r'${EXCLUDED_TAGS_REGEX}')
+    AND (JSON_VALUE(${a}customer, '$.tags') IS NULL OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(${a}customer, '$.tags')), r'${EXCLUDED_TAGS_REGEX}'))
+    AND CAST(${a}total_price AS NUMERIC) < ${MAX_ORDER_VALUE[market]}`;
+}
+
 // Para gold_sales.* store usa 'US' / 'BR' uppercase
 // Para gold.all_channels_daily market usa 'us' / 'br' lowercase
 //
@@ -79,14 +94,14 @@ export async function queryAggregatedKpis(market: Market, start: string, end: st
         COUNT(*) AS orders
       FROM \`larroude-data-prod.${dataset}.orders\`
       WHERE DATE(created_at, '${TZ[market]}') BETWEEN @start AND @end
-        AND financial_status NOT IN ('voided','refunded')
+        AND financial_status NOT IN ('voided','refunded') ${shopifyOrderFilters(market)}
     ),
     units_t AS (
       SELECT SUM(CAST(JSON_VALUE(li,'$.quantity') AS INT64)) AS units
       FROM \`larroude-data-prod.${dataset}.orders\` o,
            UNNEST(JSON_QUERY_ARRAY(line_items)) li
       WHERE DATE(o.created_at) BETWEEN @start AND @end
-        AND o.financial_status NOT IN ('voided','refunded')
+        AND o.financial_status NOT IN ('voided','refunded') ${shopifyOrderFilters(market, 'o')}
     ),
     refunds_raw AS (
       SELECT
@@ -126,7 +141,7 @@ export async function queryAggregatedKpis(market: Market, start: string, end: st
       SELECT JSON_VALUE(customer, '$.id') AS cust_id,
              MIN(DATE(created_at, '${TZ[market]}')) AS first_dt
       FROM \`larroude-data-prod.${dataset}.orders\`
-      WHERE customer IS NOT NULL AND financial_status NOT IN ('voided','refunded')
+      WHERE customer IS NOT NULL AND financial_status NOT IN ('voided','refunded') ${shopifyOrderFilters(market)}
       GROUP BY cust_id
     ),
     customer_split AS (
@@ -138,7 +153,7 @@ export async function queryAggregatedKpis(market: Market, start: string, end: st
       FROM \`larroude-data-prod.${dataset}.orders\` o
       JOIN first_order_per_customer fo ON JSON_VALUE(o.customer, '$.id') = fo.cust_id
       WHERE DATE(o.created_at) BETWEEN @start AND @end
-        AND o.financial_status NOT IN ('voided','refunded')
+        AND o.financial_status NOT IN ('voided','refunded') ${shopifyOrderFilters(market, 'o')}
     ),
     cac AS (
       SELECT new_customer_orders AS new_customers FROM customer_split
@@ -210,7 +225,7 @@ export async function queryDailySales(market: Market, start: string, end: string
         SUM(CAST(total_tax AS NUMERIC)) AS tax
       FROM \`larroude-data-prod.${dataset}.orders\`
       WHERE DATE(created_at, '${TZ[market]}') BETWEEN @start AND @end
-        AND financial_status NOT IN ('voided','refunded')
+        AND financial_status NOT IN ('voided','refunded') ${shopifyOrderFilters(market)}
       GROUP BY d
     ),
     units_daily AS (
@@ -219,7 +234,7 @@ export async function queryDailySales(market: Market, start: string, end: string
       FROM \`larroude-data-prod.${dataset}.orders\` o,
            UNNEST(JSON_QUERY_ARRAY(line_items)) li
       WHERE DATE(o.created_at) BETWEEN @start AND @end
-        AND o.financial_status NOT IN ('voided','refunded')
+        AND o.financial_status NOT IN ('voided','refunded') ${shopifyOrderFilters(market, 'o')}
       GROUP BY d
     )
     SELECT
@@ -324,7 +339,7 @@ export async function queryDailyCac(market: Market, start: string, end: string, 
              MIN(DATE(created_at, '${TZ[market]}')) AS first_order_date
       FROM \`larroude-data-prod.${dataset}.orders\`
       WHERE customer IS NOT NULL
-        AND financial_status NOT IN ('voided', 'refunded')
+        AND financial_status NOT IN ('voided', 'refunded') ${shopifyOrderFilters(market)}
       GROUP BY customer_id
     ),
     new_customers_daily AS (
@@ -334,14 +349,14 @@ export async function queryDailyCac(market: Market, start: string, end: string, 
         ON JSON_VALUE(o.customer, '$.id') = fo.customer_id
        AND DATE(o.created_at) = fo.first_order_date
       WHERE DATE(o.created_at) BETWEEN @start AND @end
-        AND o.financial_status NOT IN ('voided', 'refunded')
+        AND o.financial_status NOT IN ('voided', 'refunded') ${shopifyOrderFilters(market, 'o')}
       GROUP BY d
     ),
     orders_daily AS (
       SELECT DATE(created_at, '${TZ[market]}') AS d, COUNT(*) AS orders
       FROM \`larroude-data-prod.${dataset}.orders\`
       WHERE DATE(created_at, '${TZ[market]}') BETWEEN @start AND @end
-        AND financial_status NOT IN ('voided', 'refunded')
+        AND financial_status NOT IN ('voided', 'refunded') ${shopifyOrderFilters(market)}
       GROUP BY d
     ),
     spend_daily AS (
@@ -515,7 +530,7 @@ export async function queryChannelMix(market: Market, start: string, end: string
         LOWER(IFNULL(referring_site, '')) AS referrer
       FROM \`larroude-data-prod.${dataset}.orders\`
       WHERE DATE(created_at, '${TZ[market]}') BETWEEN @start AND @end
-        AND financial_status NOT IN ('voided', 'refunded')
+        AND financial_status NOT IN ('voided', 'refunded') ${shopifyOrderFilters(market)}
     ),
     classified AS (
       SELECT
@@ -576,7 +591,7 @@ export async function queryShopifyFunnel(market: Market, start: string, end: str
       SELECT COUNT(*) AS orders_count
       FROM \`larroude-data-prod.${dataset}.orders\`
       WHERE DATE(created_at, '${TZ[market]}') BETWEEN @start AND @end
-        AND financial_status NOT IN ('voided', 'refunded')
+        AND financial_status NOT IN ('voided', 'refunded') ${shopifyOrderFilters(market)}
     )
     SELECT
       atc.abandoned_count,
@@ -606,7 +621,7 @@ export async function queryChannelMixDaily(market: Market, start: string, end: s
         LOWER(IFNULL(referring_site, '')) AS referrer
       FROM \`larroude-data-prod.${dataset}.orders\`
       WHERE DATE(created_at, '${TZ[market]}') BETWEEN @start AND @end
-        AND financial_status NOT IN ('voided', 'refunded')
+        AND financial_status NOT IN ('voided', 'refunded') ${shopifyOrderFilters(market)}
     ),
     classified AS (
       SELECT

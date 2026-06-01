@@ -166,9 +166,9 @@ export async function getMetricBundle(
             AND LOWER(IFNULL(financial_status, '')) NOT IN ('pending', 'expired', 'authorized')
             AND (
               JSON_VALUE(customer, '$.tags') IS NULL
-              OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(customer, '$.tags')), r'b2b|wholesale')
+              OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(customer, '$.tags')), r'b2b|wholesale|marketplace|redo')
             )
-            AND NOT REGEXP_CONTAINS(LOWER(IFNULL(tags, '')), r'b2b|wholesale')
+            AND NOT REGEXP_CONTAINS(LOWER(IFNULL(tags, '')), r'b2b|wholesale|marketplace|redo')
             AND (
               REGEXP_CONTAINS(LOWER(IFNULL(landing_site, '')), r'agent[._-]?shop|utm_source=agent')
               OR REGEXP_CONTAINS(LOWER(IFNULL(referring_site, '')), r'agent[._-]?shop')

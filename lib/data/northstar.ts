@@ -54,7 +54,7 @@ function commonFilters(market: Market): string {
         AND NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(customer, '$.tags')), r'wholesale')
       )
     )
-    AND NOT REGEXP_CONTAINS(LOWER(IFNULL(tags, '')), r'b2b|wholesale')
+    AND NOT REGEXP_CONTAINS(LOWER(IFNULL(tags, '')), r'b2b|wholesale|marketplace|redo')
     AND NOT (
       LOWER(IFNULL(tags, '')) LIKE '%troquecommerce%'
       OR LOWER(IFNULL(note, '')) LIKE '%troca direta%'
