@@ -500,3 +500,77 @@ textarea:focus {
   height: 100%;
   border: none;
 }
+
+/* ==================== MAIN DASHBOARD NATIVO (lgeral port) ==================== */
+/* Classes adicionais usadas pelos componentes em components/main-dashboard/* */
+.pill-active-accent {
+  background: #ec4899;
+  color: white;
+}
+.badge-pink {
+  background: #ec4899;
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.badge-green {
+  background: #10b981;
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.no-print-bg { /* hint - sem efeito visual em screen */ }
+
+/* Print styles para o Main Dashboard nativo */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+  .no-print, .no-print-bg { display: none !important; }
+  .print-container {
+    max-width: none !important;
+    padding: 0 !important;
+    width: 100% !important;
+  }
+  .main-dashboard-root .card {
+    box-shadow: none !important;
+    border: 1px solid #e0e0e0 !important;
+    border-radius: 8px !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .funnel-grid {
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    gap: 2mm !important;
+  }
+  .kpi-grid {
+    display: grid !important;
+    grid-template-columns: repeat(8, minmax(0, 1fr)) !important;
+    gap: 2mm !important;
+  }
+  .main-dashboard-root .grid.lg\:grid-cols-2,
+  .main-dashboard-root .grid.lg\:grid-cols-3,
+  .main-dashboard-root .grid.grid-cols-1.lg\:grid-cols-2 {
+    grid-template-columns: 1fr !important;
+  }
+  .daily-chart-card {
+    height: 47mm !important;
+    max-height: 47mm !important;
+    width: 100% !important;
+    page-break-inside: avoid;
+  }
+  .daily-chart-card canvas {
+    max-height: 36mm !important;
+    height: 36mm !important;
+  }
+}
