@@ -41,6 +41,7 @@ function commonFilters(market: Market): string {
   const pixFilter = market === "BR" ? `
     AND LOWER(IFNULL(financial_status, '')) NOT IN ('pending', 'expired', 'authorized')
   ` : "";
+  const cap = market === "US" ? 30000 : 25000;
 
   return `
     cancelled_at IS NULL
@@ -50,11 +51,11 @@ function commonFilters(market: Market): string {
     AND (
       JSON_VALUE(customer, '$.tags') IS NULL
       OR (
-        NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(customer, '$.tags')), r'b2b')
-        AND NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(customer, '$.tags')), r'wholesale')
+        NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(customer, '$.tags')), r'b2b|wholesale|marketplace|redo')
       )
     )
     AND NOT REGEXP_CONTAINS(LOWER(IFNULL(tags, '')), r'b2b|wholesale|marketplace|redo')
+    AND CAST(total_price AS NUMERIC) < ${cap}
     AND NOT (
       LOWER(IFNULL(tags, '')) LIKE '%troquecommerce%'
       OR LOWER(IFNULL(note, '')) LIKE '%troca direta%'

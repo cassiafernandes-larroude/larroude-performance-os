@@ -162,10 +162,11 @@ const MOCK_BR: Omit<ShopifyBundle, "market" | "period" | "source"> = {
   ],
 };
 
-// Filtros: exclui canceladas/test/B2B/wholesale; para BR exclui tambem PIX nao pago
+// Filtros: exclui canceladas/test/B2B/wholesale/marketplace/redo; orders > cap; BR exclui PIX nao pago
 // alias = prefixo da tabela (ex: "" ou "o.") - usado quando filtros aparecem dentro de JOIN/UNNEST
 function commonFiltersShopify(market: Market, alias: string = ""): string {
   const a = alias; // "" ou "o."
+  const cap = market === "US" ? 30000 : 25000;
   const pix = market === "BR" ? `
     AND LOWER(IFNULL(${a}financial_status, '')) NOT IN ('pending', 'expired', 'authorized')
   ` : "";
@@ -178,6 +179,7 @@ function commonFiltersShopify(market: Market, alias: string = ""): string {
       OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(${a}customer, '$.tags')), r'b2b|wholesale|marketplace|redo')
     )
     AND NOT REGEXP_CONTAINS(LOWER(IFNULL(${a}tags, '')), r'b2b|wholesale|marketplace|redo')
+    AND CAST(${a}total_price AS NUMERIC) < ${cap}
     ${pix}
   `;
 }
@@ -267,6 +269,7 @@ export async function getShopifyBundle(market: Market, period: { from: string; t
               OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(o.customer, '$.tags')), r'b2b|wholesale|marketplace|redo')
             )
             AND NOT REGEXP_CONTAINS(LOWER(IFNULL(o.tags, '')), r'b2b|wholesale|marketplace|redo')
+            AND CAST(o.total_price AS NUMERIC) < ${market === "US" ? 30000 : 25000}
             ${market === "BR" ? `
             AND LOWER(IFNULL(o.financial_status, '')) NOT IN ('pending', 'expired', 'authorized')` : ""}
         )
@@ -309,6 +312,7 @@ export async function getShopifyBundle(market: Market, period: { from: string; t
             OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(o.customer, '$.tags')), r'b2b|wholesale|marketplace|redo')
           )
           AND NOT REGEXP_CONTAINS(LOWER(IFNULL(o.tags, '')), r'b2b|wholesale|marketplace|redo')
+          AND CAST(o.total_price AS NUMERIC) < ${market === "US" ? 30000 : 25000}
           ${market === "BR" ? `
           AND LOWER(IFNULL(o.financial_status, '')) NOT IN ('pending', 'expired', 'authorized')` : ""}
         GROUP BY title
@@ -335,6 +339,7 @@ export async function getShopifyBundle(market: Market, period: { from: string; t
             OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(o.customer, '$.tags')), r'b2b|wholesale|marketplace|redo')
           )
           AND NOT REGEXP_CONTAINS(LOWER(IFNULL(o.tags, '')), r'b2b|wholesale|marketplace|redo')
+          AND CAST(o.total_price AS NUMERIC) < ${market === "US" ? 30000 : 25000}
           ${market === "BR" ? `
           AND LOWER(IFNULL(o.financial_status, '')) NOT IN ('pending', 'expired', 'authorized')` : ""}
         GROUP BY collection

@@ -98,6 +98,7 @@ export async function getExecutiveBundle(market: Market): Promise<ExecutiveBundl
                 OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(customer, '$.tags')), r'b2b|wholesale|marketplace|redo')
               )
               AND NOT REGEXP_CONTAINS(LOWER(IFNULL(tags, '')), r'b2b|wholesale|marketplace|redo')
+              AND CAST(total_price AS NUMERIC) < ${market === "US" ? 30000 : 25000}
               ${market === "BR" ? `
               AND LOWER(IFNULL(financial_status, '')) NOT IN ('pending', 'expired', 'authorized')` : ""}
           ),

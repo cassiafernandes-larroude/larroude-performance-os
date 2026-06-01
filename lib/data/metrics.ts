@@ -169,6 +169,7 @@ export async function getMetricBundle(
               OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(customer, '$.tags')), r'b2b|wholesale|marketplace|redo')
             )
             AND NOT REGEXP_CONTAINS(LOWER(IFNULL(tags, '')), r'b2b|wholesale|marketplace|redo')
+            AND CAST(total_price AS NUMERIC) < 25000
             AND (
               REGEXP_CONTAINS(LOWER(IFNULL(landing_site, '')), r'agent[._-]?shop|utm_source=agent')
               OR REGEXP_CONTAINS(LOWER(IFNULL(referring_site, '')), r'agent[._-]?shop')
