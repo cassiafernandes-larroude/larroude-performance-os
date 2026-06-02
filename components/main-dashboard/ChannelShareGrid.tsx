@@ -69,10 +69,10 @@ export default function ChannelShareGrid({ data, dimmed }: Props) {
 
   return (
     <div className={`transition-opacity ${dimmed ? 'opacity-60' : 'opacity-100'}`}>
-      <SectionHeader>📊 CHANNEL SHARE - {market} - RECEITA E PARTICIPACAO DIARIA</SectionHeader>
+      <SectionHeader>📊 CHANNEL SHARE - {market} - DAILY REVENUE AND SHARE</SectionHeader>
       <p className="text-sm text-steel mt-2 mb-4">
-        Receita por canal (esquerda) e participacao percentual do canal no total daquele dia (direita).
-        Mesmos filtros do Main Dashboard: exclui B2B, wholesale, marketplace, redo e orders acima do cap por mercado.
+        Daily revenue per channel (left) and percent share of that channel in the daily total (right).
+        Same filters as the Main Dashboard: excludes B2B, wholesale, marketplace, redo and orders above the per-market cap.
       </p>
 
       <div className="space-y-6">
@@ -84,14 +84,14 @@ export default function ChannelShareGrid({ data, dimmed }: Props) {
           return (
             <div key={slug} className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <DailyBarChart
-                title={`${ch.channel} - Receita`}
+                title={`${ch.channel} - Revenue`}
                 data={revenueSeries}
                 color={ch.color ?? '#64748b'}
                 unit="currency"
                 market={market}
               />
               <DailyBarChart
-                title={`${ch.channel} - Participacao (%)`}
+                title={`${ch.channel} - Share (%)`}
                 data={share}
                 color={ch.color ?? '#64748b'}
                 unit="percent"

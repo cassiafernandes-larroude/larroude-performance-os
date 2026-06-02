@@ -98,12 +98,14 @@ export default function ChannelSharePage() {
         refreshing={refreshing}
         generatedAt={data?.generatedAt}
         periodRange={data?.period}
+        title="Channel Share"
+        lang="en"
       />
 
       {error && (
         <div className="card mt-4 p-4 border-l-4" style={{ borderLeftColor: '#ef4444' }}>
           <div className="text-sm font-medium" style={{ color: '#ef4444' }}>
-            Erro ao carregar dados
+            Failed to load data
           </div>
           <div className="text-xs mt-1" style={{ color: '#6b7280' }}>{error}</div>
         </div>
@@ -111,7 +113,7 @@ export default function ChannelSharePage() {
 
       {loading && !data && (
         <div className="card mt-4 p-8 text-center text-sm" style={{ color: '#6b7280' }}>
-          Carregando dados do BigQuery...
+          Loading data from BigQuery...
         </div>
       )}
 
