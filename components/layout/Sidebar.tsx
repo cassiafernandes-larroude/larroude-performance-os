@@ -19,6 +19,7 @@ import {
   BookOpen,
   Database,
   Bell,
+  PieChart,
   X,
 } from "lucide-react";
 
@@ -47,6 +48,7 @@ const navSections: NavSection[] = [
     title: "DASHBOARDS",
     items: [
       { href: "/dashboard-principal", label: "Main Dashboard", icon: BarChart3 },
+      { href: "/channel-share", label: "Channel Share", icon: PieChart },
       { href: "/ltv-cohorts", label: "LTV", icon: TrendingUp },
       { href: "/cac-ncac-crc", label: "CAC", icon: Users },
       { href: "/klaviyo", label: "Klaviyo Journey", icon: Mail },
