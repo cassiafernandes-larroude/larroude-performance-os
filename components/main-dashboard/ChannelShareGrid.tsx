@@ -7,6 +7,7 @@
 
 import type { DashboardPayload, DailyPoint } from '@/lib/main-dashboard/types';
 import DailyBarChart from './DailyBarChart';
+import ChannelShareInsights from './ChannelShareInsights';
 
 interface Props { data: DashboardPayload; dimmed?: boolean; }
 
@@ -101,6 +102,9 @@ export default function ChannelShareGrid({ data, dimmed }: Props) {
           );
         })}
       </div>
+
+      {/* Auto-computed insights at the bottom */}
+      <ChannelShareInsights data={data} />
     </div>
   );
 }
