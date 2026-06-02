@@ -44,6 +44,10 @@ export default function Dashboard({ data, dimmed }: Props) {
         revenue={kpis.find((k) => k.label === 'ORDER REVENUE' || k.label === 'GROSS SALES')?.raw ?? 0}
       />
 
+      {/* Canais e campanhas - logo apos Conversoes por Etapa */}
+      <SectionHeader>📡 CANAIS E CAMPANHAS — {market}</SectionHeader>
+      <ChannelBreakdown channels={channels} topCampaigns={topCampaigns} market={market} />
+
       {/* Receita diária */}
       <SectionHeader>📅 RECEITA DIÁRIA — {market}</SectionHeader>
       <div className={gridCls}>
@@ -85,10 +89,7 @@ export default function Dashboard({ data, dimmed }: Props) {
       </div>
 
       {/* Seção TRÁFEGO removida por solicitação — números de sessões não eram confiáveis */}
-
-      {/* Canais e campanhas */}
-      <SectionHeader>📡 CANAIS E CAMPANHAS — {market}</SectionHeader>
-      <ChannelBreakdown channels={channels} topCampaigns={topCampaigns} market={market} />
+      {/* CANAIS E CAMPANHAS foi movido para logo após CONVERSÕES POR ETAPA (acima) */}
 
       {/* Receita por canal — um gráfico em barra por canal */}
       <SectionHeader>📊 RECEITA POR CANAL (DIÁRIA) — {market}</SectionHeader>
