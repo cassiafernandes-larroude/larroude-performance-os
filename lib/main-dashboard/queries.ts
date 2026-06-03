@@ -643,18 +643,28 @@ export async function queryChannelMixDaily(market: Market, start: string, end: s
         d,
         revenue,
         CASE
-          WHEN NOT REGEXP_CONTAINS(landing, r'utm_source=') THEN 'Sem UTM / Direto'
+          -- OWNED CHANNELS
+          WHEN REGEXP_CONTAINS(landing, r'utm_source=klaviyo') THEN 'Klaviyo Email'
+          WHEN REGEXP_CONTAINS(landing, r'utm_source=attentive|utm_medium=sms') THEN 'SMS Attentive'
+          -- AFFILIATE / CREATOR
+          WHEN REGEXP_CONTAINS(landing, r'utm_source=awin|utm_medium=affiliate') THEN 'Awin Affiliate'
+          WHEN REGEXP_CONTAINS(landing, r'utm_source=shopmy') THEN 'ShopMy'
+          WHEN REGEXP_CONTAINS(landing, r'agent[._-]?shop|utm_source=agent') OR REGEXP_CONTAINS(referrer, r'agent[._-]?shop') THEN 'Agent.shop'
+          -- PAID ADS
           WHEN REGEXP_CONTAINS(landing, r'utm_source=(meta|facebook|ig_paid|ig_ads|fb_ads|fb|instagram_paid|fb_paid)') THEN 'Meta Ads'
           WHEN REGEXP_CONTAINS(landing, r'utm_source=(instagram|facebook|meta|fb|ig)') AND REGEXP_CONTAINS(landing, r'utm_medium=(paid|cpc|cpm|social_paid|paidsocial|paid_social)') THEN 'Meta Ads'
           WHEN REGEXP_CONTAINS(landing, r'utm_source=(instagram|facebook|meta|fb|ig)') AND NOT REGEXP_CONTAINS(landing, r'utm_medium=') THEN 'Meta Ads'
-          WHEN REGEXP_CONTAINS(landing, r'criteo') OR REGEXP_CONTAINS(referrer, r'criteo') THEN 'Criteo'
-          WHEN REGEXP_CONTAINS(landing, r'agent[._-]?shop|utm_source=agent') OR REGEXP_CONTAINS(referrer, r'agent[._-]?shop') THEN 'Agent.shop'
-          WHEN REGEXP_CONTAINS(landing, r'utm_source=klaviyo') THEN 'Klaviyo Email'
-          WHEN REGEXP_CONTAINS(landing, r'utm_source=attentive|utm_medium=sms') THEN 'SMS Attentive'
-          WHEN REGEXP_CONTAINS(landing, r'utm_source=awin|utm_medium=affiliate') THEN 'Awin Affiliate'
-          WHEN REGEXP_CONTAINS(landing, r'utm_source=shopmy') THEN 'ShopMy'
           WHEN REGEXP_CONTAINS(landing, r'utm_source=google.*utm_medium=cpc|gclid=') THEN 'Google Ads'
-          WHEN REGEXP_CONTAINS(landing, r'utm_source=(tiktok)') AND NOT REGEXP_CONTAINS(landing, r'utm_medium=(cpc|paid)') THEN 'Orgânico Social (IG)'
+          WHEN REGEXP_CONTAINS(landing, r'criteo') OR REGEXP_CONTAINS(referrer, r'criteo') THEN 'Criteo'
+          -- ORGANIC (Shopify-style: referring_site search engines / social networks without paid params)
+          WHEN REGEXP_CONTAINS(landing, r'utm_source=(linktree|linkinbio|link_in_bio|bio|lnk\.bio)') THEN 'Orgânico Social'
+          WHEN REGEXP_CONTAINS(referrer, r'google\.|bing\.|duckduckgo|yahoo\.com/search|baidu\.|yandex\.|ecosia\.|qwant\.')
+            AND NOT REGEXP_CONTAINS(landing, r'gclid=|utm_medium=(cpc|paid)') THEN 'Orgânico Search'
+          WHEN REGEXP_CONTAINS(referrer, r'instagram\.|facebook\.|tiktok\.|pinterest\.|youtube\.|twitter\.|t\.co|threads\.|x\.com')
+            AND NOT REGEXP_CONTAINS(landing, r'fbclid=|gclid=|utm_medium=(cpc|paid)') THEN 'Orgânico Social'
+          WHEN REGEXP_CONTAINS(landing, r'utm_source=(tiktok)') AND NOT REGEXP_CONTAINS(landing, r'utm_medium=(cpc|paid)') THEN 'Orgânico Social'
+          -- DIRECT (no UTM, no recognized referrer)
+          WHEN NOT REGEXP_CONTAINS(landing, r'utm_source=') THEN 'Sem UTM / Direto'
           ELSE 'Outros'
         END AS channel
       FROM parsed
