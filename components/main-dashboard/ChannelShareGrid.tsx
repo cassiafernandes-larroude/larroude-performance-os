@@ -30,8 +30,10 @@ function slugFor(channel: string): string {
   if (channel === 'ShopMy') return 'shopmy';
   if (channel === 'Criteo') return 'criteo';
   if (channel === 'Agent.shop') return 'agent_shop';
-  if (channel === 'Organico Social (IG)') return 'organico_social_ig';
-  if (channel === 'Orgânico Social (IG)') return 'organico_social_ig';
+  if (channel === 'Orgânico Search' || channel === 'Organico Search') return 'organico_search';
+  if (channel === 'Orgânico Social' || channel === 'Organico Social') return 'organico_social';
+  // legacy
+  if (channel === 'Orgânico Social (IG)' || channel === 'Organico Social (IG)') return 'organico_social_ig';
   return 'outros';
 }
 

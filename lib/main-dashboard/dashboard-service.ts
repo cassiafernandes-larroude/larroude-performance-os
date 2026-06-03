@@ -60,7 +60,8 @@ const CHANNEL_COLORS: Record<string, string> = {
   'ShopMy':                '#ec4899',
   'Criteo':                '#f97316',
   'Agent.shop':            '#06b6d4',
-  'Orgânico Social (IG)':  '#94a3b8',
+  'Orgânico Search':       '#22c55e',
+  'Orgânico Social':       '#94a3b8',
   'Outros':                '#64748b',
 };
 
@@ -600,7 +601,8 @@ export async function getDashboardPayload(
     'ShopMy': 'shopmy',
     'Criteo': 'criteo',
     'Agent.shop': 'agent_shop',
-    'Orgânico Social (IG)': 'organico_social_ig',
+    'Orgânico Search': 'organico_search',
+    'Orgânico Social': 'organico_social',
     'Outros': 'outros',
   };
   // Helper robusto para extrair YYYY-MM-DD de bucket (BQ Date object ou string)

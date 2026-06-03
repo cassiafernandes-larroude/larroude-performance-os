@@ -537,14 +537,12 @@ export async function queryChannelMix(market: Market, start: string, end: string
         revenue,
         CASE
           -- Direto: sem UTM
-          WHEN NOT REGEXP_CONTAINS(landing, r'utm_source=') THEN 'Sem UTM / Direto'
-          -- Organic Social: link in bio / linktree / IG-FB-TikTok com medium organico
-          WHEN REGEXP_CONTAINS(landing, r'utm_source=(linktree|linkinbio|link_in_bio|bio|lnk\.bio)') THEN 'Orgânico Social (IG)'
-          WHEN REGEXP_CONTAINS(landing, r'utm_source=(instagram|facebook|meta|fb|ig|tiktok)') AND REGEXP_CONTAINS(landing, r'utm_medium=(organic|organico|social_organic|social-organic|bio|profile|story|stories|reel|reels|post)') THEN 'Orgânico Social (IG)'
-          -- Meta Ads = todos utm_source IG/FB/Meta com utm_medium paid OU unknown (sem medium)
+          -- Meta Ads paid (UTMs explicitos OU referrer social + landing com fbclid/paid medium)
           WHEN REGEXP_CONTAINS(landing, r'utm_source=(meta|facebook|ig_paid|ig_ads|fb_ads|fb|instagram_paid|fb_paid)') THEN 'Meta Ads'
           WHEN REGEXP_CONTAINS(landing, r'utm_source=(instagram|facebook|meta|fb|ig)') AND REGEXP_CONTAINS(landing, r'utm_medium=(paid|cpc|cpm|social_paid|paidsocial|paid_social)') THEN 'Meta Ads'
           WHEN REGEXP_CONTAINS(landing, r'utm_source=(instagram|facebook|meta|fb|ig)') AND NOT REGEXP_CONTAINS(landing, r'utm_medium=') THEN 'Meta Ads'
+          -- Link in bio / linktree (organic social)
+          WHEN REGEXP_CONTAINS(landing, r'utm_source=(linktree|linkinbio|link_in_bio|bio|lnk\.bio)') THEN 'Orgânico Social'
           -- Criteo: QUALQUER clique com 'criteo' em landing OU referring
           WHEN REGEXP_CONTAINS(landing, r'criteo') OR REGEXP_CONTAINS(referrer, r'criteo') THEN 'Criteo'
           -- Agent.shop: utm_source ou referring agent.shop
@@ -559,8 +557,16 @@ export async function queryChannelMix(market: Market, start: string, end: string
           WHEN REGEXP_CONTAINS(landing, r'utm_source=shopmy') THEN 'ShopMy'
           -- Google Ads
           WHEN REGEXP_CONTAINS(landing, r'utm_source=google.*utm_medium=cpc|gclid=') THEN 'Google Ads'
-          -- Orgânico Social (IG/TikTok com medium organic ou social não-paid)
-          WHEN REGEXP_CONTAINS(landing, r'utm_source=(tiktok)') AND NOT REGEXP_CONTAINS(landing, r'utm_medium=(cpc|paid)') THEN 'Orgânico Social (IG)'
+          -- Orgânico Search (Shopify-style): referring site = search engine SEM gclid (paid)
+          WHEN REGEXP_CONTAINS(referrer, r'google\.|bing\.|duckduckgo|yahoo\.com/search|baidu\.|yandex\.|ecosia\.|qwant\.')
+            AND NOT REGEXP_CONTAINS(landing, r'gclid=|utm_medium=(cpc|paid)') THEN 'Orgânico Search'
+          -- Orgânico Social: referring site = social network SEM fbclid (paid)
+          WHEN REGEXP_CONTAINS(referrer, r'instagram\.|facebook\.|tiktok\.|pinterest\.|youtube\.|twitter\.|t\.co|threads\.|x\.com')
+            AND NOT REGEXP_CONTAINS(landing, r'fbclid=|gclid=|utm_medium=(cpc|paid)') THEN 'Orgânico Social'
+          -- Tiktok organico (caso especial)
+          WHEN REGEXP_CONTAINS(landing, r'utm_source=(tiktok)') AND NOT REGEXP_CONTAINS(landing, r'utm_medium=(cpc|paid)') THEN 'Orgânico Social'
+          -- Sem UTM / Direto: sem utm_source E sem referrer reconhecido
+          WHEN NOT REGEXP_CONTAINS(landing, r'utm_source=') THEN 'Sem UTM / Direto'
           ELSE 'Outros'
         END AS channel
       FROM parsed
