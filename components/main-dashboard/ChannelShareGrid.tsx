@@ -8,6 +8,7 @@
 import type { DashboardPayload, DailyPoint } from '@/lib/main-dashboard/types';
 import DailyBarChart from './DailyBarChart';
 import ChannelShareInsights from './ChannelShareInsights';
+import ChannelShareKpis from './ChannelShareKpis';
 
 interface Props { data: DashboardPayload; dimmed?: boolean; }
 
@@ -70,6 +71,9 @@ export default function ChannelShareGrid({ data, dimmed }: Props) {
 
   return (
     <div className={`transition-opacity ${dimmed ? 'opacity-60' : 'opacity-100'}`}>
+      {/* Top KPI cards: share % of each channel in total revenue */}
+      <ChannelShareKpis data={data} />
+
       <SectionHeader>📊 CHANNEL SHARE - {market} - DAILY REVENUE AND SHARE</SectionHeader>
       <p className="text-sm text-steel mt-2 mb-4">
         Daily revenue per channel (left) and percent share of that channel in the daily total (right).

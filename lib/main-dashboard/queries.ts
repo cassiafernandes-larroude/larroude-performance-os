@@ -538,6 +538,9 @@ export async function queryChannelMix(market: Market, start: string, end: string
         CASE
           -- Direto: sem UTM
           WHEN NOT REGEXP_CONTAINS(landing, r'utm_source=') THEN 'Sem UTM / Direto'
+          -- Organic Social: link in bio / linktree / IG-FB-TikTok com medium organico
+          WHEN REGEXP_CONTAINS(landing, r'utm_source=(linktree|linkinbio|link_in_bio|bio|lnk\.bio)') THEN 'Orgânico Social (IG)'
+          WHEN REGEXP_CONTAINS(landing, r'utm_source=(instagram|facebook|meta|fb|ig|tiktok)') AND REGEXP_CONTAINS(landing, r'utm_medium=(organic|organico|social_organic|social-organic|bio|profile|story|stories|reel|reels|post)') THEN 'Orgânico Social (IG)'
           -- Meta Ads = todos utm_source IG/FB/Meta com utm_medium paid OU unknown (sem medium)
           WHEN REGEXP_CONTAINS(landing, r'utm_source=(meta|facebook|ig_paid|ig_ads|fb_ads|fb|instagram_paid|fb_paid)') THEN 'Meta Ads'
           WHEN REGEXP_CONTAINS(landing, r'utm_source=(instagram|facebook|meta|fb|ig)') AND REGEXP_CONTAINS(landing, r'utm_medium=(paid|cpc|cpm|social_paid|paidsocial|paid_social)') THEN 'Meta Ads'
