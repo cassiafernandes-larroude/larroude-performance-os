@@ -536,27 +536,33 @@ export async function queryChannelMix(market: Market, start: string, end: string
       SELECT
         revenue,
         CASE
-          -- Direto: sem UTM
+          -- ============= OWNED CHANNELS (highest priority - explicit UTMs) =============
+          -- Klaviyo Email (owned channel)
+          WHEN REGEXP_CONTAINS(landing, r'utm_source=klaviyo') THEN 'Klaviyo Email'
+          -- SMS Attentive (owned channel)
+          WHEN REGEXP_CONTAINS(landing, r'utm_source=attentive|utm_medium=sms') THEN 'SMS Attentive'
+
+          -- ============= AFFILIATE / CREATOR CHANNELS =============
+          -- Awin Affiliate
+          WHEN REGEXP_CONTAINS(landing, r'utm_source=awin|utm_medium=affiliate') THEN 'Awin Affiliate'
+          -- ShopMy (creator)
+          WHEN REGEXP_CONTAINS(landing, r'utm_source=shopmy') THEN 'ShopMy'
+          -- Agent.shop
+          WHEN REGEXP_CONTAINS(landing, r'agent[._-]?shop|utm_source=agent') OR REGEXP_CONTAINS(referrer, r'agent[._-]?shop') THEN 'Agent.shop'
+
+          -- ============= PAID ADS =============
           -- Meta Ads paid (UTMs explicitos OU referrer social + landing com fbclid/paid medium)
           WHEN REGEXP_CONTAINS(landing, r'utm_source=(meta|facebook|ig_paid|ig_ads|fb_ads|fb|instagram_paid|fb_paid)') THEN 'Meta Ads'
           WHEN REGEXP_CONTAINS(landing, r'utm_source=(instagram|facebook|meta|fb|ig)') AND REGEXP_CONTAINS(landing, r'utm_medium=(paid|cpc|cpm|social_paid|paidsocial|paid_social)') THEN 'Meta Ads'
           WHEN REGEXP_CONTAINS(landing, r'utm_source=(instagram|facebook|meta|fb|ig)') AND NOT REGEXP_CONTAINS(landing, r'utm_medium=') THEN 'Meta Ads'
+          -- Google Ads paid
+          WHEN REGEXP_CONTAINS(landing, r'utm_source=google.*utm_medium=cpc|gclid=') THEN 'Google Ads'
+          -- Criteo (paid retargeting)
+          WHEN REGEXP_CONTAINS(landing, r'criteo') OR REGEXP_CONTAINS(referrer, r'criteo') THEN 'Criteo'
+
+          -- ============= ORGANIC =============
           -- Link in bio / linktree (organic social)
           WHEN REGEXP_CONTAINS(landing, r'utm_source=(linktree|linkinbio|link_in_bio|bio|lnk\.bio)') THEN 'Orgânico Social'
-          -- Criteo: QUALQUER clique com 'criteo' em landing OU referring
-          WHEN REGEXP_CONTAINS(landing, r'criteo') OR REGEXP_CONTAINS(referrer, r'criteo') THEN 'Criteo'
-          -- Agent.shop: utm_source ou referring agent.shop
-          WHEN REGEXP_CONTAINS(landing, r'agent[._-]?shop|utm_source=agent') OR REGEXP_CONTAINS(referrer, r'agent[._-]?shop') THEN 'Agent.shop'
-          -- Klaviyo Email
-          WHEN REGEXP_CONTAINS(landing, r'utm_source=klaviyo') THEN 'Klaviyo Email'
-          -- SMS (Attentive ou utm_medium=sms)
-          WHEN REGEXP_CONTAINS(landing, r'utm_source=attentive|utm_medium=sms') THEN 'SMS Attentive'
-          -- Awin Affiliate
-          WHEN REGEXP_CONTAINS(landing, r'utm_source=awin|utm_medium=affiliate') THEN 'Awin Affiliate'
-          -- ShopMy
-          WHEN REGEXP_CONTAINS(landing, r'utm_source=shopmy') THEN 'ShopMy'
-          -- Google Ads
-          WHEN REGEXP_CONTAINS(landing, r'utm_source=google.*utm_medium=cpc|gclid=') THEN 'Google Ads'
           -- Orgânico Search (Shopify-style): referring site = search engine SEM gclid (paid)
           WHEN REGEXP_CONTAINS(referrer, r'google\.|bing\.|duckduckgo|yahoo\.com/search|baidu\.|yandex\.|ecosia\.|qwant\.')
             AND NOT REGEXP_CONTAINS(landing, r'gclid=|utm_medium=(cpc|paid)') THEN 'Orgânico Search'
