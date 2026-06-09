@@ -368,19 +368,13 @@ export async function getDashboardPayload(
     { label: 'TOTAL SALES', value: fmtCurrency(totalSales, market, { compact: true }), raw: totalSales, delta: pctChange(totalSales, pTotal), tone: 'default' },
     { label: 'ORDERS', value: fmtNumber(orders), raw: orders, delta: pctChange(orders, pOrders), tone: 'default' },
     { label: 'AOV', value: fmtCurrency(aov, market), raw: aov, delta: pctChange(aov, pAov), tone: 'good' },
-    { label: 'CPO (SPEND/ORDERS)', value: fmtCurrency(cpo, market), raw: cpo, hint: 'Spend / Shopify Orders', tone: 'accent', invertDelta: true },
-    { label: 'CPA (SPEND/PIXEL PURCH.)', value: fmtCurrency(cpa, market), raw: cpa, hint: 'Spend / Meta Pixel Purchases', tone: 'warn', invertDelta: true },
     { label: 'CAC (SPEND/NEW CUST.)', value: fmtCurrency(cac, market), raw: cac, hint: 'Spend / Novos Clientes Shopify', tone: 'default', invertDelta: true },
-    { label: 'PURCHASES (META PIXEL)', value: fmtNumber(pixelPurch), raw: pixelPurch, delta: pctChange(pixelPurch, pPixelPurch), tone: 'default' },
     { label: 'TAXA DE CONVERSÃO', value: cvr > 0 ? fmtPercent(cvr, 2) : '—', raw: cvr, delta: cvr > 0 && pCvr > 0 ? pctChange(cvr, pCvr) : null, hint: `Fonte: ${cvrSource}`, tone: 'good' },
-    { label: 'DISCOUNTS', value: fmtCurrency(discounts, market, { compact: true }), raw: discounts, delta: pctChange(discounts, pDiscounts), tone: 'default' },
     { label: 'CTR', value: fmtPercent(ctr, 2), raw: ctr, delta: pctChange(ctr, pCtr), tone: 'accent' },
-    { label: 'CPC', value: fmtCurrency(cpc, market), raw: cpc, delta: pctChange(cpc, pCpc), tone: 'default', invertDelta: true },
     { label: 'UNITS SOLD', value: fmtNumber(units), raw: units, delta: pctChange(units, pUnits), tone: 'good' },
     { label: 'NEW CUSTOMER ORDERS', value: fmtNumber(num(aggCurr.new_customer_orders)), raw: num(aggCurr.new_customer_orders), delta: pctChange(num(aggCurr.new_customer_orders), num(aggPrev.new_customer_orders)), tone: 'good' },
     { label: 'NEW CUSTOMER REVENUE', value: fmtCurrency(num(aggCurr.new_customer_revenue), market, { compact: true }), raw: num(aggCurr.new_customer_revenue), delta: pctChange(num(aggCurr.new_customer_revenue), num(aggPrev.new_customer_revenue)), tone: 'good' },
     { label: 'RETURNING CUSTOMER REVENUE', value: fmtCurrency(num(aggCurr.returning_customer_revenue), market, { compact: true }), raw: num(aggCurr.returning_customer_revenue), delta: pctChange(num(aggCurr.returning_customer_revenue), num(aggPrev.returning_customer_revenue)), tone: 'accent' },
-    { label: 'TAX (TAXES)', value: fmtCurrency(num(aggCurr.tax), market, { compact: true }), raw: num(aggCurr.tax), delta: pctChange(num(aggCurr.tax), num(aggPrev.tax)), tone: 'default' },
   ];
 
   // ----- Séries por bucket (day/week/month) -----

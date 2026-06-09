@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getProductLtv, type Market } from '@/lib/ltv-dashboard/queries';
+import { memo, TTL_6H } from '@/lib/ltv-dashboard/memo-cache';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 3600;
@@ -44,7 +45,8 @@ export async function GET(
 
   const startedAt = Date.now();
   try {
-    const result = await getProductLtv(market, start, end, 200);
+    const cacheKey = `ltv:products:${market}:${start}:${end}`;
+    const result = await memo(cacheKey, TTL_6H, () => getProductLtv(market, start, end, 200));
 
     return NextResponse.json(
       {
@@ -58,7 +60,8 @@ export async function GET(
       },
       {
         headers: {
-          'Cache-Control': 's-maxage=86400, stale-while-revalidate=604800',
+          'Cache-Control':
+            'public, max-age=1800, s-maxage=86400, stale-while-revalidate=604800',
         },
       }
     );

@@ -85,7 +85,7 @@ export default function Dashboard({ freshness }: { freshness: string }) {
     setError(null);
 
     const url = `/api/ltv-native/${market}?start=${period.start}&end=${period.end}`;
-    fetch(url, { cache: 'no-store' })
+    fetch(url)
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json() as Promise<ApiResponse>;
@@ -113,7 +113,7 @@ export default function Dashboard({ freshness }: { freshness: string }) {
     setProductsData(null);
 
     const url = `/api/ltv-native/${market}/products?start=${period.start}&end=${period.end}`;
-    fetch(url, { cache: 'no-store' })
+    fetch(url)
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json() as Promise<ProductsApiResponse>;
@@ -140,7 +140,7 @@ export default function Dashboard({ freshness }: { freshness: string }) {
     setLoadingJourney(true);
     setJourneyData(null);
 
-    fetch(`/api/ltv-native/${market}/journey`, { cache: 'no-store' })
+    fetch(`/api/ltv-native/${market}/journey`)
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json() as Promise<JourneyApiResponse>;

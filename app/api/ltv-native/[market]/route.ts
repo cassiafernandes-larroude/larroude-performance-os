@@ -6,9 +6,11 @@ import {
   getRetentionStats,
   type Market,
 } from '@/lib/ltv-dashboard/queries';
+import { memo, TTL_6H } from '@/lib/ltv-dashboard/memo-cache';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 3600;
+export const maxDuration = 60;
 
 function isMarket(value: string): value is Market {
   return value === 'US' || value === 'BR';
@@ -20,11 +22,8 @@ function isoDate(v: string | null): string | null {
 }
 
 /**
- * Fast endpoint — KPIs + daily series + monthly series only.
- * Returns in ~3-8s on cold start, <1s when cached.
- *
- * Product LTV is split into a separate endpoint /api/ltv/[market]/products
- * because the line_item UNNEST aggregation takes 15-30s for 12M windows.
+ * Fast endpoint — KPIs + daily series + monthly series + retention.
+ * Cold start ~3-8s, in-memory cached <50ms, CDN cached <100ms.
  */
 export async function GET(
   req: NextRequest,
@@ -51,30 +50,31 @@ export async function GET(
 
   const startedAt = Date.now();
   try {
-    const [summary, daily, monthly, retention] = await Promise.all([
-      getLtvKpiSummary(market, start, end),
-      getDailyLtvSeries(market, start, end),
-      getMonthlyLtvSeries(market),
-      getRetentionStats(market),
-    ]);
+    const cacheKey = `ltv:summary:${market}:${start}:${end}`;
+    const result = await memo(cacheKey, TTL_6H, async () => {
+      const [summary, daily, monthly, retention] = await Promise.all([
+        getLtvKpiSummary(market, start, end),
+        getDailyLtvSeries(market, start, end),
+        getMonthlyLtvSeries(market),
+        getRetentionStats(market),
+      ]);
+      return { summary, daily, monthly, retention };
+    });
 
     return NextResponse.json(
       {
-        summary,
-        daily,
-        monthly,
-        retention,
+        ...result,
         meta: {
           generatedAt: new Date().toISOString(),
           durationMs: Date.now() - startedAt,
-          sources: summary.sources,
+          sources: result.summary.sources,
         },
       },
       {
         headers: {
-          // Aggressive cache: 24h fresh, 7d stale-while-revalidate.
-          // Cron at 08:00 BRT re-warms it daily.
-          'Cache-Control': 's-maxage=86400, stale-while-revalidate=604800',
+          // Browser cacheia 30min, CDN cacheia 24h, serve stale 7d enquanto revalida.
+          'Cache-Control':
+            'public, max-age=1800, s-maxage=86400, stale-while-revalidate=604800',
         },
       }
     );

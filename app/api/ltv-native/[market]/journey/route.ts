@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCustomerJourney, type Market } from '@/lib/ltv-dashboard/queries';
+import { memo, TTL_24H } from '@/lib/ltv-dashboard/memo-cache';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 3600;
@@ -24,10 +25,16 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
 
   const startedAt = Date.now();
   try {
-    const journey = await getCustomerJourney(market);
+    // journey é lifetime (sem janela), TTL 24h é seguro
+    const journey = await memo(`ltv:journey:${market}`, TTL_24H, () => getCustomerJourney(market));
     return NextResponse.json(
       { journey, meta: { generatedAt: new Date().toISOString(), durationMs: Date.now() - startedAt } },
-      { headers: { 'Cache-Control': 's-maxage=86400, stale-while-revalidate=604800' } }
+      {
+        headers: {
+          'Cache-Control':
+            'public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800',
+        },
+      }
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'unknown';
