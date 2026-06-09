@@ -5,8 +5,30 @@ import { fmtCurrency, fmtMultiple, fmtPercent } from '@/lib/main-dashboard/utils
 
 interface Props { channels: ChannelRevenue[]; topCampaigns: TopCampaignRoas[]; market: Market; }
 
+// Apenas no Main Dashboard: consolida "Orgânico Search" + "Orgânico Social" em um único "Orgânico".
+// No Channel Share os dois ficam separados (renderizado por componentes próprios).
+function consolidateOrganic(channels: ChannelRevenue[]): ChannelRevenue[] {
+  const organicLabels = new Set(['Orgânico Search', 'Orgânico Social', 'Organico Search', 'Organico Social']);
+  let organicRev = 0;
+  let organicPct = 0;
+  const others: ChannelRevenue[] = [];
+  for (const c of channels) {
+    if (organicLabels.has(c.channel)) {
+      organicRev += c.revenue;
+      organicPct += c.pct ?? 0;
+    } else {
+      others.push(c);
+    }
+  }
+  if (organicRev > 0) {
+    others.push({ channel: 'Orgânico', revenue: organicRev, pct: organicPct, color: '#22c55e' });
+  }
+  return others.sort((a, b) => b.revenue - a.revenue);
+}
+
 export default function ChannelBreakdown({ channels, topCampaigns, market }: Props) {
-  const maxRevenue = Math.max(1, ...channels.map((c) => c.revenue));
+  const displayChannels = consolidateOrganic(channels);
+  const maxRevenue = Math.max(1, ...displayChannels.map((c) => c.revenue));
   const maxRoas = Math.max(1, ...topCampaigns.map((c) => c.roas));
 
   return (
@@ -16,8 +38,8 @@ export default function ChannelBreakdown({ channels, topCampaigns, market }: Pro
           Receita por canal · {market}
         </div>
         <div className="space-y-2.5">
-          {channels.length === 0 && <div className="text-sm text-steel italic">Sem dados de canal no período.</div>}
-          {channels.map((c) => (
+          {displayChannels.length === 0 && <div className="text-sm text-steel italic">Sem dados de canal no período.</div>}
+          {displayChannels.map((c) => (
             <div key={c.channel} className="grid grid-cols-12 items-center gap-3">
               <div className="col-span-3 text-xs text-ink truncate text-right pr-1">{c.channel}</div>
               <div className="col-span-6 h-5 bg-cloud rounded-md overflow-hidden">
