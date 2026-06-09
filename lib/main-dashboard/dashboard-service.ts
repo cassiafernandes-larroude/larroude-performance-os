@@ -530,7 +530,10 @@ export async function getDashboardPayload(
     daily.aov.push({ date: d, value: safeDiv(dOrderRev, dOrders) });
     daily.cpo.push({ date: d, value: safeDiv(dSpend, dOrders) });
     daily.cpa.push({ date: d, value: safeDiv(dSpend, dPixel) });
-    daily.cac.push({ date: d, value: num(c.cac) });
+    // CAC daily: usa dSpend (Meta API + Supermetrics, sempre atualizado) dividido por new_customers
+    // do BQ Shopify. NUNCA usa c.cac (que vinha do BQ com Meta US parado desde 20/05).
+    const dNewCust = num(c.new_customers);
+    daily.cac.push({ date: d, value: safeDiv(dSpend, dNewCust) });
     // CVR diária:
     //   Se Shopify Admin diário disponível → usa nativo (mais preciso)
     //   Senão: usa proxy diário (orders/sessões_proxy) × calibration_factor
