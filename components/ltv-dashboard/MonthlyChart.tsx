@@ -1,20 +1,11 @@
 'use client';
 
-import {
-  Bar,
-  CartesianGrid,
-  Line,
-  ComposedChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
+import BarLineChart from '@/components/shared/BarLineChart';
 import type { Market, MonthlyLtvPoint } from '@/lib/ltv-dashboard/queries';
-import { formatMoney, formatMonth, formatNumber, formatPercent } from '@/lib/ltv-dashboard/format';
 
 /**
- * Monthly LTV bars + RPR line for the trailing 12 months.
+ * Monthly LTV bars + RepeatRate line — trailing 12 months.
+ * Refatorado para usar BarLineChart compartilhado.
  */
 export default function MonthlyChart({
   data,
@@ -27,71 +18,27 @@ export default function MonthlyChart({
     return <div className="empty">Sem dados mensais.</div>;
   }
 
+  const barData = data.map((d) => ({ date: d.month, value: Number(d.ltvAvg) }));
+  const lineData = data.map((d) => ({
+    date: d.month,
+    value: d.repeatPurchaseRate != null ? Number(d.repeatPurchaseRate) : null,
+  }));
+
   return (
-    <ResponsiveContainer width="100%" height="100%">
-      <ComposedChart data={data} margin={{ top: 8, right: 30, bottom: 8, left: 0 }}>
-        <CartesianGrid stroke="#efece6" vertical={false} />
-        <XAxis
-          dataKey="month"
-          tickFormatter={(m) => formatMonth(m, market)}
-          tick={{ fontSize: 10, fill: '#8a8a8a' }}
-          axisLine={{ stroke: '#e7e3da' }}
-          tickLine={false}
-        />
-        <YAxis
-          yAxisId="ltv"
-          tick={{ fontSize: 10, fill: '#8a8a8a' }}
-          axisLine={false}
-          tickLine={false}
-          width={50}
-          tickFormatter={(v) => (market === 'US' ? `$${v}` : `R$${v}`)}
-        />
-        <YAxis
-          yAxisId="rpr"
-          orientation="right"
-          tick={{ fontSize: 10, fill: '#8a8a8a' }}
-          axisLine={false}
-          tickLine={false}
-          width={36}
-          tickFormatter={(v) => `${v}%`}
-          domain={[0, 'dataMax + 5']}
-        />
-        <Tooltip
-          cursor={{ fill: 'rgba(212, 74, 138, 0.08)' }}
-          contentStyle={{
-            background: '#fff',
-            border: '1px solid #e7e3da',
-            borderRadius: 10,
-            fontSize: 12,
-            padding: '8px 12px',
-          }}
-          labelFormatter={(m) => formatMonth(String(m), market)}
-          formatter={(value: number, name: string) => {
-            if (name === 'LTV médio') return [formatMoney(value, market, true), name];
-            if (name === 'Repeat %') return [formatPercent(value), name];
-            if (name === 'Clientes') return [formatNumber(value, market), name];
-            return [formatMoney(value, market), name];
-          }}
-        />
-        <Bar
-          yAxisId="ltv"
-          dataKey="ltvAvg"
-          name="LTV médio"
-          fill="#d44a8a"
-          radius={[6, 6, 0, 0]}
-          maxBarSize={42}
-        />
-        <Line
-          yAxisId="rpr"
-          type="monotone"
-          dataKey="repeatPurchaseRate"
-          stroke="#2c7a5b"
-          strokeWidth={2}
-          dot={{ r: 3, fill: '#2c7a5b' }}
-          activeDot={{ r: 5 }}
-          name="Repeat %"
-        />
-      </ComposedChart>
-    </ResponsiveContainer>
+    <BarLineChart
+      title="LTV médio mensal"
+      data={barData}
+      color="#d44a8a"
+      unit="currency"
+      market={market}
+      height={260}
+      line={{
+        data: lineData,
+        name: 'Repeat %',
+        color: '#2c7a5b',
+        unit: 'percent',
+        yAxis: 'right',
+      }}
+    />
   );
 }

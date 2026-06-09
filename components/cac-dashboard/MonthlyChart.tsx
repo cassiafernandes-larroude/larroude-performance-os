@@ -1,17 +1,12 @@
 'use client';
 
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
+import BarLineChart from '@/components/shared/BarLineChart';
 import type { Market, MonthlyPoint } from '@/lib/cac-dashboard/queries';
-import { formatMoney, formatMonth, formatNumber } from '@/lib/cac-dashboard/format';
 
+/**
+ * CAC mensal — últimos 12 meses.
+ * Refatorado para usar BarLineChart compartilhado.
+ */
 export default function MonthlyChart({
   data,
   market,
@@ -23,42 +18,16 @@ export default function MonthlyChart({
     return <div className="empty">Sem dados mensais.</div>;
   }
 
+  const barData = data.map((d) => ({ date: d.month, value: Number(d.cac) }));
+
   return (
-    <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={data} margin={{ top: 8, right: 8, bottom: 8, left: 0 }}>
-        <CartesianGrid stroke="#efece6" vertical={false} />
-        <XAxis
-          dataKey="month"
-          tickFormatter={(m) => formatMonth(m, market)}
-          tick={{ fontSize: 10, fill: '#8a8a8a' }}
-          axisLine={{ stroke: '#e7e3da' }}
-          tickLine={false}
-        />
-        <YAxis
-          tick={{ fontSize: 10, fill: '#8a8a8a' }}
-          axisLine={false}
-          tickLine={false}
-          width={50}
-          tickFormatter={(v) => (market === 'US' ? `$${v}` : `R$${v}`)}
-        />
-        <Tooltip
-          cursor={{ fill: 'rgba(212, 74, 138, 0.08)' }}
-          contentStyle={{
-            background: '#fff',
-            border: '1px solid #e7e3da',
-            borderRadius: 10,
-            fontSize: 12,
-            padding: '8px 12px',
-          }}
-          labelFormatter={(m) => formatMonth(String(m), market)}
-          formatter={(value: number, name: string) => {
-            if (name === 'CAC') return [formatMoney(value, market, true), name];
-            if (name === 'Novos clientes') return [formatNumber(value, market), name];
-            return [formatMoney(value, market), name];
-          }}
-        />
-        <Bar dataKey="cac" name="CAC" fill="#d44a8a" radius={[6, 6, 0, 0]} maxBarSize={42} />
-      </BarChart>
-    </ResponsiveContainer>
+    <BarLineChart
+      title="CAC mensal"
+      data={barData}
+      color="#d44a8a"
+      unit="currency"
+      market={market}
+      height={260}
+    />
   );
 }
