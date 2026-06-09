@@ -67,7 +67,7 @@ interface OrdersResponse {
 
 const ORDERS_QUERY = `
   query GetOrders($cursor: String, $query: String!) {
-    orders(first: 100, after: $cursor, query: $query, sortKey: CREATED_AT) {
+    orders(first: 250, after: $cursor, query: $query, sortKey: CREATED_AT, reverse: true) {
       edges {
         cursor
         node {
@@ -185,7 +185,10 @@ export async function getShopifyAggregate(
   let cursor: string | null = null;
   let hasNext = true;
   let pageCount = 0;
-  const maxPages = 100;
+  // 250 orders/page × 400 pages = 100k orders max (cobre 12M com folga).
+  // sortKey + reverse=true puxa primeiro os MAIS RECENTES — se atingir o cap,
+  // perdemos orders antigos (menos crítico) em vez de cortar o período atual.
+  const maxPages = 400;
 
   while (hasNext && pageCount < maxPages) {
     pageCount++;
