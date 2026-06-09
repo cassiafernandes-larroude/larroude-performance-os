@@ -76,12 +76,12 @@ function fmtRange(start: string | undefined, end: string | undefined, lang: Lang
   return `${s.toLocaleDateString(locale, opts)} - ${e.toLocaleDateString(locale, opts)}`;
 }
 
-// Pill styles for the period buttons (rounded, big)
-const PILL_BASE = 'inline-flex items-center justify-center rounded-full text-[13px] font-semibold transition-all duration-150 select-none';
-const PILL_ACTIVE_DARK = `${PILL_BASE} bg-[#1a1a1a] text-white px-5 py-2`;
-const PILL_INACTIVE = `${PILL_BASE} bg-[#ebe9e3] text-[#1a1a1a] hover:bg-[#ddd9d0] px-5 py-2`;
-const MARKET_ACTIVE = `${PILL_BASE} bg-[#ec4899] text-white px-4 py-1.5`;
-const MARKET_INACTIVE = `${PILL_BASE} bg-[#ebe9e3] text-[#1a1a1a] hover:bg-[#ddd9d0] px-4 py-1.5`;
+// Pill styles for the period buttons - smaller on mobile (px-3) bigger on desktop (px-5)
+const PILL_BASE = 'inline-flex items-center justify-center rounded-full text-[12px] sm:text-[13px] font-semibold transition-all duration-150 select-none';
+const PILL_ACTIVE_DARK = `${PILL_BASE} bg-[#1a1a1a] text-white px-3 sm:px-5 py-1.5 sm:py-2`;
+const PILL_INACTIVE = `${PILL_BASE} bg-[#ebe9e3] text-[#1a1a1a] hover:bg-[#ddd9d0] px-3 sm:px-5 py-1.5 sm:py-2`;
+const MARKET_ACTIVE = `${PILL_BASE} bg-[#ec4899] text-white px-3 sm:px-4 py-1.5`;
+const MARKET_INACTIVE = `${PILL_BASE} bg-[#ebe9e3] text-[#1a1a1a] hover:bg-[#ddd9d0] px-3 sm:px-4 py-1.5`;
 
 export default function Header({
   market, period, customStart, customEnd, isCustom,
@@ -149,7 +149,7 @@ export default function Header({
     <header className="mb-6 no-print-bg">
       {/* Row 1: title (left) + PDF/Refresh (right) */}
       <div className="pt-8 pb-2 flex items-start justify-between gap-4 flex-wrap">
-        <h1 className="font-display text-[32px] lg:text-[40px] font-bold leading-tight" style={{ color: 'var(--ink)', letterSpacing: '-0.025em' }}>
+        <h1 className="font-display text-[24px] sm:text-[28px] lg:text-[40px] font-bold leading-tight" style={{ color: 'var(--ink)', letterSpacing: '-0.025em' }}>
           {title}
         </h1>
 

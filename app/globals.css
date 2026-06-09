@@ -574,3 +574,47 @@ textarea:focus {
     height: 36mm !important;
   }
 }
+
+/* ==================== MOBILE RESPONSIVO GERAL ==================== */
+/* Garante que nenhuma pagina cause overflow horizontal no mobile */
+@media (max-width: 767px) {
+  html, body { overflow-x: hidden; }
+
+  /* Wrappers principais com padding reduzido no mobile */
+  .main-dashboard-root,
+  .ltv-root {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+
+  /* LTV: reduz padding interno da pagina (.page) e ajusta tipografia */
+  .ltv-root .page { padding: 16px 0 60px !important; }
+  .ltv-root h1 { font-size: 22px !important; }
+  .ltv-root .kpi-value { font-size: 22px !important; }
+  .ltv-root .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 8px !important; }
+
+  /* Cards genericos: padding menor */
+  .card { padding: 12px 14px !important; }
+
+  /* Tabelas largas: scroll horizontal automatico */
+  .overflow-x-auto { -webkit-overflow-scrolling: touch; }
+
+  /* Filter card do Main/Channel: padding compacto e melhor wrapping */
+  .main-dashboard-root header > div:last-child { padding: 10px 12px !important; gap: 8px !important; }
+
+  /* DailyBarChart canvas: limita altura no mobile */
+  .daily-chart-card { padding: 10px !important; }
+  .daily-chart-card canvas { max-height: 220px !important; }
+
+  /* Section headers menores */
+  .text-xs.font-bold.uppercase { font-size: 10px !important; }
+
+  /* Inputs de data no Header: ocupam mais espaco */
+  .main-dashboard-root input[type="date"] { font-size: 11px !important; padding: 6px 10px !important; }
+}
+
+/* Telas muito pequenas (≤ 380px) */
+@media (max-width: 380px) {
+  .ltv-root .kpi-grid { grid-template-columns: 1fr !important; }
+  .main-dashboard-root h1 { font-size: 20px !important; }
+}
