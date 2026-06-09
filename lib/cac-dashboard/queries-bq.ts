@@ -15,7 +15,7 @@ import {
   queryGoogleAdsViaSupermetrics,
   queryMetaAdsViaSupermetrics,
 } from '@/lib/main-dashboard/supermetrics';
-import { getMetaSpendByDay } from './connectors/meta-ads';
+import { queryMetaAdsDaily } from '@/lib/main-dashboard/meta-ads';
 import type { Market as MainMarket } from '@/lib/main-dashboard/types';
 import type {
   DailyPoint,
@@ -27,30 +27,47 @@ import type {
 } from './queries';
 
 /**
- * Spend Google (Supermetrics) + Meta (API direta + Supermetrics fallback).
- * Retorna Map<date, spend> com soma Meta+Google por dia.
+ * Spend strategy (Cassia's directive):
+ *   - Meta:   Meta Graph API direct (PRIMARY) via META_ACCESS_TOKEN.
+ *             Supermetrics ONLY as fallback for dates the API didn't return.
+ *   - Google: ALWAYS Supermetrics (no fallback).
+ *
+ * Retorna { total: Map<date, sum>, google: total, meta: total }.
  */
 async function getSpendByDay(
   market: Market,
   startDate: string,
   endDate: string
 ): Promise<{ total: Map<string, number>; google: number; meta: number }> {
-  const [googleRows, smMetaRows, apiMeta] = await Promise.all([
+  const [googleRows, apiMeta, smMetaRows] = await Promise.all([
+    // Google: SEMPRE Supermetrics
     queryGoogleAdsViaSupermetrics(market as MainMarket, startDate, endDate).catch((err) => {
       console.error('[cac-bq] Supermetrics Google failed:', err);
       return [];
     }),
+    // Meta: API direta PRIMARY — reusa queryMetaAdsDaily do Main Dashboard
+    // (TODAS as 5 contas oficiais: US x2, BR x3 com FX USD->BRL)
+    queryMetaAdsDaily(market as MainMarket, startDate, endDate)
+      .then((rows) => {
+        const map = new Map<string, number>();
+        for (const r of rows) {
+          const v = Number((r as any).spend) || 0;
+          map.set((r as any).date, (map.get((r as any).date) || 0) + v);
+        }
+        return map;
+      })
+      .catch((err) => {
+        console.error('[cac-bq] Meta Graph API direct failed:', err);
+        return new Map<string, number>();
+      }),
+    // Meta Supermetrics: SOMENTE pra preencher gaps onde API nao retornou
     queryMetaAdsViaSupermetrics(market as MainMarket, startDate, endDate).catch((err) => {
-      console.error('[cac-bq] Supermetrics Meta failed:', err);
+      console.error('[cac-bq] Supermetrics Meta fallback failed:', err);
       return [];
-    }),
-    getMetaSpendByDay(market, startDate, endDate).catch((err) => {
-      console.error('[cac-bq] Meta API failed:', err);
-      return new Map<string, number>();
     }),
   ]);
 
-  // Google: direto do Supermetrics
+  // Google — apenas Supermetrics
   const googleByDay = new Map<string, number>();
   let googleTotal = 0;
   for (const r of googleRows) {
@@ -59,18 +76,16 @@ async function getSpendByDay(
     googleTotal += v;
   }
 
-  // Meta: API direta tem prioridade. Supermetrics como fallback dia-a-dia.
-  const metaByDay = new Map<string, number>();
-  let metaTotal = 0;
-  // Primeiro Supermetrics como base
+  // Meta — API direta PRIMARY, Supermetrics como fallback dia-a-dia
+  const metaByDay = new Map<string, number>(apiMeta); // start from API
   for (const r of smMetaRows) {
-    const v = Number(r.spend) || 0;
-    metaByDay.set(r.date, v);
+    // SOMENTE preenche se API nao tiver aquela data
+    if (!metaByDay.has(r.date)) {
+      const v = Number(r.spend) || 0;
+      metaByDay.set(r.date, v);
+    }
   }
-  // Sobrescreve com Meta API direta quando disponivel
-  apiMeta.forEach((v, date) => {
-    metaByDay.set(date, v);
-  });
+  let metaTotal = 0;
   metaByDay.forEach((v) => {
     metaTotal += v;
   });
