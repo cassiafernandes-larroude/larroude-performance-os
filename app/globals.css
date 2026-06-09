@@ -575,6 +575,69 @@ textarea:focus {
   }
 }
 
+/* ==================== SCROLLBARS GLOBAIS ==================== */
+/* Scrollbar sempre visivel em todos os dashboards (vertical e horizontal).
+   Cor pink-soft + pink quando hover, alinhado com a paleta Larroude. */
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--pink) var(--paper-deep);
+}
+
+/* WebKit (Chrome, Safari, Edge) */
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: var(--paper-deep);
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--pink-soft);
+  border-radius: 999px;
+  border: 2px solid var(--paper-deep);
+  transition: background 0.15s;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--pink);
+}
+*::-webkit-scrollbar-corner {
+  background: var(--paper-deep);
+}
+
+/* Body / html: scrollbar principal um pouco mais grossa */
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+html::-webkit-scrollbar-thumb,
+body::-webkit-scrollbar-thumb {
+  background: var(--pink);
+  border: 3px solid var(--paper);
+}
+html::-webkit-scrollbar-thumb:hover,
+body::-webkit-scrollbar-thumb:hover {
+  background: var(--pink-deep);
+}
+
+/* LTV scope: scrollbar com paleta cream/peach do LTV */
+.ltv-root::-webkit-scrollbar-thumb,
+.ltv-root *::-webkit-scrollbar-thumb {
+  background: #d97757;
+  border: 2px solid #f0ece5;
+}
+.ltv-root::-webkit-scrollbar-thumb:hover,
+.ltv-root *::-webkit-scrollbar-thumb:hover {
+  background: #c66243;
+}
+.ltv-root::-webkit-scrollbar-track,
+.ltv-root *::-webkit-scrollbar-track {
+  background: #f0ece5;
+}
+
 /* ==================== MOBILE RESPONSIVO GERAL ==================== */
 /* Garante que nenhuma pagina cause overflow horizontal no mobile */
 @media (max-width: 767px) {
