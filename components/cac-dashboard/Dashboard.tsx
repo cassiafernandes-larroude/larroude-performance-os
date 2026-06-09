@@ -60,7 +60,9 @@ export default function Dashboard({ freshness }: { freshness: string }) {
     setError(null);
 
     const url = `/api/cac-native/${market}?start=${period.start}&end=${period.end}`;
-    fetch(url)
+    // cache: 'no-store' pra evitar resposta CDN/browser cacheada de janelas
+    // anteriores. O memo-cache em processo (6h) do server ja acelera repeats.
+    fetch(url, { cache: 'no-store' })
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json() as Promise<ApiResponse>;

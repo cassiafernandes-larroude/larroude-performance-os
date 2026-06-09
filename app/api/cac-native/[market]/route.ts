@@ -71,8 +71,9 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
       },
       {
         headers: {
-          'Cache-Control':
-            'public, max-age=1800, s-maxage=86400, stale-while-revalidate=604800',
+          // dados Meta/Shopify mudam ao longo do dia — cache curto pra refresh frequente.
+          // O memo-cache em processo (6h) garante perf em hits repetidos.
+          'Cache-Control': 'public, max-age=0, s-maxage=300, stale-while-revalidate=3600',
         },
       }
     );
