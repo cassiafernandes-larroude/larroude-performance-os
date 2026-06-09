@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { type Market } from '@/lib/cac-dashboard/queries';
+// Fonte unica de verdade: BigQuery larroude-data-prod
+// (mesma fonte do Main Dashboard, LTV, Channel Share)
 import {
   getKpiSummary,
   getDailySeries,
   getMonthlySeries,
   getProductCac,
-  type Market,
-} from '@/lib/cac-dashboard/queries';
+} from '@/lib/cac-dashboard/queries-bq';
 import { memo, TTL_6H } from '@/lib/ltv-dashboard/memo-cache';
 
 export const dynamic = 'force-dynamic';

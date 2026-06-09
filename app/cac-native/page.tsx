@@ -8,7 +8,7 @@
 // o resto do lpos.
 
 import Dashboard from '@/components/cac-dashboard/Dashboard';
-import { getDataFreshness } from '@/lib/cac-dashboard/queries';
+import { getDataFreshness } from '@/lib/cac-dashboard/queries-bq';
 import './cac-dashboard.css';
 
 export const dynamic = 'force-dynamic';
