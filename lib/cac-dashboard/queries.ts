@@ -20,8 +20,8 @@ import { getShopifyAggregate } from './connectors/shopify';
 export type Market = 'US' | 'BR';
 
 const ECON_TABLE: Record<Market, string> = {
-    US: 'larroude-data-prod.gold.unite_economics_us',
-    BR: 'larroude-data-prod.gold.unite_economics_br',
+    US: 'larroude-data-platform.gold.unite_economics_us',
+    BR: 'larroude-data-platform.gold.unite_economics_br',
 };
 
 export interface DataSourceMeta {
