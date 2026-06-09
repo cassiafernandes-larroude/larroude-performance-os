@@ -231,8 +231,13 @@ export async function getDashboardPayload(
   const units = num(aggCurr.units);
   const aov = safeDiv(orderRevenue, orders); // AOV = Order Revenue / Orders
   const returnRate = num(aggCurr.return_rate);
-  const pixelPurch = num(aggCurr.pixel_purchases);
-  const pixelRevenue = num(aggCurr.pixel_revenue);
+  // Pixel Purchases & Revenue - SEMPRE usar Meta Graph API direta (META_ACCESS_TOKEN do .env).
+  // BQ gold.all_channels_daily as vezes para de receber Meta (ex: parou em 20/05/2026),
+  // entao a API e a fonte de verdade. Cai pra BQ apenas se a API retornar 0.
+  const metaApiPurchases = num(metaAdsCurr.purchases);
+  const metaApiPurchaseValue = num(metaAdsCurr.purchase_value);
+  const pixelPurch = metaApiPurchases > 0 ? metaApiPurchases : num(aggCurr.pixel_purchases);
+  const pixelRevenue = metaApiPurchaseValue > 0 ? metaApiPurchaseValue : num(aggCurr.pixel_revenue);
   const newCust = num(aggCurr.new_customers);
   const cac = safeDiv(spend, newCust);
   const cpo = safeDiv(spend, orders);
@@ -256,7 +261,9 @@ export async function getDashboardPayload(
   const pOrders = num(aggPrev.orders);
   const pUnits = num(aggPrev.units);
   const pAov = safeDiv(pOrderRev, pOrders);
-  const pPixelPurch = num(aggPrev.pixel_purchases);
+  // Previous period - mesma logica: Meta API direto > BQ
+  const pMetaApiPurchases = num(metaAdsPrev.purchases);
+  const pPixelPurch = pMetaApiPurchases > 0 ? pMetaApiPurchases : num(aggPrev.pixel_purchases);
   const pCtr = num(aggPrev.ctr);
   const pCpc = num(aggPrev.cpc);
   const pCpm = num(aggPrev.cpm);
