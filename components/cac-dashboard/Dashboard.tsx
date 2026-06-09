@@ -213,7 +213,7 @@ export default function Dashboard({ freshness }: { freshness: string }) {
             {loading ? (
               <div className="empty">Carregando...</div>
             ) : data ? (
-              <DailyChart data={data.daily} market={market} />
+              <DailyChart data={data.daily} market={market} windowDays={windowDays} />
             ) : (
               <div className="empty">—</div>
             )}
