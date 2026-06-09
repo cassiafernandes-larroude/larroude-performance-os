@@ -17,6 +17,7 @@ import {
 } from '@/lib/main-dashboard/supermetrics';
 import { queryMetaAdsDaily } from '@/lib/main-dashboard/meta-ads';
 import type { Market as MainMarket } from '@/lib/main-dashboard/types';
+import { getMetaSpendAdjustmentByDay } from '@/lib/shared/meta-adjustments';
 import type {
   DailyPoint,
   DataSourceMeta,
@@ -85,6 +86,12 @@ async function getSpendByDay(
       metaByDay.set(r.date, v);
     }
   }
+  // AJUSTE MANUAL: Meta US +$400k em Setembro/2025 (regra Cassia)
+  // Distribui pro-rata dia-a-dia e soma ao Meta spend
+  const adjByDay = getMetaSpendAdjustmentByDay(market as 'US' | 'BR', startDate, endDate);
+  adjByDay.forEach((adjValue, date) => {
+    metaByDay.set(date, (metaByDay.get(date) || 0) + adjValue);
+  });
   let metaTotal = 0;
   metaByDay.forEach((v) => {
     metaTotal += v;
@@ -205,15 +212,199 @@ export async function getMonthlySeries(market: Market): Promise<MonthlyPoint[]> 
 }
 
 /**
- * Product CAC — placeholder vazio enquanto nao portamos.
+ * Mother SKU pattern (replicado do source CAC original):
+ *   - Split SKU em '-'
+ *   - parts[0] deve começar com L\d+
+ *   - Se parts[2] for tamanho (numero tipo 5.0, 7.5), mother = parts[0]-parts[1]-parts[3] (cor)
+ *   - Senao mother = parts[0]-parts[1]-parts[2]
+ */
+const MOTHER_SKU_SQL = `
+  CASE
+    WHEN ARRAY_LENGTH(SPLIT(li_sku, '-')) >= 4
+         AND REGEXP_CONTAINS(SPLIT(li_sku, '-')[SAFE_OFFSET(0)], r'^L\\d+')
+         AND REGEXP_CONTAINS(SPLIT(li_sku, '-')[SAFE_OFFSET(2)], r'^\\d+(\\.\\d+)?$')
+    THEN CONCAT(
+      SPLIT(li_sku, '-')[SAFE_OFFSET(0)], '-',
+      SPLIT(li_sku, '-')[SAFE_OFFSET(1)], '-',
+      SPLIT(li_sku, '-')[SAFE_OFFSET(3)]
+    )
+    WHEN ARRAY_LENGTH(SPLIT(li_sku, '-')) >= 3
+         AND REGEXP_CONTAINS(SPLIT(li_sku, '-')[SAFE_OFFSET(0)], r'^L\\d+')
+    THEN CONCAT(
+      SPLIT(li_sku, '-')[SAFE_OFFSET(0)], '-',
+      SPLIT(li_sku, '-')[SAFE_OFFSET(1)], '-',
+      SPLIT(li_sku, '-')[SAFE_OFFSET(2)]
+    )
+    ELSE NULL
+  END
+`;
+
+/**
+ * Product CAC — agregação por mother SKU + alocação pro-rata de spend.
+ *
+ * Lógica (mesma do source CAC original):
+ *   1. UNNEST line_items dos orders no período
+ *   2. Identifica mother SKU
+ *   3. Para cada (date, motherSku): units, revenue, newCustomers
+ *   4. Aloca spend pro-rata = spend[day] * (productRevenue[day,sku] / totalRevenue[day])
+ *   5. CAC[sku] = SUM(allocatedSpend) / SUM(newCustomers)
  */
 export async function getProductCac(
-  _market: Market,
-  _startDate: string,
-  _endDate: string,
-  _limit = 200
+  market: Market,
+  startDate: string,
+  endDate: string,
+  limit = 200
 ): Promise<ProductCacResult> {
-  return { products: [], productDaily: [] };
+  const dataset = ordersDataset(market);
+
+  const spendPromise = getSpendByDay(market, startDate, endDate);
+
+  const sql = `
+    WITH
+    first_purchase AS (
+      SELECT
+        JSON_VALUE(o.customer, '$.id') AS customer_id,
+        MIN(DATE(o.created_at)) AS first_date
+      FROM \`larroude-data-prod.${dataset}.orders\` o
+      WHERE JSON_VALUE(o.customer, '$.id') IS NOT NULL
+        ${shopifyFilters(market)}
+      GROUP BY customer_id
+    ),
+    line_items_expanded AS (
+      SELECT
+        DATE(o.created_at) AS date,
+        JSON_VALUE(o.customer, '$.id') AS customer_id,
+        o.id AS order_id,
+        JSON_VALUE(li, '$.sku') AS li_sku,
+        JSON_VALUE(li, '$.title') AS li_title,
+        CAST(JSON_VALUE(li, '$.quantity') AS INT64) AS quantity,
+        CAST(JSON_VALUE(li, '$.price') AS NUMERIC) * CAST(JSON_VALUE(li, '$.quantity') AS INT64) AS revenue
+      FROM \`larroude-data-prod.${dataset}.orders\` o,
+        UNNEST(JSON_QUERY_ARRAY(o.line_items)) AS li
+      WHERE DATE(o.created_at) BETWEEN @start AND @end
+        ${shopifyFilters(market)}
+    ),
+    with_mother AS (
+      SELECT
+        date,
+        customer_id,
+        order_id,
+        ${MOTHER_SKU_SQL} AS mother_sku,
+        li_title,
+        quantity,
+        revenue
+      FROM line_items_expanded
+    ),
+    product_daily AS (
+      SELECT
+        FORMAT_DATE('%Y-%m-%d', wm.date) AS date,
+        wm.mother_sku,
+        ANY_VALUE(wm.li_title) AS product_name,
+        SUM(wm.quantity) AS units,
+        SUM(wm.revenue) AS revenue,
+        COUNT(DISTINCT IF(fp.first_date = wm.date, wm.customer_id, NULL)) AS new_customers
+      FROM with_mother wm
+      LEFT JOIN first_purchase fp ON wm.customer_id = fp.customer_id
+      WHERE wm.mother_sku IS NOT NULL
+      GROUP BY wm.date, wm.mother_sku
+    )
+    SELECT
+      date,
+      mother_sku,
+      product_name,
+      units,
+      revenue,
+      new_customers
+    FROM product_daily
+    ORDER BY date, mother_sku
+  `;
+
+  const [rows, spend] = await Promise.all([
+    runQuery<{
+      date: string;
+      mother_sku: string;
+      product_name: string;
+      units: number;
+      revenue: number | string;
+      new_customers: number;
+    }>(sql, { start: startDate, end: endDate }),
+    spendPromise,
+  ]);
+
+  if (!rows.length) {
+    return { products: [], productDaily: [] };
+  }
+
+  // Total revenue por dia (denominador da alocação)
+  const dailyTotalRev = new Map<string, number>();
+  for (const r of rows) {
+    const v = Number(r.revenue) || 0;
+    dailyTotalRev.set(r.date, (dailyTotalRev.get(r.date) || 0) + v);
+  }
+
+  // productDaily com allocatedSpend
+  const productDaily: ProductDailyPoint[] = [];
+  // Acumulador por mother SKU
+  interface Acc {
+    motherSku: string;
+    productName: string;
+    units: number;
+    revenue: number;
+    newCustomers: number;
+    allocatedSpend: number;
+  }
+  const acc = new Map<string, Acc>();
+
+  for (const r of rows) {
+    const revenue = Number(r.revenue) || 0;
+    const totalRevDay = dailyTotalRev.get(r.date) || 0;
+    const daySpend = spend.total.get(r.date) || 0;
+    const share = totalRevDay > 0 ? revenue / totalRevDay : 0;
+    const allocated = daySpend * share;
+
+    productDaily.push({
+      date: r.date,
+      motherSku: r.mother_sku,
+      productTitle: r.product_name || r.mother_sku,
+      units: Number(r.units) || 0,
+      revenue,
+      newCustomers: Number(r.new_customers) || 0,
+      allocatedSpend: allocated,
+    } as any);
+
+    let a = acc.get(r.mother_sku);
+    if (!a) {
+      a = {
+        motherSku: r.mother_sku,
+        productName: r.product_name || r.mother_sku,
+        units: 0,
+        revenue: 0,
+        newCustomers: 0,
+        allocatedSpend: 0,
+      };
+      acc.set(r.mother_sku, a);
+    }
+    a.units += Number(r.units) || 0;
+    a.revenue += revenue;
+    a.newCustomers += Number(r.new_customers) || 0;
+    a.allocatedSpend += allocated;
+  }
+
+  const products = Array.from(acc.values())
+    .map((a) => ({
+      motherSku: a.motherSku,
+      productName: a.productName,
+      units: a.units,
+      revenue: a.revenue,
+      newCustomers: a.newCustomers,
+      allocatedSpend: a.allocatedSpend,
+      cac: a.newCustomers > 0 ? a.allocatedSpend / a.newCustomers : 0,
+      revenuePerCustomer: a.newCustomers > 0 ? a.revenue / a.newCustomers : 0,
+    }))
+    .sort((x, y) => y.units - x.units)
+    .slice(0, limit);
+
+  return { products, productDaily };
 }
 
 export async function getDataFreshness(): Promise<string> {

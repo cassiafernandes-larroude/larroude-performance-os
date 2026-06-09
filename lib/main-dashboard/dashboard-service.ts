@@ -205,10 +205,17 @@ export async function getDashboardPayload(
   const bqMetaSpendPrev = num(aggPrev.spend) - bqGoogleSpendPrev;
   // Estratégia: Supermetrics-FIRST. Se Supermetrics retornar dados (>0), confiar.
   // Se Supermetrics ausente/falhar, usar BQ (bqMetaSpend = total - google_spend).
-  const finalMetaSpend = supermetricsMetaSpend > 0 ? supermetricsMetaSpend : bqMetaSpend;
+  let finalMetaSpend = supermetricsMetaSpend > 0 ? supermetricsMetaSpend : bqMetaSpend;
   const finalGoogleSpend = supermetricsGoogleSpend > 0 ? supermetricsGoogleSpend : bqGoogleSpend;
-  const finalMetaSpendPrev = supermetricsMetaSpendPrev > 0 ? supermetricsMetaSpendPrev : bqMetaSpendPrev;
+  let finalMetaSpendPrev = supermetricsMetaSpendPrev > 0 ? supermetricsMetaSpendPrev : bqMetaSpendPrev;
   const finalGoogleSpendPrev = supermetricsGoogleSpendPrev > 0 ? supermetricsGoogleSpendPrev : bqGoogleSpendPrev;
+
+  // AJUSTE MANUAL: Meta US +$400k Setembro/2025 (regra Cassia)
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { getMetaSpendAdjustment } = require('@/lib/shared/meta-adjustments');
+  finalMetaSpend += getMetaSpendAdjustment(market, period.start, period.end);
+  finalMetaSpendPrev += getMetaSpendAdjustment(market, period.prevStart, period.prevEnd);
+
   const spend = finalMetaSpend + finalGoogleSpend;
   // Debug log (visível em vercel logs)
   console.log(`[spend ${market} ${period.start}..${period.end}]`,

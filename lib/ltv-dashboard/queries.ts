@@ -481,6 +481,11 @@ export async function getLtvKpiSummary(
     console.warn('[ltv] meta-ads failed:', e instanceof Error ? e.message : e);
   }
 
+  // AJUSTE MANUAL: Meta US +$400k Setembro/2025 (regra Cassia)
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { getMetaSpendAdjustment } = require('@/lib/shared/meta-adjustments');
+  metaSpend += getMetaSpendAdjustment(market as 'US' | 'BR', startDate, endDate);
+
   const totalAdSpend = metaSpend + googleSpend;
   const cac = newCustomers > 0 ? totalAdSpend / newCustomers : 0;
   const ltvCacRatio = cac > 0 ? ltvPredictive / cac : 0;
