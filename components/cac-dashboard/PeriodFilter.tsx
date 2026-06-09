@@ -61,6 +61,11 @@ export function presetRange(preset: Exclude<Preset, 'custom'>, refDate: string):
 
 const PRESETS: Exclude<Preset, 'custom'>[] = ['7d', '14d', '28d', '3M', '6M', '12M'];
 
+// Pill styles — EXACTLY MATCH Main Dashboard Header
+const PILL_BASE = 'inline-flex items-center justify-center rounded-full text-[12px] sm:text-[13px] font-semibold transition-all duration-150 select-none';
+const PILL_ACTIVE_DARK = `${PILL_BASE} bg-[#1a1a1a] text-white px-3 sm:px-5 py-1.5 sm:py-2`;
+const PILL_INACTIVE = `${PILL_BASE} bg-[#ebe9e3] text-[#1a1a1a] hover:bg-[#ddd9d0] px-3 sm:px-5 py-1.5 sm:py-2`;
+
 export default function PeriodFilter({
   value,
   onChange,
@@ -70,11 +75,9 @@ export default function PeriodFilter({
   onChange: (s: PeriodState) => void;
   maxDate: string;
 }) {
-  // Draft state — só aplica no Apply
   const [draftStart, setDraftStart] = useState(value.start);
   const [draftEnd, setDraftEnd] = useState(value.end);
 
-  // Sincroniza draft quando o valor externo muda (ex: usuário clica preset)
   useEffect(() => {
     setDraftStart(value.start);
     setDraftEnd(value.end);
@@ -87,6 +90,7 @@ export default function PeriodFilter({
   }, [maxDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setPreset = (p: Exclude<Preset, 'custom'>) => onChange(presetRange(p, maxDate));
+  const isCustom = value.preset === 'custom';
 
   function applyDates() {
     if (!draftStart || !draftEnd) {
@@ -101,50 +105,72 @@ export default function PeriodFilter({
   }
 
   return (
-    <div className="period-bar" role="group" aria-label="Period filter">
-      <span className="period-label">Period</span>
-      {PRESETS.map((p) => (
-        <button
-          key={p}
-          className={`period-btn ${value.preset === p ? 'active' : ''}`}
-          onClick={() => setPreset(p)}
-        >
-          {p.toUpperCase()}
-        </button>
-      ))}
-      <span className="divider" />
+    <div
+      className="px-5 py-3 rounded-2xl flex flex-wrap items-center gap-3 no-print mb-5"
+      style={{ background: 'white', border: '0.8px solid #e5e3de' }}
+    >
+      <span
+        className="text-[11px] uppercase tracking-[0.12em] font-semibold mr-1"
+        style={{ color: '#9ca3af' }}
+      >
+        Period
+      </span>
+      <div className="flex items-center gap-2 flex-wrap">
+        {PRESETS.map((p) => {
+          const active = value.preset === p;
+          return (
+            <button
+              key={p}
+              onClick={() => setPreset(p)}
+              className={active ? PILL_ACTIVE_DARK : PILL_INACTIVE}
+            >
+              {p.toUpperCase()}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="h-7 w-px mx-1" style={{ background: '#e5e3de' }} />
+
       <input
         type="date"
-        className="date-input"
         value={draftStart}
-        max={draftEnd || maxDate}
         onChange={(e) => setDraftStart(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === 'Enter') applyDates();
         }}
-        aria-label="Start date"
+        className="rounded-full px-4 py-2 text-[13px] bg-white font-medium"
+        style={{
+          border: `1px solid ${isCustom ? '#d97757' : '#e5e3de'}`,
+          boxShadow: isCustom ? '0 0 0 1px rgba(217,119,87,0.30)' : 'none',
+        }}
       />
-      <span style={{ color: '#8a8a8a', fontSize: 12 }}>to</span>
+      <span className="text-[13px]" style={{ color: '#6b7280' }}>to</span>
       <input
         type="date"
-        className="date-input"
         value={draftEnd}
-        min={draftStart}
         max={maxDate}
         onChange={(e) => setDraftEnd(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === 'Enter') applyDates();
         }}
-        aria-label="End date"
+        className="rounded-full px-4 py-2 text-[13px] bg-white font-medium"
+        style={{
+          border: `1px solid ${isCustom ? '#d97757' : '#e5e3de'}`,
+          boxShadow: isCustom ? '0 0 0 1px rgba(217,119,87,0.30)' : 'none',
+        }}
       />
       <button
-        className="period-btn apply-btn"
         onClick={applyDates}
-        aria-label="Apply date range"
+        className={PILL_ACTIVE_DARK}
+        title="Apply date range"
       >
         Apply
       </button>
-      <span className="period-desc">{presetLabel(value)}</span>
+
+      <span className="ml-auto text-[13px] italic px-2" style={{ color: '#9ca3af' }}>
+        {presetLabel(value)}
+      </span>
     </div>
   );
 }
