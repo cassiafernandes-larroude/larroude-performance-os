@@ -33,7 +33,7 @@ const STORAGE_KEY = 'lpos-cac-state-v2';
 export default function Dashboard({ freshness }: { freshness: string }) {
   const [market, setMarket] = useState<Market>('US');
   const [period, setPeriod] = useState<PeriodState>(() =>
-    presetRange(28, freshness || new Date().toISOString().slice(0, 10))
+    presetRange('28d', freshness || new Date().toISOString().slice(0, 10))
   );
   const [data, setData] = useState<ApiResponse | null>(null);
   const [loading, setLoading] = useState(true);

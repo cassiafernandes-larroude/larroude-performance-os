@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 
-export type Preset = 7 | 28 | 60 | 90 | 'custom';
+export type Preset = '7d' | '14d' | '28d' | '3M' | '6M' | '12M' | 'custom';
 
 export interface PeriodState {
   preset: Preset;
@@ -16,14 +16,40 @@ function isoDaysAgo(days: number, ref: Date = new Date()): string {
   return d.toISOString().slice(0, 10);
 }
 
+function daysFor(preset: Exclude<Preset, 'custom'>): number {
+  switch (preset) {
+    case '7d': return 7;
+    case '14d': return 14;
+    case '28d': return 28;
+    case '3M': return 90;
+    case '6M': return 180;
+    case '12M': return 365;
+  }
+}
+
+function presetLabel(preset: Preset): string {
+  if (preset === 'custom') return 'Período customizado';
+  const map: Record<Exclude<Preset, 'custom'>, string> = {
+    '7d': 'Últimos 7 dias',
+    '14d': 'Últimos 14 dias',
+    '28d': 'Últimos 28 dias',
+    '3M': 'Últimos 3 meses',
+    '6M': 'Últimos 6 meses',
+    '12M': 'Últimos 12 meses',
+  };
+  return map[preset];
+}
+
 export function presetRange(preset: Exclude<Preset, 'custom'>, refDate: string): PeriodState {
   const ref = new Date(refDate + 'T12:00:00');
   return {
     preset,
-    start: isoDaysAgo(preset - 1, ref),
+    start: isoDaysAgo(daysFor(preset) - 1, ref),
     end: refDate,
   };
 }
+
+const PRESETS: Exclude<Preset, 'custom'>[] = ['7d', '14d', '28d', '3M', '6M', '12M'];
 
 export default function PeriodFilter({
   value,
@@ -45,30 +71,15 @@ export default function PeriodFilter({
   return (
     <div className="period-bar" role="group" aria-label="Filtro de período">
       <span className="period-label">Período</span>
-      <button
-        className={`period-btn ${value.preset === 7 ? 'active' : ''}`}
-        onClick={() => setPreset(7)}
-      >
-        7D
-      </button>
-      <button
-        className={`period-btn ${value.preset === 28 ? 'active' : ''}`}
-        onClick={() => setPreset(28)}
-      >
-        28D
-      </button>
-      <button
-        className={`period-btn ${value.preset === 60 ? 'active' : ''}`}
-        onClick={() => setPreset(60)}
-      >
-        60D
-      </button>
-      <button
-        className={`period-btn ${value.preset === 90 ? 'active' : ''}`}
-        onClick={() => setPreset(90)}
-      >
-        90D
-      </button>
+      {PRESETS.map((p) => (
+        <button
+          key={p}
+          className={`period-btn ${value.preset === p ? 'active' : ''}`}
+          onClick={() => setPreset(p)}
+        >
+          {p.toUpperCase()}
+        </button>
+      ))}
       <span className="divider" />
       <input
         type="date"
@@ -88,9 +99,7 @@ export default function PeriodFilter({
         onChange={(e) => onChange({ preset: 'custom', start: value.start, end: e.target.value })}
         aria-label="Data final"
       />
-      <span className="period-desc">
-        {value.preset === 'custom' ? 'Período customizado' : `Últimos ${value.preset} dias`}
-      </span>
+      <span className="period-desc">{presetLabel(value.preset)}</span>
     </div>
   );
 }
