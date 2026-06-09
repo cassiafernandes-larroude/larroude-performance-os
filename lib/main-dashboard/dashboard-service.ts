@@ -399,9 +399,14 @@ export async function getDashboardPayload(
 
   // Spend Supermetrics (Meta + Google) — agregado por bucket (igual ao BQ)
   const supermetricsSpendDaily = new Map<string, number>();
+  // Meta Pixel purchases via Meta Graph API direto (fonte de verdade, sempre atualizada)
+  // BQ gold.all_channels_daily as vezes para de receber Meta (ex: parou em 20/05/2026),
+  // por isso preferimos a API direta como fonte primaria para o daily.
+  const metaApiPurchasesDaily = new Map<string, number>();
   for (const r of metaAdsDaily) {
     const b = bucketDate(r.date);
     supermetricsSpendDaily.set(b, (supermetricsSpendDaily.get(b) ?? 0) + r.spend);
+    metaApiPurchasesDaily.set(b, (metaApiPurchasesDaily.get(b) ?? 0) + (r.purchases ?? 0));
   }
   for (const r of googleAdsDaily) {
     const b = bucketDate(r.date);
@@ -496,7 +501,11 @@ export async function getDashboardPayload(
     const dSpendSuper = supermetricsSpendDaily.get(d);
     const dSpend = dSpendSuper != null && dSpendSuper > 0 ? dSpendSuper : num(a.spend);
     const dOrders = num(s.orders);
-    const dPixel = num(a.pixel_purchases);
+    // Pixel purchases: prefere Meta Graph API direto (sempre atualizado) sobre BQ
+    // (BQ gold.all_channels_daily pode estar com gap de ingest do Meta).
+    const dPixelApi = metaApiPurchasesDaily.get(d) ?? 0;
+    const dPixelBq = num(a.pixel_purchases);
+    const dPixel = dPixelApi > 0 ? dPixelApi : dPixelBq;
     const dSessions = sessionsMap.get(d) ?? 0;
 
     daily.gross_sales.push({ date: d, value: dGross });
