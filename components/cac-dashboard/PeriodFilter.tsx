@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 export type Preset = '7d' | '14d' | '28d' | '3M' | '6M' | '12M' | 'custom';
 
@@ -27,17 +27,27 @@ function daysFor(preset: Exclude<Preset, 'custom'>): number {
   }
 }
 
-function presetLabel(preset: Preset): string {
-  if (preset === 'custom') return 'Período customizado';
+function presetLabel(state: PeriodState): string {
+  if (state.preset === 'custom') {
+    const days = Math.max(
+      1,
+      Math.round(
+        (new Date(state.end + 'T12:00:00').getTime() -
+          new Date(state.start + 'T12:00:00').getTime()) /
+          86400000
+      ) + 1
+    );
+    return `Last ${days} day${days === 1 ? '' : 's'}`;
+  }
   const map: Record<Exclude<Preset, 'custom'>, string> = {
-    '7d': 'Últimos 7 dias',
-    '14d': 'Últimos 14 dias',
-    '28d': 'Últimos 28 dias',
-    '3M': 'Últimos 3 meses',
-    '6M': 'Últimos 6 meses',
-    '12M': 'Últimos 12 meses',
+    '7d': 'Last 7 days',
+    '14d': 'Last 14 days',
+    '28d': 'Last 28 days',
+    '3M': 'Last 3 months',
+    '6M': 'Last 6 months',
+    '12M': 'Last 12 months',
   };
-  return map[preset];
+  return map[state.preset];
 }
 
 export function presetRange(preset: Exclude<Preset, 'custom'>, refDate: string): PeriodState {
@@ -60,6 +70,16 @@ export default function PeriodFilter({
   onChange: (s: PeriodState) => void;
   maxDate: string;
 }) {
+  // Draft state — só aplica no Apply
+  const [draftStart, setDraftStart] = useState(value.start);
+  const [draftEnd, setDraftEnd] = useState(value.end);
+
+  // Sincroniza draft quando o valor externo muda (ex: usuário clica preset)
+  useEffect(() => {
+    setDraftStart(value.start);
+    setDraftEnd(value.end);
+  }, [value.start, value.end]);
+
   useEffect(() => {
     if (value.end > maxDate) {
       onChange({ ...value, end: maxDate });
@@ -68,9 +88,21 @@ export default function PeriodFilter({
 
   const setPreset = (p: Exclude<Preset, 'custom'>) => onChange(presetRange(p, maxDate));
 
+  function applyDates() {
+    if (!draftStart || !draftEnd) {
+      alert('Select a start and end date.');
+      return;
+    }
+    if (draftStart > draftEnd) {
+      alert('Start date must be before or equal to end date.');
+      return;
+    }
+    onChange({ preset: 'custom', start: draftStart, end: draftEnd });
+  }
+
   return (
-    <div className="period-bar" role="group" aria-label="Filtro de período">
-      <span className="period-label">Período</span>
+    <div className="period-bar" role="group" aria-label="Period filter">
+      <span className="period-label">Period</span>
       {PRESETS.map((p) => (
         <button
           key={p}
@@ -84,22 +116,35 @@ export default function PeriodFilter({
       <input
         type="date"
         className="date-input"
-        value={value.start}
-        max={value.end}
-        onChange={(e) => onChange({ preset: 'custom', start: e.target.value, end: value.end })}
-        aria-label="Data inicial"
+        value={draftStart}
+        max={draftEnd || maxDate}
+        onChange={(e) => setDraftStart(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') applyDates();
+        }}
+        aria-label="Start date"
       />
-      <span style={{ color: '#8a8a8a', fontSize: 12 }}>até</span>
+      <span style={{ color: '#8a8a8a', fontSize: 12 }}>to</span>
       <input
         type="date"
         className="date-input"
-        value={value.end}
-        min={value.start}
+        value={draftEnd}
+        min={draftStart}
         max={maxDate}
-        onChange={(e) => onChange({ preset: 'custom', start: value.start, end: e.target.value })}
-        aria-label="Data final"
+        onChange={(e) => setDraftEnd(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') applyDates();
+        }}
+        aria-label="End date"
       />
-      <span className="period-desc">{presetLabel(value.preset)}</span>
+      <button
+        className="period-btn apply-btn"
+        onClick={applyDates}
+        aria-label="Apply date range"
+      >
+        Apply
+      </button>
+      <span className="period-desc">{presetLabel(value)}</span>
     </div>
   );
 }
