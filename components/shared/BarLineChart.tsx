@@ -78,6 +78,8 @@ interface Props {
   line?: LineOverlay;
   /** linhas de referência horizontais (e.g. saudável 3x, breakeven 1x) */
   referenceLines?: ReferenceLine[];
+  /** se true, renderiza só o canvas (sem card wrapper) — útil quando o container já tem estética própria */
+  bare?: boolean;
 }
 
 // ---------- formatters ----------
@@ -149,6 +151,7 @@ export default function BarLineChart({
   height = 220,
   line,
   referenceLines,
+  bare = false,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const chartRef = useRef<Chart | null>(null);
@@ -364,6 +367,14 @@ export default function BarLineChart({
       chartRef.current?.destroy();
     };
   }, [data, color, title, unit, market, showLabels, line, referenceLines]);
+
+  if (bare) {
+    return (
+      <div style={{ height, width: '100%' }}>
+        <canvas ref={canvasRef} />
+      </div>
+    );
+  }
 
   return (
     <div className="card daily-chart-card p-4">

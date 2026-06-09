@@ -5,7 +5,6 @@ import Header from './Header';
 import KpiCard from './KpiCard';
 import PeriodFilter, { presetRange, type PeriodState } from './PeriodFilter';
 import DailyChart from './DailyChart';
-import MonthlyChart from './MonthlyChart';
 import ProductTable from './ProductTable';
 import ProductTrendChart from './ProductTrendChart';
 import ProductMatrixHeatmap from './ProductMatrixHeatmap';
@@ -203,37 +202,19 @@ export default function Dashboard({ freshness }: { freshness: string }) {
           </div>
         )}
 
-        <div className="charts-grid two-col">
-          <div className="chart-card">
-            <div className="chart-title">
-              <h3>CAC diário · últimos 28 dias</h3>
-              <span className="meta">{loading ? <span className="spinner" /> : null}</span>
-            </div>
-            <div className="chart-area">
-              {loading ? (
-                <div className="empty">Carregando...</div>
-              ) : data ? (
-                <DailyChart data={data.daily} market={market} />
-              ) : (
-                <div className="empty">—</div>
-              )}
-            </div>
+        <div className="chart-card">
+          <div className="chart-title">
+            <h3>CAC · evolução no período</h3>
+            <span className="meta">{loading ? <span className="spinner" /> : null}</span>
           </div>
-
-          <div className="chart-card">
-            <div className="chart-title">
-              <h3>CAC mensal · últimos 12 meses</h3>
-              <span className="meta">rolling 12M · histórico via BigQuery</span>
-            </div>
-            <div className="chart-area">
-              {loading ? (
-                <div className="empty">Carregando...</div>
-              ) : data ? (
-                <MonthlyChart data={data.monthly} market={market} />
-              ) : (
-                <div className="empty">—</div>
-              )}
-            </div>
+          <div className="chart-area">
+            {loading ? (
+              <div className="empty">Carregando...</div>
+            ) : data ? (
+              <DailyChart data={data.daily} market={market} />
+            ) : (
+              <div className="empty">—</div>
+            )}
           </div>
         </div>
 
