@@ -50,7 +50,7 @@ const navSections: NavSection[] = [
       { href: "/dashboard-principal", label: "Main Dashboard", icon: BarChart3 },
       { href: "/channel-share", label: "Channel Share", icon: PieChart },
       { href: "/ltv-native", label: "LTV", icon: TrendingUp },
-      { href: "/cac-ncac-crc", label: "CAC", icon: Users },
+      { href: "/cac-native", label: "CAC", icon: Users },
       { href: "/klaviyo", label: "Klaviyo Journey", icon: Mail },
       { href: "/meta-ads", label: "Meta Ads", icon: Megaphone },
       { href: "/google-ads", label: "Google Ads", icon: Search },
