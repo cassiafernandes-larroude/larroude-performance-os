@@ -383,15 +383,17 @@ export async function getProductCac(
     const share = totalRevDay > 0 ? revenue / totalRevDay : 0;
     const allocated = daySpend * share;
 
+    const pdNewCust = Number(r.new_customers) || 0;
     productDaily.push({
       date: r.date,
       motherSku: r.mother_sku,
-      productTitle: r.product_name || r.mother_sku,
+      productName: r.product_name || r.mother_sku,
       units: Number(r.units) || 0,
       revenue,
-      newCustomers: Number(r.new_customers) || 0,
+      newCustomers: pdNewCust,
       allocatedSpend: allocated,
-    } as any);
+      cac: pdNewCust > 0 ? allocated / pdNewCust : 0,
+    });
 
     let a = acc.get(r.mother_sku);
     if (!a) {
