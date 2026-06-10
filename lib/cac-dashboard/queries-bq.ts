@@ -12,7 +12,10 @@
 
 import { runQuery } from './bigquery';
 import { queryDailyCac } from '@/lib/main-dashboard/queries';
-import { queryGoogleAdsViaSupermetrics } from '@/lib/main-dashboard/supermetrics';
+import {
+  queryGoogleAdsViaSupermetrics,
+  queryGoogleAdsTotalViaSupermetrics,
+} from '@/lib/main-dashboard/supermetrics';
 import { queryMetaAdsDaily } from '@/lib/main-dashboard/meta-ads';
 import type { Market as MainMarket } from '@/lib/main-dashboard/types';
 import { getMetaSpendAdjustmentByDay } from '@/lib/shared/meta-adjustments';
@@ -51,16 +54,25 @@ async function getSpendByDay(
     return null;
   }
 
-  // Serializa Google primeiro (Supermetrics pode ter rate limit em chamadas paralelas).
-  // Google: SEMPRE Supermetrics (regra Cassia)
-  const googleRows = await queryGoogleAdsViaSupermetrics(market as MainMarket, startDate, endDate).catch((err) => {
-    console.error('[cac-bq] Supermetrics Google failed:', err);
-    return [] as Array<{ date: string; spend: number }>;
-  });
-  console.log(`[cac-bq] Google Supermetrics returned ${googleRows.length} rows for ${market} ${startDate}..${endDate}`);
-  if (googleRows.length > 0) {
-    console.log(`[cac-bq] Google first row:`, JSON.stringify(googleRows[0]));
-  }
+  // Google: SEMPRE Supermetrics (regra Cassia).
+  // Usa a MESMA chamada que o Main Dashboard faz para garantir paridade total.
+  // queryGoogleAdsTotalViaSupermetrics retorna { spend, clicks, ... } agregado;
+  // queryGoogleAdsViaSupermetrics retorna rows daily.
+  const [googleTotalResult, googleRows] = await Promise.all([
+    queryGoogleAdsTotalViaSupermetrics(market as MainMarket, startDate, endDate).catch((err) => {
+      console.error('[cac-bq] Google Total Supermetrics failed:', err);
+      return { spend: 0, clicks: 0, impressions: 0, conversions: 0, conversion_value: 0 };
+    }),
+    queryGoogleAdsViaSupermetrics(market as MainMarket, startDate, endDate).catch((err) => {
+      console.error('[cac-bq] Google Daily Supermetrics failed:', err);
+      return [] as Array<{ date: string; spend: number }>;
+    }),
+  ]);
+  console.log(
+    `[cac-bq] Google Supermetrics ${market} ${startDate}..${endDate}:`,
+    `total=$${googleTotalResult.spend.toFixed(0)}`,
+    `daily_rows=${googleRows.length}`
+  );
 
   // Meta: API direta — TODAS as 5 contas oficiais (US x3, BR x3 com FX USD->BRL)
   const apiMeta = await queryMetaAdsDaily(market as MainMarket, startDate, endDate)
@@ -79,16 +91,18 @@ async function getSpendByDay(
       return new Map<string, number>();
     });
 
-  // Google — apenas Supermetrics, com normalize de data
+  // Google — total autoritativo de queryGoogleAdsTotalViaSupermetrics (= Main Dashboard).
+  // googleByDay é usado pra distribuição diária no chart.
   const googleByDay = new Map<string, number>();
-  let googleTotal = 0;
+  let googleDailySum = 0;
   for (const r of googleRows) {
     const iso = normalizeISODate((r as any).date);
     if (!iso) continue;
     const v = Number(r.spend) || 0;
     googleByDay.set(iso, (googleByDay.get(iso) || 0) + v);
-    googleTotal += v;
+    googleDailySum += v;
   }
+  const googleTotal = googleTotalResult.spend || googleDailySum;
 
   // Meta — API direta + ajuste manual Set/25
   const metaByDay = new Map<string, number>(apiMeta);
