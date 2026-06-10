@@ -36,7 +36,7 @@ import {
   queryGA4SessionsByChannel,
 } from './supermetrics';
 import { calcPeriod, fmtCurrency, fmtMultiple, fmtNumber, fmtPercent, granularityFor, pctChange, safeDiv } from './utils';
-import { getMetaSpendAdjustment } from '@/lib/shared/meta-adjustments';
+import { getMetaSpendAdjustment, getMetaSpendAdjustmentByDay } from '@/lib/shared/meta-adjustments';
 import type {
   CampaignRow,
   ChannelRevenue,
@@ -395,6 +395,18 @@ export async function getDashboardPayload(
   const adsMap = alignByDate(adsDaily, 'date');
   const cacMap = alignByDate(cacDaily, 'date');
 
+  // AJUSTE MANUAL Meta US +$400k Setembro/2025 — chart e KPI agregado
+  // Distribui pro-rata dia-a-dia e re-agrupa no bucket atual (day/week/month)
+  // para que o gráfico "Amount Spent (Ad Cost)" mostre Set/25 com ajuste somado.
+  // Cobre toda janela visível do chart (chartStart pode ser anterior a period.start).
+  const adjustmentRangeStart = chartStart < period.start ? chartStart : period.start;
+  const metaAdjByDay = getMetaSpendAdjustmentByDay(market, adjustmentRangeStart, period.end);
+  const metaAdjByBucket = new Map<string, number>();
+  metaAdjByDay.forEach((amount, isoDate) => {
+    const bucket = bucketDate(isoDate);
+    metaAdjByBucket.set(bucket, (metaAdjByBucket.get(bucket) ?? 0) + amount);
+  });
+
   // Helper: alinha datas diárias do Supermetrics/MetaAPI ao bucket do BQ (week/month).
   // BQ DATE_TRUNC(d, WEEK(MONDAY)) retorna a SEGUNDA-FEIRA da semana ISO.
   // BQ DATE_TRUNC(d, MONTH) retorna o PRIMEIRO DIA do mês.
@@ -512,7 +524,9 @@ export async function getDashboardPayload(
     const dTotal = dOrderRev - dRefund;
     // Spend diário: prefere Supermetrics (Meta + Google completo) sobre BQ (com gaps)
     const dSpendSuper = supermetricsSpendDaily.get(d);
-    const dSpend = dSpendSuper != null && dSpendSuper > 0 ? dSpendSuper : num(a.spend);
+    const dSpendBase = dSpendSuper != null && dSpendSuper > 0 ? dSpendSuper : num(a.spend);
+    // Aplica ajuste manual Set/25 ao bucket atual (regra Cassia, REGRAS-LARROUDE-OS.md 3.3)
+    const dSpend = dSpendBase + (metaAdjByBucket.get(d) ?? 0);
     const dOrders = num(s.orders);
     // Pixel purchases: prefere Meta Graph API direto (sempre atualizado) sobre BQ
     // (BQ gold.all_channels_daily pode estar com gap de ingest do Meta).
