@@ -9,7 +9,10 @@
 
 import type { Market } from './types';
 
-const SUPERMETRICS_API = 'https://api.supermetrics.com/enterprise/v2/query';
+// URL completa: /data/json garante formato { meta, data: [[...]] } com header na row 0.
+// Sem o /data/json, Supermetrics responde em outro formato que quebra o parser
+// (bug histórico: causou Google = $0 em CAC native commit d51c5e0/0b662ef).
+const SUPERMETRICS_API = 'https://api.supermetrics.com/enterprise/v2/query/data/json';
 
 // Account IDs do Google Ads via Supermetrics
 const GADS_ACCOUNT_IDS: Record<Market, string[]> = {
