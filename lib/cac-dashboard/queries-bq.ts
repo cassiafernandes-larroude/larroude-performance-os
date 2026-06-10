@@ -12,10 +12,7 @@
 
 import { runQuery } from './bigquery';
 import { queryDailyCac } from '@/lib/main-dashboard/queries';
-import {
-  queryGoogleAdsViaSupermetrics,
-  queryMetaAdsViaSupermetrics,
-} from '@/lib/main-dashboard/supermetrics';
+import { queryGoogleAdsViaSupermetrics } from '@/lib/main-dashboard/supermetrics';
 import { queryMetaAdsDaily } from '@/lib/main-dashboard/meta-ads';
 import type { Market as MainMarket } from '@/lib/main-dashboard/types';
 import { getMetaSpendAdjustmentByDay } from '@/lib/shared/meta-adjustments';
@@ -41,20 +38,36 @@ async function getSpendByDay(
   startDate: string,
   endDate: string
 ): Promise<{ total: Map<string, number>; google: number; meta: number }> {
-  const [googleRows, apiMeta, smMetaRows] = await Promise.all([
-    // Google: SEMPRE Supermetrics
+  // Normaliza qualquer formato de data pra ISO (Supermetrics as vezes retorna M/D/YYYY)
+  // REGRA: REGRAS-LARROUDE-OS.md secao 15 — paridade KPI vs chart
+  function normalizeISODate(raw: any): string | null {
+    if (!raw) return null;
+    const s = String(raw).trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+    const us = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (us) return `${us[3]}-${us[1].padStart(2, '0')}-${us[2].padStart(2, '0')}`;
+    const parsed = new Date(s);
+    if (!isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+    return null;
+  }
+
+  const [googleRows, apiMeta] = await Promise.all([
+    // Google: SEMPRE Supermetrics (regra Cassia)
     queryGoogleAdsViaSupermetrics(market as MainMarket, startDate, endDate).catch((err) => {
       console.error('[cac-bq] Supermetrics Google failed:', err);
       return [];
     }),
-    // Meta: API direta PRIMARY — reusa queryMetaAdsDaily do Main Dashboard
-    // (TODAS as 5 contas oficiais: US x2, BR x3 com FX USD->BRL)
+    // Meta: API direta — TODAS as 5 contas oficiais (US x3, BR x3 com FX USD->BRL)
+    // SEM fallback Supermetrics (regra Cassia: Meta priorizar API direto).
+    // Fallback duplicava spend (commit 18712fb mostrou +$20k extra no CAC vs Main).
     queryMetaAdsDaily(market as MainMarket, startDate, endDate)
       .then((rows) => {
         const map = new Map<string, number>();
         for (const r of rows) {
+          const iso = normalizeISODate((r as any).date);
+          if (!iso) continue;
           const v = Number((r as any).spend) || 0;
-          map.set((r as any).date, (map.get((r as any).date) || 0) + v);
+          map.set(iso, (map.get(iso) || 0) + v);
         }
         return map;
       })
@@ -62,33 +75,21 @@ async function getSpendByDay(
         console.error('[cac-bq] Meta Graph API direct failed:', err);
         return new Map<string, number>();
       }),
-    // Meta Supermetrics: SOMENTE pra preencher gaps onde API nao retornou
-    queryMetaAdsViaSupermetrics(market as MainMarket, startDate, endDate).catch((err) => {
-      console.error('[cac-bq] Supermetrics Meta fallback failed:', err);
-      return [];
-    }),
   ]);
 
-  // Google — apenas Supermetrics
+  // Google — apenas Supermetrics, com normalize de data
   const googleByDay = new Map<string, number>();
   let googleTotal = 0;
   for (const r of googleRows) {
+    const iso = normalizeISODate((r as any).date);
+    if (!iso) continue;
     const v = Number(r.spend) || 0;
-    googleByDay.set(r.date, (googleByDay.get(r.date) || 0) + v);
+    googleByDay.set(iso, (googleByDay.get(iso) || 0) + v);
     googleTotal += v;
   }
 
-  // Meta — API direta PRIMARY, Supermetrics como fallback dia-a-dia
-  const metaByDay = new Map<string, number>(apiMeta); // start from API
-  for (const r of smMetaRows) {
-    // SOMENTE preenche se API nao tiver aquela data
-    if (!metaByDay.has(r.date)) {
-      const v = Number(r.spend) || 0;
-      metaByDay.set(r.date, v);
-    }
-  }
-  // AJUSTE MANUAL: Meta US +$400k em Setembro/2025 (regra Cassia)
-  // Distribui pro-rata dia-a-dia e soma ao Meta spend
+  // Meta — API direta + ajuste manual Set/25
+  const metaByDay = new Map<string, number>(apiMeta);
   const adjByDay = getMetaSpendAdjustmentByDay(market as 'US' | 'BR', startDate, endDate);
   adjByDay.forEach((adjValue, date) => {
     metaByDay.set(date, (metaByDay.get(date) || 0) + adjValue);
@@ -97,6 +98,8 @@ async function getSpendByDay(
   metaByDay.forEach((v) => {
     metaTotal += v;
   });
+
+  console.log(`[cac-bq spend ${market}] google_total=$${googleTotal.toFixed(0)} meta_total=$${metaTotal.toFixed(0)} google_rows=${googleRows.length}`);
 
   // Soma total por dia
   const total = new Map<string, number>();
@@ -221,6 +224,12 @@ function ordersDataset(market: Market): string {
   return market === 'US' ? 'stg_shopify' : 'stg_shopify_br';
 }
 
+// Timezone por mercado (alinhado com Main Dashboard — REGRAS-LARROUDE-OS.md)
+const TZ: Record<Market, string> = {
+  US: 'America/New_York',
+  BR: 'America/Sao_Paulo',
+};
+
 function shopifyFilters(market: Market, alias = 'o'): string {
   return `
     AND ${alias}.cancelled_at IS NULL
@@ -285,7 +294,7 @@ export async function getProductCac(
     first_purchase AS (
       SELECT
         JSON_VALUE(o.customer, '$.id') AS customer_id,
-        MIN(DATE(o.created_at)) AS first_date
+        MIN(DATE(o.created_at, '${TZ[market]}')) AS first_date
       FROM \`larroude-data-prod.${dataset}.orders\` o
       WHERE JSON_VALUE(o.customer, '$.id') IS NOT NULL
         ${shopifyFilters(market)}
@@ -293,7 +302,7 @@ export async function getProductCac(
     ),
     line_items_expanded AS (
       SELECT
-        DATE(o.created_at) AS date,
+        DATE(o.created_at, '${TZ[market]}') AS date,
         JSON_VALUE(o.customer, '$.id') AS customer_id,
         o.id AS order_id,
         JSON_VALUE(li, '$.sku') AS li_sku,
@@ -302,7 +311,7 @@ export async function getProductCac(
         CAST(JSON_VALUE(li, '$.price') AS NUMERIC) * CAST(JSON_VALUE(li, '$.quantity') AS INT64) AS revenue
       FROM \`larroude-data-prod.${dataset}.orders\` o,
         UNNEST(JSON_QUERY_ARRAY(o.line_items)) AS li
-      WHERE DATE(o.created_at) BETWEEN @start AND @end
+      WHERE DATE(o.created_at, '${TZ[market]}') BETWEEN @start AND @end
         ${shopifyFilters(market)}
     ),
     with_mother AS (
