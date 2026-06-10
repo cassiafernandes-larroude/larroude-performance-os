@@ -1,9 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import Header from '@/components/main-dashboard/Header';
-import type { PeriodKey, PeriodRange, Market as MainMarket } from '@/lib/main-dashboard/types';
-import { calcPeriod } from '@/lib/main-dashboard/utils';
+import UeHeader from './UeHeader';
 import { computeCascade, DEFAULT_ASSUMPTIONS, type Assumptions } from '@/lib/unit-economics/cascade';
 import type { ProductUnitEconomics, Market } from '@/lib/unit-economics/queries';
 import AssumptionsPanel from './AssumptionsPanel';
@@ -25,19 +23,17 @@ interface ApiResponse {
   googleSpend: number;
   marketingCoverage: number;
   marketingPerUnit: number;
+  partial?: boolean;
+  pagesProcessed?: number;
   products: ProductUnitEconomics[];
   variants: ProductUnitEconomics[];
   meta?: { generatedAt: string; durationMs: number };
 }
 
-const STATE_KEY = 'lpos-ue-state-v1';
+const STATE_KEY = 'lpos-ue-state-v2'; // bump from v1 (schema mudou — sem period)
 
 interface State {
   market: Market;
-  period: PeriodKey;
-  customStart?: string;
-  customEnd?: string;
-  isCustom?: boolean;
   selectedMotherSku: string | null;
   assumptions: Record<Market, Assumptions>;
 }
@@ -45,7 +41,6 @@ interface State {
 export default function Dashboard({ freshness }: { freshness: string }) {
   const [state, setState] = useState<State>({
     market: 'US',
-    period: '28d',
     selectedMotherSku: null,
     assumptions: { US: { ...DEFAULT_ASSUMPTIONS.US }, BR: { ...DEFAULT_ASSUMPTIONS.BR } },
   });
@@ -61,7 +56,11 @@ export default function Dashboard({ freshness }: { freshness: string }) {
       const raw = window.localStorage.getItem(STATE_KEY);
       if (raw) {
         const saved = JSON.parse(raw) as Partial<State>;
-        setState((s) => ({ ...s, ...saved, assumptions: { ...s.assumptions, ...(saved.assumptions || {}) } }));
+        setState((s) => ({
+          ...s,
+          ...saved,
+          assumptions: { ...s.assumptions, ...(saved.assumptions || {}) },
+        }));
       }
     } catch {}
   }, []);
@@ -71,32 +70,36 @@ export default function Dashboard({ freshness }: { freshness: string }) {
     window.localStorage.setItem(STATE_KEY, JSON.stringify(state));
   }, [state]);
 
-  // Período → range
-  const periodRange: PeriodRange = useMemo(() => {
-    if (state.isCustom && state.customStart && state.customEnd) {
-      const s = new Date(state.customStart + 'T12:00:00').getTime();
-      const e = new Date(state.customEnd + 'T12:00:00').getTime();
-      const days = Math.max(1, Math.round((e - s) / 86400000) + 1);
-      const prevEndDate = new Date(s - 86400000);
-      const prevStartDate = new Date(prevEndDate.getTime() - (days - 1) * 86400000);
-      return {
-        start: state.customStart,
-        end: state.customEnd,
-        days,
-        prevStart: prevStartDate.toISOString().slice(0, 10),
-        prevEnd: prevEndDate.toISOString().slice(0, 10),
-      };
-    }
-    return calcPeriod(state.period, freshness || undefined);
-  }, [state.period, state.isCustom, state.customStart, state.customEnd, freshness]);
+  // Fetch — janela é decidida pelo backend (60d rolling).
+  function fetchData(force: boolean = false) {
+    setLoading(true);
+    setError(null);
+    const url = `/api/unit-economics/${state.market}${force ? `?_=${Date.now()}` : ''}`;
+    return fetch(url, { cache: 'no-store' })
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json() as Promise<ApiResponse>;
+      })
+      .then((json) => {
+        setData(json);
+        setLoading(false);
+        setRefreshing(false);
+        if (!state.selectedMotherSku && json.products?.[0]) {
+          setState((s) => ({ ...s, selectedMotherSku: json.products[0].motherSku }));
+        }
+      })
+      .catch((err: Error) => {
+        setError(err.message || 'Erro ao buscar dados');
+        setLoading(false);
+        setRefreshing(false);
+      });
+  }
 
-  // Fetch
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    const url = `/api/unit-economics/${state.market}?start=${periodRange.start}&end=${periodRange.end}`;
-    fetch(url, { cache: 'no-store' })
+    fetch(`/api/unit-economics/${state.market}`, { cache: 'no-store' })
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json() as Promise<ApiResponse>;
@@ -105,8 +108,6 @@ export default function Dashboard({ freshness }: { freshness: string }) {
         if (cancelled) return;
         setData(json);
         setLoading(false);
-        setRefreshing(false);
-        // Auto-seleciona o primeiro mother SKU se nenhum selecionado
         if (!state.selectedMotherSku && json.products?.[0]) {
           setState((s) => ({ ...s, selectedMotherSku: json.products[0].motherSku }));
         }
@@ -115,28 +116,15 @@ export default function Dashboard({ freshness }: { freshness: string }) {
         if (cancelled) return;
         setError(err.message || 'Erro ao buscar dados');
         setLoading(false);
-        setRefreshing(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [state.market, periodRange.start, periodRange.end]);
+  }, [state.market]);
 
   function handleRefresh() {
     setRefreshing(true);
-    setLoading(true);
-    const url = `/api/unit-economics/${state.market}?start=${periodRange.start}&end=${periodRange.end}&_=${Date.now()}`;
-    fetch(url, { cache: 'no-store' })
-      .then((r) => r.json() as Promise<ApiResponse>)
-      .then((json) => {
-        setData(json);
-        setLoading(false);
-        setRefreshing(false);
-      })
-      .catch(() => {
-        setLoading(false);
-        setRefreshing(false);
-      });
+    fetchData(true);
   }
   function handleExportPdf() {
     if (typeof window !== 'undefined') window.print();
@@ -145,7 +133,9 @@ export default function Dashboard({ freshness }: { freshness: string }) {
   // Produto selecionado + cascata
   const selectedProduct = useMemo(() => {
     if (!data || !state.selectedMotherSku) return null;
-    return data.products.find((p) => p.motherSku === state.selectedMotherSku) ?? data.products[0] ?? null;
+    return (
+      data.products.find((p) => p.motherSku === state.selectedMotherSku) ?? data.products[0] ?? null
+    );
   }, [data, state.selectedMotherSku]);
 
   const selectedVariants = useMemo(() => {
@@ -168,39 +158,56 @@ export default function Dashboard({ freshness }: { freshness: string }) {
     }));
   }, [selectedVariants, assumptions, state.market, data]);
 
+  // Window label — formata "May 13 - Jun 12, 2026" se temos data; senão "last 60 days"
+  const windowLabel = useMemo(() => {
+    if (data?.startDate && data?.endDate) {
+      const s = new Date(data.startDate + 'T00:00:00Z');
+      const e = new Date(data.endDate + 'T00:00:00Z');
+      const opts: Intl.DateTimeFormatOptions = {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        timeZone: 'UTC',
+      };
+      return `${s.toLocaleDateString('en-US', opts)} → ${e.toLocaleDateString('en-US', opts)}`;
+    }
+    return 'last 60 days';
+  }, [data?.startDate, data?.endDate]);
+
   return (
     <div className="main-dashboard-root">
-      <Header
-        market={state.market as MainMarket}
-        period={state.period}
-        customStart={state.customStart}
-        customEnd={state.customEnd}
-        isCustom={state.isCustom}
-        onMarketChange={(m) =>
-          setState((s) => ({ ...s, market: m as Market, selectedMotherSku: null }))
-        }
-        onPeriodChange={(p) => setState((s) => ({ ...s, period: p, isCustom: false }))}
-        onCustomRange={(start, end) =>
-          setState((s) => ({ ...s, customStart: start, customEnd: end, isCustom: true }))
-        }
+      <UeHeader
+        market={state.market}
+        onMarketChange={(m) => setState((s) => ({ ...s, market: m, selectedMotherSku: null }))}
         onRefresh={handleRefresh}
         onExportPdf={handleExportPdf}
         refreshing={refreshing}
-        periodRange={periodRange}
-        title="Unit Economics"
-        subtitleSuffix="Margem de contribuição por unidade · Shopify + Meta + Google · period"
-        lang="en"
+        windowLabel={windowLabel}
       />
 
       {error && (
-        <div className="card mt-4 p-4" style={{ borderColor: '#b3382f', background: '#fff5f5', color: '#b3382f' }}>
+        <div
+          className="card mt-4 p-4"
+          style={{ borderColor: '#b3382f', background: '#fff5f5', color: '#b3382f' }}
+        >
           <strong>Erro:</strong> {error}
         </div>
       )}
 
       {loading && !data && (
         <div className="card mt-4 p-8 text-center text-sm" style={{ color: '#6b7280' }}>
-          Carregando Unit Economics de BigQuery...
+          Carregando do Shopify… (~30s na primeira carga; cache 6h depois)
+        </div>
+      )}
+
+      {data && data.partial && (
+        <div
+          className="card mt-4 p-3 text-sm"
+          style={{ borderColor: '#d97706', background: '#fffbeb', color: '#92400e' }}
+        >
+          <strong>⚠ Dados parciais:</strong> processadas {data.pagesProcessed} páginas (
+          {data.totalOrders.toLocaleString('en-US')} orders) antes do limite de tempo. Médias por
+          unidade ainda são representativas.
         </div>
       )}
 
@@ -244,7 +251,10 @@ export default function Dashboard({ freshness }: { freshness: string }) {
             onReset={() =>
               setState((s) => ({
                 ...s,
-                assumptions: { ...s.assumptions, [state.market]: { ...DEFAULT_ASSUMPTIONS[state.market] } },
+                assumptions: {
+                  ...s.assumptions,
+                  [state.market]: { ...DEFAULT_ASSUMPTIONS[state.market] },
+                },
               }))
             }
           />

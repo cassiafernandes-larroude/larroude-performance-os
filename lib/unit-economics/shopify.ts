@@ -32,9 +32,10 @@ function getConfig(market: Market): ShopifyConfig {
 }
 
 // Query única que pega TUDO necessário pra cascata de unit economics
+// first: 250 = max Shopify (reduz round-trips em 60% vs first: 100)
 const ORDERS_QUERY = `
   query Orders($cursor: String, $query: String!) {
-    orders(first: 100, after: $cursor, query: $query, sortKey: CREATED_AT, reverse: true) {
+    orders(first: 250, after: $cursor, query: $query, sortKey: CREATED_AT, reverse: true) {
       edges {
         cursor
         node {
@@ -214,6 +215,9 @@ export interface UnitEconomicsRaw {
   totalRevenue: number;
   totalRefunds: number;
   cogsCoverage: number;
+  /** true se a paginação foi interrompida por timeout — dados parciais */
+  partial: boolean;
+  pagesProcessed: number;
   products: ProductUnitEconomics[];
   variants: ProductUnitEconomics[];
 }
@@ -278,8 +282,10 @@ function finalize(acc: BucketAcc, currency: 'USD' | 'BRL', market: Market): Prod
 export async function getUnitEconomicsFromShopify(
   market: Market,
   startDate: string,
-  endDate: string
+  endDate: string,
+  timeoutMs: number = 50_000 // 50s — Vercel maxDuration 60s, deixa 10s pra outros await + JSON.stringify
 ): Promise<UnitEconomicsRaw> {
+  const t0 = Date.now();
   const currency: 'USD' | 'BRL' = market === 'US' ? 'USD' : 'BRL';
   // NOTA: Shopify search NÃO suporta `financial_status:NOT(...)` — filtra no JS via displayFinancialStatus.
   // Tags B2B/wholesale/marketplace/redo/influencer ja filtradas pelo Shopify search.
@@ -291,7 +297,8 @@ export async function getUnitEconomicsFromShopify(
   let cursor: string | null = null;
   let hasNext = true;
   let pageCount = 0;
-  const MAX_PAGES = 400; // 100 orders/page × 400 = 40k orders max
+  let partial = false;
+  const MAX_PAGES = 400; // 250 orders/page × 400 = 100k orders max
 
   let totalUnits = 0;
   let totalOrders = 0;
@@ -301,6 +308,12 @@ export async function getUnitEconomicsFromShopify(
   let cogsCoveredUnits = 0;
 
   while (hasNext && pageCount < MAX_PAGES) {
+    // Timeout interno: para antes de Vercel cortar (504)
+    if (Date.now() - t0 > timeoutMs) {
+      console.warn(`[ue ${market}] timeout after ${pageCount} pages, returning partial`);
+      partial = true;
+      break;
+    }
     pageCount++;
     const json = await gql(market, ORDERS_QUERY, { cursor, query: queryFilter });
     const orders = json.data?.orders;
@@ -422,6 +435,8 @@ export async function getUnitEconomicsFromShopify(
 
   const cogsCoverage = allVariantUnits > 0 ? cogsCoveredUnits / allVariantUnits : 0;
 
+  console.log(`[ue ${market}] ${pageCount} pages, ${totalOrders} orders, ${totalUnits} units, ${products.length} products, ${variants.length} variants, partial=${partial}, ${Date.now() - t0}ms`);
+
   return {
     market,
     startDate,
@@ -432,6 +447,8 @@ export async function getUnitEconomicsFromShopify(
     totalRevenue,
     totalRefunds,
     cogsCoverage,
+    partial,
+    pagesProcessed: pageCount,
     products,
     variants,
   };

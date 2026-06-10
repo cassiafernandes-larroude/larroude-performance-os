@@ -8,30 +8,38 @@ import type { Market as MainMarket } from '@/lib/main-dashboard/types';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 3600;
-export const maxDuration = 60;
+// 300s = Vercel Pro best-effort. Backend já tem timeout interno de 50s.
+export const maxDuration = 300;
 
 function isMarket(v: string): v is Market {
   return v === 'US' || v === 'BR';
 }
-function isoDate(v: string | null): string | null {
-  if (!v) return null;
-  return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
+
+// Janela fixa 60 dias rolling — Unit Economics é per-unit, não tem período de operação.
+// 60d = amostra estatisticamente robusta sem timeout Vercel.
+const WINDOW_DAYS = 60;
+
+function defaultWindow(): { start: string; end: string } {
+  const end = new Date();
+  end.setUTCHours(23, 59, 59, 999);
+  const start = new Date(end.getTime() - (WINDOW_DAYS - 1) * 86400000);
+  start.setUTCHours(0, 0, 0, 0);
+  return {
+    start: start.toISOString().slice(0, 10),
+    end: end.toISOString().slice(0, 10),
+  };
 }
 
-export async function GET(req: NextRequest, ctx: { params: { market: string } }) {
+export async function GET(_req: NextRequest, ctx: { params: { market: string } }) {
   const market = ctx.params.market.toUpperCase();
   if (!isMarket(market)) return NextResponse.json({ error: 'Invalid market' }, { status: 400 });
-  const url = new URL(req.url);
-  const start = isoDate(url.searchParams.get('start'));
-  const end = isoDate(url.searchParams.get('end'));
-  if (!start || !end) return NextResponse.json({ error: 'start and end required' }, { status: 400 });
-  if (start > end) return NextResponse.json({ error: 'start must be <= end' }, { status: 400 });
 
+  const { start, end } = defaultWindow();
   const startedAt = Date.now();
   try {
-    const cacheKey = `ue:${market}:${start}:${end}`;
+    const cacheKey = `ue:${market}:${start}:${end}:v2`;
     const result = await memo(cacheKey, TTL_6H, async () => {
-      // FONTE ÚNICA: Shopify Admin GraphQL (orders + line_items + cost + tax + refunds + payments)
+      // FONTE ÚNICA: Shopify Admin GraphQL (orders + lineItems + cost + tax + duties + refunds + payments)
       // Marketing vem em paralelo de Meta API + Google Supermetrics
       const [shop, metaTotal, googleTotal] = await Promise.all([
         getUnitEconomicsFromShopify(market, start, end),
@@ -63,7 +71,7 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
 
     return NextResponse.json(
       { ...result, meta: { generatedAt: new Date().toISOString(), durationMs: Date.now() - startedAt } },
-      { headers: { 'Cache-Control': 'public, max-age=0, s-maxage=300, stale-while-revalidate=3600' } }
+      { headers: { 'Cache-Control': 'public, max-age=0, s-maxage=600, stale-while-revalidate=21600' } }
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'unknown';
