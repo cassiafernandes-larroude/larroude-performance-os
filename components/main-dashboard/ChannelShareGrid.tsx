@@ -5,55 +5,13 @@
 //   2. Participacao (% do total daily)
 // Reusa DailyBarChart e os dados de daily.channel_{slug} ja existentes no payload.
 
-import type { DashboardPayload, DailyPoint, ChannelRevenue } from '@/lib/main-dashboard/types';
+import type { DashboardPayload, DailyPoint } from '@/lib/main-dashboard/types';
 import DailyBarChart from './DailyBarChart';
 import ChannelShareInsights from './ChannelShareInsights';
 import ChannelShareKpis from './ChannelShareKpis';
+import { consolidateOrganicPayload, slugForChannel } from '@/lib/shared/channel-consolidation';
 
-// Consolida "Orgânico Search" + "Orgânico Social" em um único "Orgânico".
-// Aplica em channels (totais) E daily.channel_organico_search + _social → daily.channel_organico.
-function consolidateOrganic(data: DashboardPayload): DashboardPayload {
-  const organicLabels = new Set(['Orgânico Search', 'Orgânico Social', 'Organico Search', 'Organico Social']);
-  let organicRev = 0;
-  let organicPct = 0;
-  const otherChannels: ChannelRevenue[] = [];
-  for (const c of data.channels) {
-    if (organicLabels.has(c.channel)) {
-      organicRev += c.revenue;
-      organicPct += c.pct ?? 0;
-    } else {
-      otherChannels.push(c);
-    }
-  }
-  const newChannels = [...otherChannels];
-  if (organicRev > 0) {
-    newChannels.push({ channel: 'Orgânico', revenue: organicRev, pct: organicPct, color: '#22c55e' });
-  }
-  newChannels.sort((a, b) => b.revenue - a.revenue);
-
-  // Consolida daily.channel_organico_search + _social em daily.channel_organico
-  const dailyAny = data.daily as any;
-  const searchDaily: DailyPoint[] = dailyAny.channel_organico_search ?? [];
-  const socialDaily: DailyPoint[] = dailyAny.channel_organico_social ?? [];
-  const byDate = new Map<string, DailyPoint>();
-  for (const pt of [...searchDaily, ...socialDaily]) {
-    const cur = byDate.get(pt.date);
-    if (cur) {
-      cur.value += pt.value ?? 0;
-    } else {
-      byDate.set(pt.date, { date: pt.date, value: pt.value ?? 0, inPeriod: pt.inPeriod });
-    }
-  }
-  const organicSeries = Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date));
-
-  // Cria novo daily map sem as series antigas + com a nova consolidada
-  const newDaily: any = { ...dailyAny };
-  delete newDaily.channel_organico_search;
-  delete newDaily.channel_organico_social;
-  if (organicSeries.length > 0) newDaily.channel_organico = organicSeries;
-
-  return { ...data, channels: newChannels, daily: newDaily };
-}
+// Consolidação via helper compartilhado (paridade garantida com Main Dashboard).
 
 interface Props { data: DashboardPayload; dimmed?: boolean; }
 
@@ -64,53 +22,32 @@ const SectionHeader = ({ children }: { children: React.ReactNode }) => (
   </div>
 );
 
-// Mesmo mapping de slug do Dashboard.tsx
-function slugFor(channel: string): string {
-  if (channel === 'Sem UTM / Direto') return 'sem_utm_direto';
-  if (channel === 'Meta Ads') return 'meta_ads';
-  if (channel === 'Google Ads') return 'google_ads';
-  if (channel === 'Klaviyo Email') return 'klaviyo_email';
-  if (channel === 'SMS Attentive') return 'sms_attentive';
-  if (channel === 'Awin Affiliate') return 'awin_affiliate';
-  if (channel === 'ShopMy') return 'shopmy';
-  if (channel === 'Criteo') return 'criteo';
-  if (channel === 'Agent.shop') return 'agent_shop';
-  if (channel === 'Orgânico' || channel === 'Organico') return 'organico';
-  if (channel === 'Orgânico Search' || channel === 'Organico Search') return 'organico_search';
-  if (channel === 'Orgânico Social' || channel === 'Organico Social') return 'organico_social';
-  // legacy
-  if (channel === 'Orgânico Social (IG)' || channel === 'Organico Social (IG)') return 'organico_social_ig';
-  return 'outros';
-}
-
 export default function ChannelShareGrid({ data: rawData, dimmed }: Props) {
-  // Consolida Organico Search + Organico Social em um unico Organico (channels + daily)
-  const data = consolidateOrganic(rawData);
+  // Consolida via helper compartilhado — paridade garantida com Main Dashboard
+  const data = consolidateOrganicPayload(rawData);
   const { market, daily, channels } = data;
 
   // Dedup por slug
   const seen = new Set<string>();
   const uniqueChannels = channels.filter((ch) => {
-    const slug = slugFor(ch.channel);
+    const slug = slugForChannel(ch.channel);
     if (seen.has(slug)) return false;
     seen.add(slug);
     return true;
   });
 
   // Pre-calcula total diario somando todos os canais
-  // Map date -> total revenue across all channels
   const totalsByDate = new Map<string, number>();
   for (const ch of uniqueChannels) {
-    const slug = slugFor(ch.channel);
+    const slug = slugForChannel(ch.channel);
     const series: DailyPoint[] = (daily as any)[`channel_${slug}`] ?? [];
     for (const pt of series) {
       totalsByDate.set(pt.date, (totalsByDate.get(pt.date) ?? 0) + (pt.value ?? 0));
     }
   }
 
-  // Helper - cria serie de participacao (% do total daily) para um canal
   function shareSeries(channel: string): DailyPoint[] {
-    const slug = slugFor(channel);
+    const slug = slugForChannel(channel);
     const series: DailyPoint[] = (daily as any)[`channel_${slug}`] ?? [];
     return series.map((pt) => {
       const total = totalsByDate.get(pt.date) ?? 0;
@@ -132,7 +69,7 @@ export default function ChannelShareGrid({ data: rawData, dimmed }: Props) {
 
       <div className="space-y-6">
         {uniqueChannels.map((ch) => {
-          const slug = slugFor(ch.channel);
+          const slug = slugForChannel(ch.channel);
           const revenueSeries: DailyPoint[] = (daily as any)[`channel_${slug}`] ?? [];
           if (revenueSeries.length === 0) return null;
           const share = shareSeries(ch.channel);

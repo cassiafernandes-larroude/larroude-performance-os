@@ -2,32 +2,13 @@
 
 import type { ChannelRevenue, Market, TopCampaignRoas } from '@/lib/main-dashboard/types';
 import { fmtCurrency, fmtMultiple, fmtPercent } from '@/lib/main-dashboard/utils';
+import { consolidateOrganicChannels } from '@/lib/shared/channel-consolidation';
 
 interface Props { channels: ChannelRevenue[]; topCampaigns: TopCampaignRoas[]; market: Market; }
 
-// Apenas no Main Dashboard: consolida "Orgânico Search" + "Orgânico Social" em um único "Orgânico".
-// No Channel Share os dois ficam separados (renderizado por componentes próprios).
-function consolidateOrganic(channels: ChannelRevenue[]): ChannelRevenue[] {
-  const organicLabels = new Set(['Orgânico Search', 'Orgânico Social', 'Organico Search', 'Organico Social']);
-  let organicRev = 0;
-  let organicPct = 0;
-  const others: ChannelRevenue[] = [];
-  for (const c of channels) {
-    if (organicLabels.has(c.channel)) {
-      organicRev += c.revenue;
-      organicPct += c.pct ?? 0;
-    } else {
-      others.push(c);
-    }
-  }
-  if (organicRev > 0) {
-    others.push({ channel: 'Orgânico', revenue: organicRev, pct: organicPct, color: '#22c55e' });
-  }
-  return others.sort((a, b) => b.revenue - a.revenue);
-}
-
 export default function ChannelBreakdown({ channels, topCampaigns, market }: Props) {
-  const displayChannels = consolidateOrganic(channels);
+  // Consolidação via helper compartilhado (mesmo código usado no Channel Share)
+  const displayChannels = consolidateOrganicChannels(channels);
   const maxRevenue = Math.max(1, ...displayChannels.map((c) => c.revenue));
   const maxRoas = Math.max(1, ...topCampaigns.map((c) => c.roas));
 
