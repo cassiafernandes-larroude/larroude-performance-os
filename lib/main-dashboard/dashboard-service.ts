@@ -36,6 +36,7 @@ import {
   queryGA4SessionsByChannel,
 } from './supermetrics';
 import { calcPeriod, fmtCurrency, fmtMultiple, fmtNumber, fmtPercent, granularityFor, pctChange, safeDiv } from './utils';
+import { getMetaSpendAdjustment } from '@/lib/shared/meta-adjustments';
 import type {
   CampaignRow,
   ChannelRevenue,
@@ -210,11 +211,15 @@ export async function getDashboardPayload(
   let finalMetaSpendPrev = supermetricsMetaSpendPrev > 0 ? supermetricsMetaSpendPrev : bqMetaSpendPrev;
   const finalGoogleSpendPrev = supermetricsGoogleSpendPrev > 0 ? supermetricsGoogleSpendPrev : bqGoogleSpendPrev;
 
-  // AJUSTE MANUAL: Meta US +$400k Setembro/2025 (regra Cassia)
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { getMetaSpendAdjustment } = require('@/lib/shared/meta-adjustments');
-  finalMetaSpend += getMetaSpendAdjustment(market, period.start, period.end);
-  finalMetaSpendPrev += getMetaSpendAdjustment(market, period.prevStart, period.prevEnd);
+  // AJUSTE MANUAL: Meta US +$400k Setembro/2025 (regra Cassia, REGRAS-LARROUDE-OS.md secao 3.3)
+  // Pro-rata pelos dias do periodo que overlap com Set/2025.
+  const metaAdjCurr = getMetaSpendAdjustment(market, period.start, period.end);
+  const metaAdjPrev = getMetaSpendAdjustment(market, period.prevStart, period.prevEnd);
+  finalMetaSpend += metaAdjCurr;
+  finalMetaSpendPrev += metaAdjPrev;
+  if (metaAdjCurr > 0 || metaAdjPrev > 0) {
+    console.log(`[meta-adj ${market}]`, `curr=$${metaAdjCurr.toFixed(0)}`, `prev=$${metaAdjPrev.toFixed(0)}`);
+  }
 
   const spend = finalMetaSpend + finalGoogleSpend;
   // Debug log (visível em vercel logs)

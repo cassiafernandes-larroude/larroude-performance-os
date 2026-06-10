@@ -41,6 +41,7 @@ import { getMetaSpendByDay } from './connectors/meta-ads';
 import { getGoogleAdsSpendByDay } from './connectors/google-ads';
 import { motherSkuOf, productTypeOf } from './connectors/shopify';
 import { topLtvMinCustomers } from './thresholds';
+import { getMetaSpendAdjustment } from '@/lib/shared/meta-adjustments';
 
 export { topLtvMinCustomers };
 
@@ -481,9 +482,7 @@ export async function getLtvKpiSummary(
     console.warn('[ltv] meta-ads failed:', e instanceof Error ? e.message : e);
   }
 
-  // AJUSTE MANUAL: Meta US +$400k Setembro/2025 (regra Cassia)
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { getMetaSpendAdjustment } = require('@/lib/shared/meta-adjustments');
+  // AJUSTE MANUAL: Meta US +$400k Setembro/2025 (regra Cassia, REGRAS-LARROUDE-OS.md secao 3.3)
   metaSpend += getMetaSpendAdjustment(market as 'US' | 'BR', startDate, endDate);
 
   const totalAdSpend = metaSpend + googleSpend;
@@ -722,6 +721,13 @@ export async function getMonthlyLtvSeries(market: Market): Promise<MonthlyLtvPoi
     }
   } catch (e) {
     console.warn('[monthly] meta/google spend failed:', e instanceof Error ? e.message : e);
+  }
+
+  // AJUSTE MANUAL: Meta US +$400k Setembro/2025 (regra Cassia)
+  // Adiciona ao bucket mensal pra que LTV/CAC overtime mostre Set/25 correto.
+  const sep25Adj = getMetaSpendAdjustment(market as 'US' | 'BR', '2025-09-01', '2025-09-30');
+  if (sep25Adj > 0) {
+    metaByMonth.set('2025-09', (metaByMonth.get('2025-09') ?? 0) + sep25Adj);
   }
 
   const byMonth = new Map<string, MonthlyLtvPoint>();
