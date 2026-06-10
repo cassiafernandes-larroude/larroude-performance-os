@@ -5,8 +5,8 @@
 //
 // Endpoint: GET https://graph.facebook.com/v20.0/act_{ACCOUNT_ID}/insights
 //
-// Contas:
-//  US: Larroudé US (2047856822417350) + PRE-ORDER US (929449929417505)
+// Contas (REGRAS-LARROUDE-OS.md secao 3.1):
+//  US: Larroudé US (2047856822417350) + PRE-ORDER US (929449929417505) + Larroude New (312869193575906)
 //  BR: Larroudé Brasil (1735567560524487) + Pre-Order BR (1975682443187483) + Brand BR (756931007040325)
 //
 // CURRENCY: TODAS as contas (US e BR) são cobradas em USD.
@@ -19,7 +19,8 @@ import { runQuery } from './bigquery';
 const META_GRAPH_API = 'https://graph.facebook.com/v20.0';
 
 const META_ACCOUNT_IDS: Record<Market, string[]> = {
-  US: ['2047856822417350', '929449929417505'],
+  // Larroude New (312869193575906) adicionada 2026-05-25 (task #68)
+  US: ['2047856822417350', '929449929417505', '312869193575906'],
   BR: ['1735567560524487', '1975682443187483', '756931007040325'],
 };
 

@@ -24,11 +24,12 @@ const GA4_ACCOUNT_IDS: Record<Market, string> = {
 };
 
 // Account IDs do Meta Ads via Supermetrics (todas em USD)
-//  US: Larroudé US + PRE-ORDER US
+//  US: Larroudé US + PRE-ORDER US + Larroude New (REGRAS-LARROUDE-OS.md 3.1)
 //  BR: Larroudé Brasil + Pre-Order BR + Brand BR (todas USD!)
 // IMPORTANTE: Supermetrics aceita SEM o prefixo act_ (numéricos puros)
 const META_ACCOUNT_IDS: Record<Market, string[]> = {
-  US: ['2047856822417350', '929449929417505'],
+  // Larroude New (312869193575906) adicionada 2026-05-25 (task #68)
+  US: ['2047856822417350', '929449929417505', '312869193575906'],
   BR: ['1735567560524487', '1975682443187483', '756931007040325'],
 };
 
