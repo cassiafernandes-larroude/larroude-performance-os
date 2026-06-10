@@ -422,21 +422,43 @@ export async function getDashboardPayload(
     return d.toISOString().slice(0, 10);
   }
 
+  // Normaliza qualquer formato de data pra ISO YYYY-MM-DD (Supermetrics as vezes
+  // retorna M/D/YYYY, ISO, ou outros formatos dependendo da config da conta).
+  function normalizeISODate(raw: any): string | null {
+    if (!raw) return null;
+    const s = String(raw).trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+    const us = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (us) return `${us[3]}-${us[1].padStart(2, '0')}-${us[2].padStart(2, '0')}`;
+    const parsed = new Date(s);
+    if (!isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+    return null;
+  }
+
   // Spend Supermetrics (Meta + Google) — agregado por bucket (igual ao BQ)
   const supermetricsSpendDaily = new Map<string, number>();
   // Meta Pixel purchases via Meta Graph API direto (fonte de verdade, sempre atualizada)
   // BQ gold.all_channels_daily as vezes para de receber Meta (ex: parou em 20/05/2026),
   // por isso preferimos a API direta como fonte primaria para o daily.
   const metaApiPurchasesDaily = new Map<string, number>();
+  let metaSpendDailySum = 0;
+  let googleSpendDailySum = 0;
   for (const r of metaAdsDaily) {
-    const b = bucketDate(r.date);
+    const iso = normalizeISODate(r.date);
+    if (!iso) { console.warn(`[spend-daily ${market}] invalid Meta date:`, r.date); continue; }
+    const b = bucketDate(iso);
     supermetricsSpendDaily.set(b, (supermetricsSpendDaily.get(b) ?? 0) + r.spend);
     metaApiPurchasesDaily.set(b, (metaApiPurchasesDaily.get(b) ?? 0) + (r.purchases ?? 0));
+    metaSpendDailySum += r.spend;
   }
   for (const r of googleAdsDaily) {
-    const b = bucketDate(r.date);
+    const iso = normalizeISODate((r as any).date);
+    if (!iso) { console.warn(`[spend-daily ${market}] invalid Google date:`, (r as any).date); continue; }
+    const b = bucketDate(iso);
     supermetricsSpendDaily.set(b, (supermetricsSpendDaily.get(b) ?? 0) + r.spend);
+    googleSpendDailySum += r.spend;
   }
+  console.log(`[spend-daily ${market}] meta_daily_sum=$${metaSpendDailySum.toFixed(0)} google_daily_sum=$${googleSpendDailySum.toFixed(0)} google_rows=${googleAdsDaily.length}`);
 
   // dateList = SOMENTE buckets do BQ (que já estão agregados corretamente por week/month).
   // NÃO incluir keys diárias de Supermetrics — gerava barras vazias entre buckets.
