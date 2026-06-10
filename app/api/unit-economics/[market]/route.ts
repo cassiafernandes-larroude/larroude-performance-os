@@ -3,7 +3,7 @@ import { getUnitEconomicsFromShopify, type Market } from '@/lib/unit-economics/s
 import { queryMetaAdsTotal } from '@/lib/main-dashboard/meta-ads';
 import { queryGoogleAdsTotalViaSupermetrics } from '@/lib/main-dashboard/supermetrics';
 import { getMetaSpendAdjustment } from '@/lib/shared/meta-adjustments';
-import { memo, TTL_6H } from '@/lib/ltv-dashboard/memo-cache';
+import { memo, TTL_30M } from '@/lib/ltv-dashboard/memo-cache';
 import type { Market as MainMarket } from '@/lib/main-dashboard/types';
 
 export const dynamic = 'force-dynamic';
@@ -15,19 +15,11 @@ function isMarket(v: string): v is Market {
   return v === 'US' || v === 'BR';
 }
 
-// Janela fixa 60 dias rolling — Unit Economics é per-unit, não tem período de operação.
-// 60d = amostra estatisticamente robusta sem timeout Vercel.
-const WINDOW_DAYS = 60;
-
+// Regra Cassia (2026-06-10): UE mostra SEMPRE o dado de HOJE — não janela móvel.
+// Janela = hoje (start = end = today UTC).
 function defaultWindow(): { start: string; end: string } {
-  const end = new Date();
-  end.setUTCHours(23, 59, 59, 999);
-  const start = new Date(end.getTime() - (WINDOW_DAYS - 1) * 86400000);
-  start.setUTCHours(0, 0, 0, 0);
-  return {
-    start: start.toISOString().slice(0, 10),
-    end: end.toISOString().slice(0, 10),
-  };
+  const today = new Date().toISOString().slice(0, 10);
+  return { start: today, end: today };
 }
 
 export async function GET(_req: NextRequest, ctx: { params: { market: string } }) {
@@ -37,8 +29,8 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
   const { start, end } = defaultWindow();
   const startedAt = Date.now();
   try {
-    const cacheKey = `ue:${market}:${start}:${end}:v2`;
-    const result = await memo(cacheKey, TTL_6H, async () => {
+    const cacheKey = `ue:${market}:${start}:${end}:today:v3`;
+    const result = await memo(cacheKey, TTL_30M, async () => {
       // FONTE ÚNICA: Shopify Admin GraphQL (orders + lineItems + cost + tax + duties + refunds + payments)
       // Marketing vem em paralelo de Meta API + Google Supermetrics
       const [shop, metaTotal, googleTotal] = await Promise.all([
@@ -71,7 +63,7 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
 
     return NextResponse.json(
       { ...result, meta: { generatedAt: new Date().toISOString(), durationMs: Date.now() - startedAt } },
-      { headers: { 'Cache-Control': 'public, max-age=0, s-maxage=600, stale-while-revalidate=21600' } }
+      { headers: { 'Cache-Control': 'public, max-age=0, s-maxage=60, stale-while-revalidate=1800' } }
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'unknown';

@@ -37,5 +37,7 @@ export async function memo<T>(
   return value;
 }
 
+export const TTL_30M = 30 * 60 * 1000;
+export const TTL_1H = 60 * 60 * 1000;
 export const TTL_6H = 6 * 60 * 60 * 1000;
 export const TTL_24H = 24 * 60 * 60 * 1000;

@@ -168,7 +168,6 @@ export default function Dashboard({ freshness }: { freshness: string }) {
         refreshing={refreshing}
         startDate={data?.startDate}
         endDate={data?.endDate}
-        windowDays={60}
       />
 
       {error && (
@@ -182,7 +181,7 @@ export default function Dashboard({ freshness }: { freshness: string }) {
 
       {loading && !data && (
         <div className="card mt-4 p-8 text-center text-sm" style={{ color: '#6b7280' }}>
-          Carregando do Shopify… (~30s na primeira carga; cache 6h depois)
+          Carregando dados de hoje do Shopify… (cache 30min depois da 1ª carga)
         </div>
       )}
 

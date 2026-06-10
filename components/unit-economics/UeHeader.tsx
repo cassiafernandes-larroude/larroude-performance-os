@@ -10,7 +10,6 @@ interface Props {
   refreshing: boolean;
   startDate?: string;
   endDate?: string;
-  windowDays: number;
 }
 
 // Mesmas constantes de estilo do main-dashboard/Header.tsx
@@ -40,8 +39,15 @@ export default function UeHeader({
   refreshing,
   startDate,
   endDate,
-  windowDays,
 }: Props) {
+  const today = endDate
+    ? new Date(endDate + 'T00:00:00Z').toLocaleDateString('en-US', {
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+        timeZone: 'UTC',
+      })
+    : '';
   return (
     <header className="mb-6 no-print-bg">
       {/* Row 1: title + PDF/Refresh */}
@@ -109,17 +115,17 @@ export default function UeHeader({
         })}
       </div>
 
-      {/* Row 3: subtitle + range */}
+      {/* Row 3: subtitle */}
       <div className="pb-4">
         <p className="text-sm" style={{ color: 'var(--ink-soft)' }}>
-          Per-unit contribution margin · Shopify Admin + Meta API + Supermetrics · window{' '}
+          Per-unit contribution margin · Shopify Admin + Meta API + Supermetrics · data from{' '}
           <span className="font-semibold" style={{ color: 'var(--ink)' }}>
-            {fmtRange(startDate, endDate)}
+            {today}
           </span>
         </p>
       </div>
 
-      {/* Row 4: window card (read-only — UE eh per-unit, sem filtro de periodo) */}
+      {/* Row 4: today card (read-only — UE eh per-unit, sempre "hoje") */}
       <div
         className="px-5 py-3 rounded-2xl flex flex-wrap items-center gap-3 no-print"
         style={{ background: 'white', border: '0.8px solid #e5e3de' }}
@@ -128,21 +134,18 @@ export default function UeHeader({
           className="text-[11px] uppercase tracking-[0.12em] font-semibold mr-1"
           style={{ color: '#9ca3af' }}
         >
-          Window
+          Period
         </span>
         <span className={`${PILL_BASE} bg-[#1a1a1a] text-white px-3 sm:px-5 py-1.5 sm:py-2`}>
-          Last {windowDays} days
+          Today
         </span>
         <div className="h-7 w-px mx-1" style={{ background: '#e5e3de' }} />
-        <span
-          className="text-[13px] font-medium px-3"
-          style={{ color: 'var(--ink)' }}
-        >
-          {fmtRange(startDate, endDate)}
+        <span className="text-[13px] font-medium px-3" style={{ color: 'var(--ink)' }}>
+          {today}
         </span>
         <div className="ml-auto" />
         <span className="text-[12px] italic" style={{ color: '#9ca3af' }}>
-          Per-unit averages — period not selectable
+          Live · refreshes every 30 min
         </span>
       </div>
     </header>
