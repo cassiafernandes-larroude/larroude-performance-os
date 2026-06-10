@@ -43,6 +43,7 @@ const ORDERS_QUERY = `
           tags
           cancelledAt
           test
+          displayFinancialStatus
           paymentGatewayNames
           customer { id tags }
           totalPriceSet { shopMoney { amount currencyCode } }
@@ -95,6 +96,7 @@ interface OrderNode {
   tags: string[];
   cancelledAt: string | null;
   test: boolean;
+  displayFinancialStatus: string | null;
   paymentGatewayNames: string[];
   customer: { id: string; tags: string[] } | null;
   totalPriceSet: { shopMoney: { amount: string; currencyCode: string } };
@@ -178,6 +180,9 @@ const EXCLUDED_TAGS = /b2b|wholesale|marketplace|redo|influencer/i;
 function isExcluded(order: OrderNode): boolean {
   if (order.cancelledAt) return true;
   if (order.test) return true;
+  // Filtra financial_status no JS (Shopify search NÃO suporta NOT(...) syntax)
+  const fs = (order.displayFinancialStatus || '').toUpperCase();
+  if (fs === 'VOIDED' || fs === 'REFUNDED') return true;
   const tagsCombined = (order.tags || []).concat(order.customer?.tags || []).join(' ').toLowerCase();
   if (EXCLUDED_TAGS.test(tagsCombined)) return true;
   return false;
@@ -276,7 +281,9 @@ export async function getUnitEconomicsFromShopify(
   endDate: string
 ): Promise<UnitEconomicsRaw> {
   const currency: 'USD' | 'BRL' = market === 'US' ? 'USD' : 'BRL';
-  const queryFilter = `created_at:>=${startDate}T00:00:00Z AND created_at:<=${endDate}T23:59:59Z AND -tag:b2b AND -tag:wholesale AND -tag:marketplace AND -tag:redo AND -tag:influencer AND financial_status:NOT(voided OR refunded)`;
+  // NOTA: Shopify search NÃO suporta `financial_status:NOT(...)` — filtra no JS via displayFinancialStatus.
+  // Tags B2B/wholesale/marketplace/redo/influencer ja filtradas pelo Shopify search.
+  const queryFilter = `created_at:>=${startDate}T00:00:00Z AND created_at:<=${endDate}T23:59:59Z AND -tag:b2b AND -tag:wholesale AND -tag:marketplace AND -tag:redo AND -tag:influencer`;
 
   const motherBuckets = new Map<string, BucketAcc>();
   const variantBuckets = new Map<string, BucketAcc>(); // key: mother|variant
