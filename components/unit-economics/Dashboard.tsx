@@ -158,22 +158,6 @@ export default function Dashboard({ freshness }: { freshness: string }) {
     }));
   }, [selectedVariants, assumptions, state.market, data]);
 
-  // Window label — formata "May 13 - Jun 12, 2026" se temos data; senão "last 60 days"
-  const windowLabel = useMemo(() => {
-    if (data?.startDate && data?.endDate) {
-      const s = new Date(data.startDate + 'T00:00:00Z');
-      const e = new Date(data.endDate + 'T00:00:00Z');
-      const opts: Intl.DateTimeFormatOptions = {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-        timeZone: 'UTC',
-      };
-      return `${s.toLocaleDateString('en-US', opts)} → ${e.toLocaleDateString('en-US', opts)}`;
-    }
-    return 'last 60 days';
-  }, [data?.startDate, data?.endDate]);
-
   return (
     <div className="main-dashboard-root">
       <UeHeader
@@ -182,7 +166,9 @@ export default function Dashboard({ freshness }: { freshness: string }) {
         onRefresh={handleRefresh}
         onExportPdf={handleExportPdf}
         refreshing={refreshing}
-        windowLabel={windowLabel}
+        startDate={data?.startDate}
+        endDate={data?.endDate}
+        windowDays={60}
       />
 
       {error && (

@@ -283,7 +283,7 @@ export async function getUnitEconomicsFromShopify(
   market: Market,
   startDate: string,
   endDate: string,
-  timeoutMs: number = 50_000 // 50s — Vercel maxDuration 60s, deixa 10s pra outros await + JSON.stringify
+  timeoutMs: number = 58_000 // 58s — Vercel Pro maxDuration 300s; conservador pra deixar margem pra Promise.all (Meta+Google) + JSON.stringify
 ): Promise<UnitEconomicsRaw> {
   const t0 = Date.now();
   const currency: 'USD' | 'BRL' = market === 'US' ? 'USD' : 'BRL';
