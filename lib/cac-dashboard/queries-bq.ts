@@ -51,31 +51,33 @@ async function getSpendByDay(
     return null;
   }
 
-  const [googleRows, apiMeta] = await Promise.all([
-    // Google: SEMPRE Supermetrics (regra Cassia)
-    queryGoogleAdsViaSupermetrics(market as MainMarket, startDate, endDate).catch((err) => {
-      console.error('[cac-bq] Supermetrics Google failed:', err);
-      return [];
-    }),
-    // Meta: API direta — TODAS as 5 contas oficiais (US x3, BR x3 com FX USD->BRL)
-    // SEM fallback Supermetrics (regra Cassia: Meta priorizar API direto).
-    // Fallback duplicava spend (commit 18712fb mostrou +$20k extra no CAC vs Main).
-    queryMetaAdsDaily(market as MainMarket, startDate, endDate)
-      .then((rows) => {
-        const map = new Map<string, number>();
-        for (const r of rows) {
-          const iso = normalizeISODate((r as any).date);
-          if (!iso) continue;
-          const v = Number((r as any).spend) || 0;
-          map.set(iso, (map.get(iso) || 0) + v);
-        }
-        return map;
-      })
-      .catch((err) => {
-        console.error('[cac-bq] Meta Graph API direct failed:', err);
-        return new Map<string, number>();
-      }),
-  ]);
+  // Serializa Google primeiro (Supermetrics pode ter rate limit em chamadas paralelas).
+  // Google: SEMPRE Supermetrics (regra Cassia)
+  const googleRows = await queryGoogleAdsViaSupermetrics(market as MainMarket, startDate, endDate).catch((err) => {
+    console.error('[cac-bq] Supermetrics Google failed:', err);
+    return [] as Array<{ date: string; spend: number }>;
+  });
+  console.log(`[cac-bq] Google Supermetrics returned ${googleRows.length} rows for ${market} ${startDate}..${endDate}`);
+  if (googleRows.length > 0) {
+    console.log(`[cac-bq] Google first row:`, JSON.stringify(googleRows[0]));
+  }
+
+  // Meta: API direta — TODAS as 5 contas oficiais (US x3, BR x3 com FX USD->BRL)
+  const apiMeta = await queryMetaAdsDaily(market as MainMarket, startDate, endDate)
+    .then((rows) => {
+      const map = new Map<string, number>();
+      for (const r of rows) {
+        const iso = normalizeISODate((r as any).date);
+        if (!iso) continue;
+        const v = Number((r as any).spend) || 0;
+        map.set(iso, (map.get(iso) || 0) + v);
+      }
+      return map;
+    })
+    .catch((err) => {
+      console.error('[cac-bq] Meta Graph API direct failed:', err);
+      return new Map<string, number>();
+    });
 
   // Google — apenas Supermetrics, com normalize de data
   const googleByDay = new Map<string, number>();
