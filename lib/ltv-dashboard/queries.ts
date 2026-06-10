@@ -42,6 +42,11 @@ import { getGoogleAdsSpendByDay } from './connectors/google-ads';
 import { motherSkuOf, productTypeOf } from './connectors/shopify';
 import { topLtvMinCustomers } from './thresholds';
 import { getMetaSpendAdjustment } from '@/lib/shared/meta-adjustments';
+import {
+  queryGoogleAdsViaSupermetrics,
+  queryGoogleAdsTotalViaSupermetrics,
+} from '@/lib/main-dashboard/supermetrics';
+import type { Market as MainMarket } from '@/lib/main-dashboard/types';
 
 export { topLtvMinCustomers };
 
@@ -463,21 +468,23 @@ export async function getLtvKpiSummary(
   });
   const newCustomers = Number(newRows[0]?.new_customers ?? 0);
 
-  // Ad spend (best-effort)
+  // Ad spend (best-effort) — alinhado com Main Dashboard + CAC native:
+  //   Meta: Meta Graph API direta (todas 5 contas) via getMetaSpendByDay
+  //   Google: Supermetrics (regra Cassia)
   let metaSpend = 0;
   let googleSpend = 0;
-  let googleSource: 'api' | 'bigquery_fallback' | 'unavailable' = 'unavailable';
+  let googleSource: 'api' | 'bigquery_fallback' | 'unavailable' = 'api';
   try {
-    const [metaMap, googleResult] = await Promise.all([
+    const [metaMap, googleTotal] = await Promise.all([
       getMetaSpendByDay(market, startDate, endDate),
-      getGoogleAdsSpendByDay(market, startDate, endDate).catch((e) => {
-        console.warn('[ltv] google-ads failed:', e instanceof Error ? e.message : e);
-        return { data: new Map<string, number>(), source: 'unavailable' as const };
+      queryGoogleAdsTotalViaSupermetrics(market as MainMarket, startDate, endDate).catch((e) => {
+        console.warn('[ltv] google supermetrics failed:', e instanceof Error ? e.message : e);
+        googleSource = 'unavailable';
+        return { spend: 0, clicks: 0, impressions: 0, conversions: 0, conversion_value: 0 };
       }),
     ]);
     metaSpend = sumMap(metaMap);
-    googleSpend = sumMap(googleResult.data);
-    googleSource = googleResult.source;
+    googleSpend = Number(googleTotal.spend) || 0;
   } catch (e) {
     console.warn('[ltv] meta-ads failed:', e instanceof Error ? e.message : e);
   }
@@ -704,20 +711,22 @@ export async function getMonthlyLtvSeries(market: Market): Promise<MonthlyLtvPoi
   const metaByMonth = new Map<string, number>();
   const googleByMonth = new Map<string, number>();
   try {
-    const [metaDaily, googleResult] = await Promise.all([
+    const [metaDaily, googleDaily] = await Promise.all([
       getMetaSpendByDay(market, startISO, endISO),
-      getGoogleAdsSpendByDay(market, startISO, endISO).catch(() => ({
-        data: new Map<string, number>(),
-        source: 'unavailable' as const,
-      })),
+      // Google via Supermetrics (alinhado com Main + CAC native)
+      queryGoogleAdsViaSupermetrics(market as MainMarket, startISO, endISO).catch((e) => {
+        console.warn('[monthly] google supermetrics failed:', e instanceof Error ? e.message : e);
+        return [] as Array<{ date: string; spend: number }>;
+      }),
     ]);
     for (const [date, value] of metaDaily) {
       const ym = date.slice(0, 7);
       metaByMonth.set(ym, (metaByMonth.get(ym) ?? 0) + value);
     }
-    for (const [date, value] of googleResult.data) {
-      const ym = date.slice(0, 7);
-      googleByMonth.set(ym, (googleByMonth.get(ym) ?? 0) + value);
+    for (const row of googleDaily) {
+      const ym = String(row.date).slice(0, 7);
+      const v = Number(row.spend) || 0;
+      googleByMonth.set(ym, (googleByMonth.get(ym) ?? 0) + v);
     }
   } catch (e) {
     console.warn('[monthly] meta/google spend failed:', e instanceof Error ? e.message : e);
