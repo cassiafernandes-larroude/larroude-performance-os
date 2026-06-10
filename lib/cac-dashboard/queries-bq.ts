@@ -10,6 +10,7 @@
  * BQ all_channels_daily como fallback.
  */
 
+import { runQuery } from './bigquery';
 import { queryDailyCac } from '@/lib/main-dashboard/queries';
 import {
   queryGoogleAdsViaSupermetrics,
