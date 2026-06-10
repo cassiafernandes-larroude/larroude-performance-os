@@ -185,17 +185,11 @@ export async function getUnitEconomics(
       LEFT JOIN refunds_per_line r
         ON r.order_id = i.order_id AND r.line_item_id = i.line_item_id
     ),
-    items_with_cogs AS (
-      SELECT
-        i.*,
-        IFNULL(inv.cost, 0) AS unit_cogs
-      FROM items i
-      LEFT JOIN \`larroude-data-prod.${dataset}.inventory_items\` inv
-        ON inv.sku = i.variant_sku
-    ),
     -- Exclui lixo de SKU (x-*, puramente numérico)
+    -- COGS NÃO vem do BQ (policy tag PII bloqueia inventory_items.cost) —
+    -- enriquecido no servidor via Shopify Admin GraphQL (lib/unit-economics/shopify-cogs.ts)
     items_clean AS (
-      SELECT * FROM items_with_cogs
+      SELECT i.*, CAST(0 AS NUMERIC) AS unit_cogs FROM items i
       WHERE mother_sku IS NOT NULL
         AND NOT REGEXP_CONTAINS(LOWER(mother_sku), r'^x-')
         AND NOT REGEXP_CONTAINS(mother_sku, r'^[0-9]+$')

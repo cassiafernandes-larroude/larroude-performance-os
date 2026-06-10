@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUnitEconomics, type Market } from '@/lib/unit-economics/queries';
+import { getCogsBySku } from '@/lib/unit-economics/shopify-cogs';
 import { queryMetaAdsTotal } from '@/lib/main-dashboard/meta-ads';
 import { queryGoogleAdsTotalViaSupermetrics } from '@/lib/main-dashboard/supermetrics';
 import { getMetaSpendAdjustment } from '@/lib/shared/meta-adjustments';
@@ -32,11 +33,12 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
   try {
     const cacheKey = `ue:${market}:${start}:${end}`;
     const result = await memo(cacheKey, TTL_6H, async () => {
-      // 1. BQ Shopify — cascata por unidade
+      // 1. BQ Shopify — cascata por unidade (SEM COGS — policy tag PII bloqueia BQ)
       const bq = await getUnitEconomics(market, start, end);
 
-      // 2. Marketing total = Meta API + Google Supermetrics + ajuste manual
-      const [metaTotal, googleTotal] = await Promise.all([
+      // 2. Em paralelo: Marketing + COGS via Shopify Admin GraphQL
+      const allSkus = bq.variants.map((v) => v.variantSku).filter((s): s is string => !!s);
+      const [metaTotal, googleTotal, cogsBySku] = await Promise.all([
         queryMetaAdsTotal(market as MainMarket, start, end).catch((err) => {
           console.error('[ue] Meta API failed:', err);
           return { spend: 0 } as any;
@@ -45,26 +47,50 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
           console.error('[ue] Google Supermetrics failed:', err);
           return { spend: 0 } as any;
         }),
+        getCogsBySku(market, allSkus).catch((err) => {
+          console.error('[ue] Shopify COGS failed:', err);
+          return new Map<string, number>();
+        }),
       ]);
+
+      // 3. Enriquecer cada variant com COGS via Shopify (BQ retorna 0 placeholder)
+      for (const v of bq.variants) {
+        if (v.variantSku && cogsBySku.has(v.variantSku)) {
+          v.unitCogs = cogsBySku.get(v.variantSku)!;
+        }
+      }
+      // Re-calcular unit_cogs do mother SKU = média ponderada das variants
+      const variantsByMother = new Map<string, typeof bq.variants>();
+      for (const v of bq.variants) {
+        const arr = variantsByMother.get(v.motherSku) ?? [];
+        arr.push(v);
+        variantsByMother.set(v.motherSku, arr);
+      }
+      for (const p of bq.products) {
+        const vs = variantsByMother.get(p.motherSku) ?? [];
+        const totalUnitsM = vs.reduce((s, v) => s + v.totalUnits, 0);
+        const totalCogsM = vs.reduce((s, v) => s + v.unitCogs * v.totalUnits, 0);
+        if (totalUnitsM > 0) p.unitCogs = totalCogsM / totalUnitsM;
+      }
 
       const metaAdj = getMetaSpendAdjustment(market, start, end);
       const metaSpend = (Number(metaTotal.spend) || 0) + metaAdj;
       const googleSpend = Number(googleTotal.spend) || 0;
       const totalMarketingSpend = metaSpend + googleSpend;
-
-      // 3. Rateio marketing por unidade (sobre total units do período)
       const marketingPerUnit = bq.totalUnits > 0 ? totalMarketingSpend / bq.totalUnits : 0;
-      // Cobertura: aqui assumimos 100% das unidades têm spend rateado (não há
-      // atribuição por produto). Se quiser atribuição real, adicionar depois.
-      const marketingCoverage = 1.0;
+
+      // Cobertura COGS = % de variants com cost preenchido
+      const variantsWithCogs = bq.variants.filter((v) => v.unitCogs > 0).length;
+      const cogsCoverage = bq.variants.length > 0 ? variantsWithCogs / bq.variants.length : 0;
 
       return {
         ...bq,
         totalMarketingSpend,
         metaSpend,
         googleSpend,
-        marketingCoverage,
+        marketingCoverage: 1.0,
         marketingPerUnit,
+        cogsCoverage,
       };
     });
 
