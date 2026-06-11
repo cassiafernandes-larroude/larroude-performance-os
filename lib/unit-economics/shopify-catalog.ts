@@ -89,17 +89,24 @@ interface CatalogAcc {
   motherSku: string;
   productName: string;
   totalPrice: number;
+  totalCompareAt: number;
+  compareAtVariantCount: number;
   totalCost: number;
   variantCount: number;
   costVariantCount: number;
-  variants: Map<string, { price: number; cost: number; productName: string }>;
+  variants: Map<string, { price: number; compareAtPrice: number; cost: number; productName: string }>;
 }
 
 export interface CatalogEntry {
   motherSku: string;
   variantSku: string | null;
   productName: string;
+  /** variant.price (preço efetivo cobrado — pode estar com desconto site) */
   unitPrice: number;
+  /** variant.compareAtPrice (preço cheio "de" - quando há desconto site). 0 se não há. */
+  unitCompareAtPrice: number;
+  /** Preço "list" pra display: compareAtPrice se > 0, senão price. Pra cascata partir do cheio. */
+  unitListPrice: number;
   unitCogs: number;
 }
 
@@ -152,7 +159,11 @@ export async function getShopifyCatalog(
         if (/^x-/i.test(mSku) || /^[0-9]+$/.test(mSku)) continue;
 
         const price = parseFloat(v.price || '0') || 0;
+        const compareAtPrice = parseFloat(v.compareAtPrice || '0') || 0;
         const cost = parseFloat(v.inventoryItem?.unitCost?.amount || '0') || 0;
+        // listPrice = preço CHEIO ("de"). Quando há desconto site (BR), compareAtPrice
+        // tem o preço cheio e price tem o efetivo. Fallback pra price quando sem desconto.
+        const listPrice = compareAtPrice > 0 ? compareAtPrice : price;
 
         let acc = motherBuckets.get(mSku);
         if (!acc) {
@@ -160,6 +171,8 @@ export async function getShopifyCatalog(
             motherSku: mSku,
             productName: p.title || mSku,
             totalPrice: 0,
+            totalCompareAt: 0,
+            compareAtVariantCount: 0,
             totalCost: 0,
             variantCount: 0,
             costVariantCount: 0,
@@ -169,12 +182,17 @@ export async function getShopifyCatalog(
         }
         acc.totalPrice += price;
         acc.variantCount += 1;
+        if (compareAtPrice > 0) {
+          acc.totalCompareAt += compareAtPrice;
+          acc.compareAtVariantCount += 1;
+        }
         if (cost > 0) {
           acc.totalCost += cost;
           acc.costVariantCount += 1;
         }
         acc.variants.set(variantSku, {
           price,
+          compareAtPrice,
           cost,
           productName: p.title || variantSku,
         });
@@ -183,6 +201,8 @@ export async function getShopifyCatalog(
           variantSku,
           productName: p.title || variantSku,
           unitPrice: price,
+          unitCompareAtPrice: compareAtPrice,
+          unitListPrice: listPrice,
           unitCogs: cost,
         });
       }
@@ -192,13 +212,21 @@ export async function getShopifyCatalog(
     cursor = products.pageInfo.endCursor;
   }
 
-  const productsOut: CatalogEntry[] = Array.from(motherBuckets.values()).map((acc) => ({
-    motherSku: acc.motherSku,
-    variantSku: null,
-    productName: acc.productName,
-    unitPrice: acc.variantCount > 0 ? acc.totalPrice / acc.variantCount : 0,
-    unitCogs: acc.costVariantCount > 0 ? acc.totalCost / acc.costVariantCount : 0,
-  }));
+  const productsOut: CatalogEntry[] = Array.from(motherBuckets.values()).map((acc) => {
+    const avgPrice = acc.variantCount > 0 ? acc.totalPrice / acc.variantCount : 0;
+    const avgCompareAt =
+      acc.compareAtVariantCount > 0 ? acc.totalCompareAt / acc.compareAtVariantCount : 0;
+    const listPrice = avgCompareAt > 0 ? avgCompareAt : avgPrice;
+    return {
+      motherSku: acc.motherSku,
+      variantSku: null,
+      productName: acc.productName,
+      unitPrice: avgPrice,
+      unitCompareAtPrice: avgCompareAt,
+      unitListPrice: listPrice,
+      unitCogs: acc.costVariantCount > 0 ? acc.totalCost / acc.costVariantCount : 0,
+    };
+  });
 
   console.log(`[ue-catalog ${market}] ${pages} pages, ${productsOut.length} products, ${variantsOut.length} variants, partial=${partial}, ${Date.now() - t0}ms`);
 

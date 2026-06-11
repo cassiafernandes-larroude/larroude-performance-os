@@ -36,7 +36,7 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
   const { start, end } = defaultWindow();
   const startedAt = Date.now();
   try {
-    const cacheKey = `ue:${market}:${start}:${end}:d1-cat-ret30d-exch30d-pix30d-coupon-rate30d:v9`;
+    const cacheKey = `ue:${market}:${start}:${end}:listPrice-cat-ret30d-exch30d-pix30d-coupon-rate30d:v10`;
     const result = await memo(cacheKey, TTL_30M, async () => {
       // 6 fontes em paralelo:
       // 1) Shopify orders D-1 (sells)
@@ -111,11 +111,20 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
         const exchangeRate = exch?.exchangeRate ?? 0;
         const pixShare30d =
           pix && pix.totalQty > 0 ? pix.pixShare : returns30d.pixShareOverall;
+        // Cassia 2026-06-11: "preço base está puxando o preço com o desconto atual do site, não full price"
+        // Use compareAtPrice (preço cheio) como base; diferença pra price entra como desconto site nativo.
+        const listPrice = cat.unitListPrice;
+        const sitePrice = cat.unitPrice;
+        const siteDiscount = listPrice > sitePrice ? listPrice - sitePrice : 0;
         if (sell) {
+          // sell.unitGrossRevenue é o preço médio efetivamente vendido D-1.
+          // Substituir por listPrice (cheio) e somar siteDiscount + discount Shopify (cupons) ao unitDiscount.
           return {
             ...sell,
             productName: sell.productName || cat.productName,
-            unitRefund: sell.unitGrossRevenue * returnRate,
+            unitGrossRevenue: listPrice,
+            unitDiscount: sell.unitDiscount + siteDiscount,
+            unitRefund: listPrice * returnRate,
             exchangeRate,
             returnRate30d: returnRate,
             returnTotalQty30d,
@@ -129,12 +138,12 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
           productName: cat.productName,
           totalUnits: 0,
           totalOrders: 0,
-          unitGrossRevenue: cat.unitPrice,
-          unitDiscount: 0,
+          unitGrossRevenue: listPrice,
+          unitDiscount: siteDiscount,
           unitTax: 0,
           unitDuties: 0,
           unitCogs: cat.unitCogs,
-          unitRefund: cat.unitPrice * returnRate,
+          unitRefund: listPrice * returnRate,
           exchangeRate,
           returnRate30d: returnRate,
           returnTotalQty30d,
@@ -156,11 +165,16 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
         const exchangeRate = exch?.exchangeRate ?? 0;
         const pixShare30d =
           pix && pix.totalQty > 0 ? pix.pixShare : returns30d.pixShareOverall;
+        const listPrice = cat.unitListPrice;
+        const sitePrice = cat.unitPrice;
+        const siteDiscount = listPrice > sitePrice ? listPrice - sitePrice : 0;
         if (sell) {
           return {
             ...sell,
             productName: sell.productName || cat.productName,
-            unitRefund: sell.unitGrossRevenue * returnRate,
+            unitGrossRevenue: listPrice,
+            unitDiscount: sell.unitDiscount + siteDiscount,
+            unitRefund: listPrice * returnRate,
             exchangeRate,
             returnRate30d: returnRate,
             returnTotalQty30d,
@@ -174,12 +188,12 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
           productName: cat.productName,
           totalUnits: 0,
           totalOrders: 0,
-          unitGrossRevenue: cat.unitPrice,
-          unitDiscount: 0,
+          unitGrossRevenue: listPrice,
+          unitDiscount: siteDiscount,
           unitTax: 0,
           unitDuties: 0,
           unitCogs: cat.unitCogs,
-          unitRefund: cat.unitPrice * returnRate,
+          unitRefund: listPrice * returnRate,
           exchangeRate,
           returnRate30d: returnRate,
           returnTotalQty30d,
