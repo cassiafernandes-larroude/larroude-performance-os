@@ -78,14 +78,6 @@ export default function AssumptionsPanel({ assumptions, market, onChange, onRese
           step={1}
         />
         <Field
-          label="Custo de troca"
-          prefix={currency}
-          suffix="/un"
-          value={assumptions.exchangePerUnit}
-          onChange={(n) => update('exchangePerUnit', n)}
-          step={1}
-        />
-        <Field
           label="Taxa de cartão"
           suffix="%"
           value={assumptions.cardFeePct * 100}
@@ -93,23 +85,14 @@ export default function AssumptionsPanel({ assumptions, market, onChange, onRese
           step={0.1}
         />
         {market === 'BR' && (
-          <>
-            <Field
-              label="% vendas PIX"
-              suffix="%"
-              value={(assumptions.pixSharePctOverride ?? 0) * 100}
-              onChange={(n) => update('pixSharePctOverride', n === 0 ? null : n / 100)}
-              step={1}
-              hint="0 = usa real 30d Shopify"
-            />
-            <Field
-              label="Desconto PIX"
-              suffix="%"
-              value={assumptions.pixDiscountPct * 100}
-              onChange={(n) => update('pixDiscountPct', n / 100)}
-              step={1}
-            />
-          </>
+          <Field
+            label="Desconto PIX"
+            suffix="%"
+            value={assumptions.pixDiscountPct * 100}
+            onChange={(n) => update('pixDiscountPct', n / 100)}
+            step={1}
+            hint="% PIX vem real do Shopify 30d"
+          />
         )}
       </div>
     </section>

@@ -38,7 +38,7 @@ interface ApiResponse {
   meta?: { generatedAt: string; durationMs: number };
 }
 
-const STATE_KEY = 'lpos-ue-state-v2'; // bump from v1 (schema mudou — sem period)
+const STATE_KEY = 'lpos-ue-state-v3'; // v3 (2026-06-11): removidos pixSharePctOverride e exchangePerUnit das premissas
 
 interface State {
   market: Market;

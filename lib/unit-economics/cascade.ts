@@ -111,9 +111,8 @@ export function computeCascade(
   const priceAfterDiscount = priceAfterBaseDiscount - couponDiscount;
 
   // 3. PIX blend (BR apenas): receita efetiva ponderada
-  const pixShare = market === 'BR'
-    ? assumptions.pixSharePctOverride ?? product.pixShare
-    : 0;
+  //    pixShare SEMPRE vem do real Shopify 30d (regra Cassia 2026-06-11).
+  const pixShare = market === 'BR' ? product.pixShare : 0;
   const pixDisc = market === 'BR' ? assumptions.pixDiscountPct : 0;
   const effectiveRevenue = priceAfterDiscount * (pixShare * (1 - pixDisc) + (1 - pixShare));
 
@@ -136,14 +135,10 @@ export function computeCascade(
   // 8. Premissas puras
   const shipping = assumptions.shippingPerUnit;
   const fulfillment = assumptions.fulfillmentPerUnit;
-  // Custo de troca (Cassia 2026-06-10): usa exchangeRate REAL dos ultimos 30d.
-  // Cada unidade trocada custa (shipping + fulfillment) extra (logistica reversa).
-  // Fallback pra premissa pura se nao houver dado real.
+  // Custo de troca (Cassia 2026-06-11): SEMPRE baseado em dados reais 30d.
+  // exchange = exchangeRate × (shipping + fulfillment). Sem premissa editavel.
   const exchangeRate = product.exchangeRate ?? 0;
-  const exchange =
-    exchangeRate > 0
-      ? exchangeRate * (shipping + fulfillment)
-      : assumptions.exchangePerUnit;
+  const exchange = exchangeRate * (shipping + fulfillment);
 
   // Margem de Contribuição Bruta
   const grossContributionMargin = netRevenue - cogs - duties - cardFee - shipping - fulfillment - exchange;
