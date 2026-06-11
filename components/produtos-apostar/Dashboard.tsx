@@ -232,7 +232,7 @@ export default function Dashboard() {
             );
           })}
         </div>
-        <p className="text-sm pb-3" style={{ color: 'var(--ink-soft)' }}>
+        <p className="text-sm pb-4" style={{ color: 'var(--ink-soft)' }}>
           Sugestões de produtos baseadas em performance dos{' '}
           <strong>últimos 28 dias</strong>
           {data && (
@@ -262,10 +262,10 @@ export default function Dashboard() {
       )}
 
       {data && (
-        <div className="grid grid-cols-1 lg:grid-cols-[360px,1fr] gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-[360px,1fr] gap-6 mt-6">
           {/* Lista de candidatos */}
           <aside
-            className="p-3 rounded-2xl"
+            className="p-4 sm:p-5 rounded-2xl"
             style={{ background: '#fff', border: '0.8px solid #e5e3de' }}
           >
             <div className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: '#6b7280' }}>
@@ -306,12 +306,12 @@ export default function Dashboard() {
           </aside>
 
           {/* Calculadora */}
-          <div className="space-y-4">
+          <div className="space-y-6">
             {selected && calc && (
               <>
                 {/* Header do produto */}
                 <section
-                  className="p-4 sm:p-5 rounded-2xl"
+                  className="p-5 rounded-2xl"
                   style={{ background: '#fff', border: '0.8px solid #e5e3de' }}
                 >
                   <div className="flex items-baseline justify-between gap-2 flex-wrap">
@@ -340,7 +340,7 @@ export default function Dashboard() {
 
                 {/* Inputs da aposta */}
                 <section
-                  className="p-4 sm:p-5 rounded-2xl"
+                  className="p-5 rounded-2xl"
                   style={{ background: '#fff', border: '0.8px solid #e5e3de' }}
                 >
                   <div className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: '#ec4899' }}>
@@ -402,7 +402,7 @@ export default function Dashboard() {
 
                 {/* Projeção */}
                 <section
-                  className="p-4 sm:p-5 rounded-2xl"
+                  className="p-5 rounded-2xl"
                   style={{ background: '#fff', border: '0.8px solid #e5e3de' }}
                 >
                   <div className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: '#ec4899' }}>
