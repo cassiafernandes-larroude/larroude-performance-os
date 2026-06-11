@@ -62,12 +62,6 @@ const navSections: NavSection[] = [
     ],
   },
   {
-    title: "INTELLIGENCE",
-    items: [
-      { href: "/diagnostics", label: "Diagnostics", icon: Microscope, badge: "4" },
-    ],
-  },
-  {
     title: "CONFIG",
     items: [
       { href: "/glossario", label: "KPI Glossary", icon: BookOpen },
