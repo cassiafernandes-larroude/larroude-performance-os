@@ -210,7 +210,7 @@ export default function Dashboard() {
             className="font-display text-[24px] sm:text-[28px] lg:text-[40px] font-bold leading-tight"
             style={{ color: 'var(--ink)', letterSpacing: '-0.025em' }}
           >
-            Produtos para Apostar
+            Products to Bet On
           </h1>
         </div>
         <div className="pb-3 flex items-center gap-2 no-print">
@@ -233,12 +233,11 @@ export default function Dashboard() {
           })}
         </div>
         <p className="text-sm pb-4" style={{ color: 'var(--ink-soft)' }}>
-          Sugestões de produtos baseadas em performance dos{' '}
-          <strong>últimos 28 dias</strong>
+          Product suggestions based on the <strong>last 28 days</strong> performance
           {data && (
             <span style={{ color: 'var(--ink)' }}>
               {' '}({data.startDate} → {data.endDate}) · {data.totalUnits28d.toLocaleString()}{' '}
-              unidades vendidas no period
+              units sold in the period
             </span>
           )}
         </p>
@@ -253,43 +252,43 @@ export default function Dashboard() {
           className="cursor-pointer p-4 text-[12px] font-semibold flex items-center gap-2 select-none"
           style={{ color: '#92400e' }}
         >
-          <span>ℹ️ Como o Score é calculado</span>
-          <span className="text-[10px] font-normal opacity-70">(clique para expandir)</span>
+          <span>ℹ️ How the Score is calculated</span>
+          <span className="text-[10px] font-normal opacity-70">(click to expand)</span>
         </summary>
         <div className="px-4 pb-4 text-[12px] space-y-2" style={{ color: '#78350f' }}>
           <div
             className="font-mono text-[11px] p-2 rounded"
             style={{ background: '#fff', border: '1px solid #fed7aa' }}
           >
-            score = units_28d (SEM Exchange-Only) × margemBrutaPct × (1 − returnRate30d) × (1 − exchangeRate30d × 0.3)
+            score = units_28d (excl. Exchange-Only) × grossMarginPct × (1 − returnRate30d) × (1 − exchangeRate30d × 0.3)
           </div>
           <ul className="space-y-1 pl-4 list-disc">
             <li>
-              <strong>units_28d (regulares)</strong> — unidades vendidas DTC nos últimos 28
-              dias, <strong>excluindo orders com tag Exchange-Only</strong> (Cassia 2026-06-11).
-              Orders Exchange-Only são operacionais de CX (cliente trocando outro produto) e
-              não respondem a campanhas de marketing — não devem inflar o ranking.
+              <strong>units_28d (regular)</strong> — DTC units sold in the last 28 days,
+              <strong> excluding orders tagged Exchange-Only</strong>. Exchange-Only orders are
+              CX operational (customer swapping another product) and don't respond to marketing
+              campaigns — they shouldn't inflate the ranking.
             </li>
             <li>
-              <strong>margemBrutaPct</strong> — (preço médio pago 28d − COGS catálogo) / preço
-              médio. Eficiência unitária ANTES de marketing/frete/fulfillment.
+              <strong>grossMarginPct</strong> — (28d avg price paid − catalog COGS) / avg price.
+              Unit efficiency BEFORE marketing/shipping/fulfillment.
             </li>
             <li>
-              <strong>(1 − returnRate30d)</strong> — penaliza devoluções (refunds). Métrica =
-              refunds_qty / total_qty nos últimos 30 dias.
+              <strong>(1 − returnRate30d)</strong> — penalizes refunds. Metric =
+              refunds_qty / total_qty in the last 30 days.
             </li>
             <li>
-              <strong>(1 − exchangeRate30d × 0.3)</strong> — penaliza trocas (tag Exchange-Only)
-              com peso 0.3 (troca custa logística mas não receita).
+              <strong>(1 − exchangeRate30d × 0.3)</strong> — penalizes exchanges (Exchange-Only)
+              with 0.3 weight (exchange costs logistics but not revenue).
             </li>
           </ul>
           <div className="text-[11px] italic opacity-90 pt-1">
-            ⚠ <strong>Disclaimer:</strong> o score é uma heurística, não uma garantia de retorno.
-            Volume passado não garante volume futuro — o cenário pode mudar com sazonalidade,
-            inventário, mix de campanhas e preço. A calculadora à direita projeta o cenário
-            financeiro DADAS as premissas inseridas (meta, ROAS, descontos); o time deve julgar
-            viabilidade operacional (estoque disponível, capacidade de fulfillment, prazo
-            realista). Não inclui custos fixos, salários, ferramentas ou impostos diretos.
+            ⚠ <strong>Disclaimer:</strong> the score is a heuristic, not a guaranteed return.
+            Past volume doesn't guarantee future volume — scenario may change with seasonality,
+            inventory, campaign mix and price. The calculator on the right projects the financial
+            scenario GIVEN the inputs (target, ROAS, discounts); the team must judge operational
+            feasibility (available stock, fulfillment capacity, realistic timeline). Doesn't
+            include fixed costs, salaries, tools or direct taxes.
           </div>
         </div>
       </details>
@@ -299,7 +298,7 @@ export default function Dashboard() {
           className="p-4 rounded-2xl"
           style={{ border: '0.8px solid #b3382f', background: '#fff5f5', color: '#b3382f' }}
         >
-          <strong>Erro:</strong> {error}
+          <strong>Error:</strong> {error}
         </div>
       )}
       {loading && !data && (
@@ -307,7 +306,7 @@ export default function Dashboard() {
           className="p-8 text-center text-sm rounded-2xl"
           style={{ background: '#fff', border: '0.8px solid #e5e3de', color: '#6b7280' }}
         >
-          Carregando candidatos do Shopify (28d)...
+          Loading candidates from Shopify (28d)...
         </div>
       )}
 
@@ -319,7 +318,7 @@ export default function Dashboard() {
             style={{ background: '#fff', border: '0.8px solid #e5e3de' }}
           >
             <div className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: '#6b7280' }}>
-              Top 30 candidatos (score)
+              Top 30 Candidates (by score)
             </div>
             <div className="overflow-y-auto thin-scroll" style={{ maxHeight: 700 }}>
               {data.candidates.slice(0, 30).map((c, idx) => {
@@ -343,9 +342,9 @@ export default function Dashboard() {
                       </span>
                     </div>
                     <div className="text-[10px] mt-0.5 flex items-center gap-2" style={{ color: '#6b7280' }}>
-                      <span>{c.units28d.toLocaleString()} un</span>
+                      <span>{c.units28d.toLocaleString()} units</span>
                       <span>·</span>
-                      <span>{pct(c.grossMarginPct, 0)} margem</span>
+                      <span>{pct(c.grossMarginPct, 0)} margin</span>
                       <span>·</span>
                       <span>{fmt(c.avgPricePaid28d, currency)}</span>
                     </div>
@@ -381,10 +380,10 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 text-[12px]">
-                    <Mini label="Vendidos 28d" value={`${selected.units28d.toLocaleString()} un`} />
-                    <Mini label="Margem bruta" value={pct(selected.grossMarginPct, 1)} />
-                    <Mini label="Devoluções 30d" value={pct(selected.returnRate30d, 1)} />
-                    <Mini label="Trocas 30d" value={pct(selected.exchangeRate30d, 1)} />
+                    <Mini label="Sold 28d" value={`${selected.units28d.toLocaleString()} units`} />
+                    <Mini label="Gross margin" value={pct(selected.grossMarginPct, 1)} />
+                    <Mini label="Returns 30d" value={pct(selected.returnRate30d, 1)} />
+                    <Mini label="Exchanges 30d" value={pct(selected.exchangeRate30d, 1)} />
                   </div>
                 </section>
 
@@ -394,42 +393,42 @@ export default function Dashboard() {
                   style={{ background: '#fff', border: '0.8px solid #e5e3de' }}
                 >
                   <div className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: '#ec4899' }}>
-                    🎯 Parâmetros da Aposta
+                    🎯 Bet Parameters
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
                     <Field
-                      label="Meta unidades"
+                      label="Units target"
                       value={state.metaUnits}
                       onChange={(n) => setState((s) => ({ ...s, metaUnits: n }))}
                       step={50}
                     />
                     <Field
-                      label="Prazo (dias)"
+                      label="Timeline (days)"
                       value={state.prazoDias}
                       onChange={(n) => setState((s) => ({ ...s, prazoDias: n }))}
                       step={1}
                     />
                     <Field
-                      label="ROAS desejado"
+                      label="Target ROAS"
                       value={state.roas}
                       onChange={(n) => setState((s) => ({ ...s, roas: n }))}
                       step={0.1}
                     />
                     <Field
-                      label="Desconto comercial %"
+                      label="Discount %"
                       value={state.descontoPct * 100}
                       onChange={(n) => setState((s) => ({ ...s, descontoPct: n / 100 }))}
                       step={1}
                     />
                     <Field
-                      label="Cupom adicional %"
+                      label="Extra coupon %"
                       value={state.cupomPct * 100}
                       onChange={(n) => setState((s) => ({ ...s, cupomPct: n / 100 }))}
                       step={1}
                     />
                     {state.market === 'BR' && (
                       <Field
-                        label="Desconto PIX %"
+                        label="PIX discount %"
                         value={state.pixDescontoPct * 100}
                         onChange={(n) => setState((s) => ({ ...s, pixDescontoPct: n / 100 }))}
                         step={1}
@@ -442,7 +441,7 @@ export default function Dashboard() {
                       step={1}
                     />
                     <Field
-                      label={`Frete ${currency === 'USD' ? '$' : 'R$'}/un`}
+                      label={`Shipping ${currency === 'USD' ? '$' : 'R$'}/un`}
                       value={state.shippingPerUnit}
                       onChange={(n) => setState((s) => ({ ...s, shippingPerUnit: n }))}
                       step={1}
@@ -456,79 +455,79 @@ export default function Dashboard() {
                   style={{ background: '#fff', border: '0.8px solid #e5e3de' }}
                 >
                   <div className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: '#ec4899' }}>
-                    📊 Projeção da Aposta
+                    📊 Bet Projection
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
                     <Big
-                      label="Investimento total"
+                      label="Total investment"
                       value={fmt(calc.investimento, currency, true)}
                       sub={`ROAS ${state.roas} · ${fmt(calc.mktPerUnit, currency)}/un`}
                       tone="alert"
                     />
                     <Big
-                      label="Receita projetada"
+                      label="Projected revenue"
                       value={fmt(calc.receitaProjetada, currency, true)}
-                      sub={`${state.metaUnits.toLocaleString()} un × ${fmt(calc.effectiveRevenue, currency)}`}
+                      sub={`${state.metaUnits.toLocaleString()} units × ${fmt(calc.effectiveRevenue, currency)}`}
                       tone="info"
                     />
                     <Big
-                      label="MC Bruta total"
+                      label="Total gross CM"
                       value={fmt(calc.mcbTotal, currency, true)}
                       sub={`${fmt(calc.mcbPerUnit, currency)}/un`}
                       tone={calc.mcbTotal > 0 ? 'success' : 'danger'}
                     />
                     <Big
-                      label="MC Líquida total"
+                      label="Total net CM"
                       value={fmt(calc.mclTotal, currency, true)}
-                      sub={`${fmt(calc.mclPerUnit, currency)}/un · após mkt`}
+                      sub={`${fmt(calc.mclPerUnit, currency)}/un · after mkt`}
                       tone={calc.mclTotal > 0 ? 'success' : 'danger'}
                     />
                     <Big
-                      label="Unidades/dia"
+                      label="Units/day"
                       value={Math.round(calc.unitsPerDay).toLocaleString()}
-                      sub={`Hoje: ${calc.unitsPerDayCurrent.toFixed(1)}/dia · ${calc.upliftPct > 0 ? '+' : ''}${pct(calc.upliftPct, 0)}`}
+                      sub={`Today: ${calc.unitsPerDayCurrent.toFixed(1)}/day · ${calc.upliftPct > 0 ? '+' : ''}${pct(calc.upliftPct, 0)}`}
                       tone="info"
                     />
                     <Big
-                      label="Preço efetivo"
+                      label="Effective price"
                       value={fmt(calc.effectiveRevenue, currency)}
-                      sub={`De ${fmt(calc.listPrice, currency)}${state.market === 'BR' && calc.pixShare > 0 ? ` · PIX ${pct(calc.pixShare, 0)}` : ''}`}
+                      sub={`From ${fmt(calc.listPrice, currency)}${state.market === 'BR' && calc.pixShare > 0 ? ` · PIX ${pct(calc.pixShare, 0)}` : ''}`}
                       tone="neutral"
                     />
                     <Big
-                      label="COGS total"
+                      label="Total COGS"
                       value={fmt(calc.cogsTotal, currency, true)}
                       sub={`${fmt(calc.cogs, currency)}/un`}
                       tone="neutral"
                     />
                     <Big
-                      label="Margem líquida"
+                      label="Net margin"
                       value={
                         calc.effectiveRevenue > 0
                           ? pct(calc.mclPerUnit / calc.effectiveRevenue, 1)
                           : '—'
                       }
-                      sub="MC Líq / Receita"
+                      sub="Net CM / Revenue"
                       tone={calc.mclPerUnit > 0 ? 'success' : 'danger'}
                     />
                   </div>
 
-                  {/* Veredito */}
+                  {/* Verdict */}
                   <div className="mt-4 p-3 rounded-lg" style={{ background: '#f9fafb' }}>
                     <div className="text-[12px]" style={{ color: '#374151' }}>
                       {calc.mclTotal > 0 ? (
                         <>
-                          ✅ <strong>Aposta lucrativa:</strong> investindo{' '}
-                          {fmt(calc.investimento, currency)} a ROAS {state.roas}, projeção de{' '}
-                          {fmt(calc.mclTotal, currency)} de MC Líquida em {state.prazoDias} dias.
+                          ✅ <strong>Profitable bet:</strong> investing{' '}
+                          {fmt(calc.investimento, currency)} at ROAS {state.roas}, projection of{' '}
+                          {fmt(calc.mclTotal, currency)} Net CM in {state.prazoDias} days.
                           Volume {pct(calc.upliftPct, 0)}{' '}
-                          {calc.upliftPct > 0 ? 'acima' : 'abaixo'} do baseline 28d.
+                          {calc.upliftPct > 0 ? 'above' : 'below'} 28d baseline.
                         </>
                       ) : (
                         <>
-                          ⚠ <strong>Aposta no vermelho:</strong> mesmo no ROAS {state.roas}, MC
-                          Líquida ficaria {fmt(calc.mclTotal, currency)}. Revisar: reduzir
-                          desconto, subir ROAS alvo, ou negociar COGS.
+                          ⚠ <strong>Bet in the red:</strong> even at ROAS {state.roas}, Net CM
+                          would be {fmt(calc.mclTotal, currency)}. Review: cut discount, raise
+                          target ROAS, or negotiate COGS.
                         </>
                       )}
                     </div>

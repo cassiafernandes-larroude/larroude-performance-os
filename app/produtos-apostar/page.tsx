@@ -1,7 +1,7 @@
 import Dashboard from '@/components/produtos-apostar/Dashboard';
 
 export const metadata = {
-  title: 'Produtos para Apostar · Larroudé Performance OS',
+  title: 'Products to Bet On · Larroudé Performance OS',
 };
 
 export const dynamic = 'force-dynamic';

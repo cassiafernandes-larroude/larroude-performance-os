@@ -75,30 +75,30 @@ export default function KpiCards({
     <section className="mt-6">
       <div className="kpi-grid-auto">
         <KpiCard
-          label="MC BRUTA / un"
+          label="GROSS CM / un"
           value={cascade ? fmt(cascade.grossContributionMargin, data.currency) : '—'}
-          sub={cascade ? `${pct(cascade.gcmPctOfRevenue)} da receita` : ''}
+          sub={cascade ? `${pct(cascade.gcmPctOfRevenue)} of revenue` : ''}
           tone="neutral"
         />
         <KpiCard
-          label="MC LÍQUIDA REAL / un"
+          label="NET CM REAL / un"
           value={cascade ? fmt(cascade.netCmReal, data.currency) : '—'}
-          sub={cascade ? `Marketing real: ${fmt(cascade.marketingReal, data.currency)}` : ''}
+          sub={cascade ? `Real marketing: ${fmt(cascade.marketingReal, data.currency)}` : ''}
           tone={mcRealPositive ? 'success' : 'danger'}
         />
         <KpiCard
-          label="MC LÍQUIDA PREMISSA / un"
+          label="NET CM ASSUMED / un"
           value={cascade ? fmt(cascade.netCmAssumption, data.currency) : '—'}
           sub={cascade ? `Marketing %: ${fmt(cascade.marketingAssumption, data.currency)}` : ''}
           tone={mcPremPositive ? 'success' : 'danger'}
         />
         <KpiCard
-          label="DEVOLUÇÕES (30D)"
+          label="RETURNS (30D)"
           value={pct(returnRateValue, 2)}
           sub={
             returnTotal > 0
-              ? `${returnRefunded.toLocaleString()} de ${returnTotal.toLocaleString()} un · Trocas (Exchange-Only): ${pct(exchangeRateValue, 1)}`
-              : `Sem devoluções · Trocas: ${pct(exchangeRateValue, 1)}`
+              ? `${returnRefunded.toLocaleString()} of ${returnTotal.toLocaleString()} un · Exchanges: ${pct(exchangeRateValue, 1)}`
+              : `No returns · Exchanges: ${pct(exchangeRateValue, 1)}`
           }
           tone={returnTone}
         />
@@ -110,9 +110,9 @@ export default function KpiCards({
           onGoalChange={onUnitsGoalChange}
         />
         <KpiCard
-          label="MARKETING TOTAL"
+          label="TOTAL MARKETING"
           value={fmt(marketingPremissa, data.currency, { compact: true })}
-          sub={`${pct(assumptions.marketingPct)} × ${effectiveUnits.toLocaleString()} un (${usingGoal ? 'meta' : 'real'}) · ${fmt(marketingPremissaPerUnit, data.currency)}/un · Real: ${fmt(data.totalMarketingSpend, data.currency, { compact: true })}`}
+          sub={`${pct(assumptions.marketingPct)} × ${effectiveUnits.toLocaleString()} units (${usingGoal ? 'target' : 'actual'}) · ${fmt(marketingPremissaPerUnit, data.currency)}/un · Real: ${fmt(data.totalMarketingSpend, data.currency, { compact: true })}`}
           tone="alert"
         />
       </div>

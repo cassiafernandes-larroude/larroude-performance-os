@@ -384,7 +384,7 @@ export async function getDashboardPayload(
     { label: 'TAXA DE CONVERSÃO', value: cvr > 0 ? fmtPercent(cvr, 2) : '—', raw: cvr, delta: cvr > 0 && pCvr > 0 ? pctChange(cvr, pCvr) : null, hint: `Fonte: ${cvrSource}`, tone: 'good' },
     { label: 'CTR', value: fmtPercent(ctr, 2), raw: ctr, delta: pctChange(ctr, pCtr), tone: 'accent' },
     { label: 'UNITS SOLD', value: fmtNumber(units), raw: units, delta: pctChange(units, pUnits), tone: 'good' },
-    { label: 'NEW CUSTOMER ORDERS', value: fmtNumber(num(aggCurr.new_customer_orders)), raw: num(aggCurr.new_customer_orders), delta: pctChange(num(aggCurr.new_customer_orders), num(aggPrev.new_customer_orders)), tone: 'good' },
+    // Cassia 2026-06-11: NEW CUSTOMER ORDERS removed from Main Dashboard.
     { label: 'NEW CUSTOMER REVENUE', value: fmtCurrency(num(aggCurr.new_customer_revenue), market, { compact: true }), raw: num(aggCurr.new_customer_revenue), delta: pctChange(num(aggCurr.new_customer_revenue), num(aggPrev.new_customer_revenue)), tone: 'good' },
     { label: 'RETURNING CUSTOMER REVENUE', value: fmtCurrency(num(aggCurr.returning_customer_revenue), market, { compact: true }), raw: num(aggCurr.returning_customer_revenue), delta: pctChange(num(aggCurr.returning_customer_revenue), num(aggPrev.returning_customer_revenue)), tone: 'accent' },
   ];
