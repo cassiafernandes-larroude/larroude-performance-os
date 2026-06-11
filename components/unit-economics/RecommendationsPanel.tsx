@@ -49,7 +49,7 @@ export default function RecommendationsPanel({
 }: Props) {
   if (!product || !cascade) {
     return (
-      <section className="card mt-6 p-5">
+      <section className="card mt-6 p-3 sm:p-5">
         <div className="text-xs font-bold uppercase tracking-wider" style={{ color: '#ec4899' }}>
           📊 Cenários de Desconto
         </div>
@@ -87,7 +87,7 @@ export default function RecommendationsPanel({
   }, [product, assumptions, market, marketingPerUnitReal, targetMargin]);
 
   return (
-    <section className="card mt-6 p-5">
+    <section className="card mt-6 p-3 sm:p-5">
       <div className="mb-4">
         <div className="text-xs font-bold uppercase tracking-wider" style={{ color: '#ec4899' }}>
           📊 Cenários de Desconto — {market} · Alvo: {targetLabel}
@@ -112,7 +112,7 @@ export default function RecommendationsPanel({
       </div>
 
       {/* Cards de cenários */}
-      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-2 sm:gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         {scenarios.map((s) => {
           const tone = s.passes ? '#10b981' : s.margin >= targetMargin - 0.05 ? '#d97706' : '#dc2626';
           const bg = s.passes ? '#f0fdf4' : '#fff';

@@ -70,7 +70,13 @@ function motherSkuOf(sku: string | null): string | null {
   const parts = sku.split('-');
   if (parts.length < 3) return null;
   if (parts.length >= 4 && /^\d+(\.\d+)?$/.test(parts[2])) {
+    if (parts.length >= 5 && parts[4]) {
+      return `${parts[0]}-${parts[1]}-${parts[3]}-${parts[4]}`;
+    }
     return `${parts[0]}-${parts[1]}-${parts[3]}`;
+  }
+  if (parts.length >= 4 && parts[3]) {
+    return `${parts[0]}-${parts[1]}-${parts[2]}-${parts[3]}`;
   }
   return `${parts[0]}-${parts[1]}-${parts[2]}`;
 }

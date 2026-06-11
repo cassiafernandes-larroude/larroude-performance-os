@@ -36,7 +36,7 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
   const { start, end } = defaultWindow();
   const startedAt = Date.now();
   try {
-    const cacheKey = `ue:${market}:${start}:${end}:listPrice-cat-ret30d-exch30d-pix30d-coupon-rate30d:v10`;
+    const cacheKey = `ue:${market}:${start}:${end}:motherWithProductId-listPrice-cat-ret30d-exch30d-pix30d-coupon-rate30d:v11`;
     const result = await memo(cacheKey, TTL_30M, async () => {
       // 6 fontes em paralelo:
       // 1) Shopify orders D-1 (sells)

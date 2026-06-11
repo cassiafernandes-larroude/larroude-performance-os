@@ -165,13 +165,21 @@ async function gql(market: Market, query: string, variables: Record<string, any>
 }
 
 // ---------- Extrai mother SKU ----------
+// Quando parts[2] eh tamanho (numero), mother inclui productId (parts[4]) pra
+// nao colapsar produtos distintos que compartilham mesma cor base.
+// Ex: L415-STEL-5.0-PEAN-1759 -> L415-STEL-PEAN-1759 (nao L415-STEL-PEAN).
 function motherSkuOf(sku: string | null): string | null {
   if (!sku) return null;
   const parts = sku.split('-');
   if (parts.length < 3) return null;
-  // Se parts[2] for tamanho (número), pula → mother = parts[0]-parts[1]-parts[3]
   if (parts.length >= 4 && /^\d+(\.\d+)?$/.test(parts[2])) {
+    if (parts.length >= 5 && parts[4]) {
+      return `${parts[0]}-${parts[1]}-${parts[3]}-${parts[4]}`;
+    }
     return `${parts[0]}-${parts[1]}-${parts[3]}`;
+  }
+  if (parts.length >= 4 && parts[3]) {
+    return `${parts[0]}-${parts[1]}-${parts[2]}-${parts[3]}`;
   }
   return `${parts[0]}-${parts[1]}-${parts[2]}`;
 }

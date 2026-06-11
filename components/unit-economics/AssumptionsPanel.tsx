@@ -18,7 +18,7 @@ export default function AssumptionsPanel({ assumptions, market, onChange, onRese
   }
 
   return (
-    <section className="card mt-6 p-5">
+    <section className="card mt-6 p-3 sm:p-5">
       <div className="flex items-baseline justify-between mb-4">
         <div>
           <div className="text-xs font-bold uppercase tracking-wider text-accent">
@@ -37,7 +37,7 @@ export default function AssumptionsPanel({ assumptions, market, onChange, onRese
         </button>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
         <Field
           label="Desconto comercial"
           suffix="%"

@@ -27,7 +27,7 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
   const today = new Date().toISOString().slice(0, 10);
   const startedAt = Date.now();
   try {
-    const cacheKey = `ue-today:${market}:${today}:v2`;
+    const cacheKey = `ue-today:${market}:${today}:motherWithProductId:v3`;
     const result = await memo(cacheKey, TTL_5M, async () => {
       const t = await getTodaySales(market);
       // Converte maps em arrays serializáveis

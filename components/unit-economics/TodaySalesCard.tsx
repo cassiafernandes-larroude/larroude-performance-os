@@ -99,7 +99,7 @@ export default function TodaySalesCard({
 
   return (
     <section
-      className="card mt-6 p-5"
+      className="card mt-6 p-3 sm:p-5"
       style={{ borderColor: '#fbbf24', background: '#fffbeb' }}
     >
       <div className="flex items-start justify-between gap-4 flex-wrap mb-3">
@@ -129,7 +129,7 @@ export default function TodaySalesCard({
         </button>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
         <Cell label="Unidades" value={u.toLocaleString(locale)} tone="warn" />
         <Cell label="Pedidos" value={o.toLocaleString(locale)} tone="warn" />
         <Cell label="Receita bruta" value={fmt(rev, currency, true)} tone="warn" />
