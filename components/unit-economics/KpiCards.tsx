@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import type { CascadeUnit, Assumptions } from '@/lib/unit-economics/cascade';
-import type { Market } from '@/lib/unit-economics/queries';
+import type { Market, ProductUnitEconomics } from '@/lib/unit-economics/queries';
 
 interface ApiData {
   market?: Market;
@@ -38,25 +38,29 @@ export default function KpiCards({
   assumptions,
   unitsGoal,
   onUnitsGoalChange,
+  selectedProduct,
 }: {
   data: ApiData;
   cascade: CascadeUnit | null;
   assumptions: Assumptions;
   unitsGoal: number;
   onUnitsGoalChange: (n: number) => void;
+  selectedProduct: ProductUnitEconomics | null;
 }) {
-  const returnRateValue = data.returnRate30d ?? cascade?.returnRate ?? 0;
+  // Cassia 2026-06-11: KPIs do topo referem ao produto selecionado.
+  // Return rate: cascade.returnRate (30d do produto)
+  // Unidades: selectedProduct.totalUnits no D-1 + orders do produto
+  // Marketing Total: marketingPct × effectiveUnits × pricePerUnit do produto
+  const returnRateValue = cascade?.returnRate ?? 0;
   const returnTone: Tone =
     returnRateValue > 0.08 ? 'danger' : returnRateValue > 0.05 ? 'warn' : 'neutral';
   const mcRealPositive = cascade ? cascade.netCmReal > 0 : false;
   const mcPremPositive = cascade ? cascade.netCmAssumption > 0 : false;
 
-  // Marketing total reativo: muda quando marketingPct OU meta de unidades muda.
-  // Premissa = marketingPct × (meta || actual) × pricePerUnit
-  // Cassia 2026-06-11: "o marketing total deve considerar o numero da meta no bloco de unidades"
-  const pricePerUnit =
-    data.totalUnits > 0 ? data.totalRevenue / data.totalUnits : 0;
-  const effectiveUnits = unitsGoal > 0 ? unitsGoal : data.totalUnits;
+  const productUnits = selectedProduct?.totalUnits ?? 0;
+  const productOrders = selectedProduct?.totalOrders ?? 0;
+  const pricePerUnit = selectedProduct?.unitGrossRevenue ?? 0;
+  const effectiveUnits = unitsGoal > 0 ? unitsGoal : productUnits;
   const projectedRevenue = effectiveUnits * pricePerUnit;
   const marketingPremissa = assumptions.marketingPct * projectedRevenue;
   const marketingPremissaPerUnit = assumptions.marketingPct * pricePerUnit;
@@ -90,8 +94,8 @@ export default function KpiCards({
           tone={returnTone}
         />
         <UnitsGoalCard
-          actual={data.totalUnits}
-          orders={data.totalOrders}
+          actual={productUnits}
+          orders={productOrders}
           market={data.market || 'US'}
           locale={data.currency === 'USD' ? 'en-US' : 'pt-BR'}
           onGoalChange={onUnitsGoalChange}

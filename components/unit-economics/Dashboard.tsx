@@ -227,6 +227,7 @@ export default function Dashboard({ freshness }: { freshness: string }) {
             assumptions={assumptions}
             unitsGoal={unitsGoal}
             onUnitsGoalChange={setUnitsGoal}
+            selectedProduct={selectedProduct}
           />
 
           <div className="grid grid-cols-1 lg:grid-cols-[300px,1fr] gap-4 mt-6">

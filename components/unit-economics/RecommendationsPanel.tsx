@@ -1,27 +1,31 @@
 'use client';
 
 /**
- * Recomendações Unit Economics.
+ * Recomendações Unit Economics — POR PRODUTO SELECIONADO.
  *
  * Cassia 2026-06-11:
  *   "considerando que para BR podemos chegar em margem 0% e US precisamos
  *    de 30% de margem (no caso de US, inclua cenários com 15%, 20% e 30%)"
+ *   "o quadro recomendações deve ser relacionado ao produto selecionado"
  *
- * Cálculo por produto:
- *   MC Líq Premissa / un = MC Bruta / un − marketingPct × effectiveRevenue
- *   Margem % = MC Líq Premissa / un / effectiveRevenue
+ * Para o produto selecionado e cada TARGET margin %:
+ *   MCB_target = target × effRev
+ *   marketing_máximo_pct = (MCB / effRev) − target
+ *   gap_atual = netCmAssumption − target × effRev
  *
- * Para um TARGET margin %:
- *   marketingPct_máximo = (MC Bruta / effRev) − target
- *   Ou seja, qto sobra pra marketing depois de tirar o alvo de margem.
+ * Quando o produto não atinge o target, calcula 3 alavancas:
+ *   1. Subir preço em X% (mantendo COGS)
+ *   2. Reduzir COGS em X% (mantendo preço)
+ *   3. Reduzir marketingPct em X pontos
  */
 
 import { useMemo } from 'react';
-import { computeCascade, type Assumptions } from '@/lib/unit-economics/cascade';
+import { computeCascade, type Assumptions, type CascadeUnit } from '@/lib/unit-economics/cascade';
 import type { ProductUnitEconomics, Market } from '@/lib/unit-economics/queries';
 
 interface Props {
-  products: ProductUnitEconomics[];
+  product: ProductUnitEconomics | null;
+  cascade: CascadeUnit | null;
   market: Market;
   assumptions: Assumptions;
   marketingPerUnitReal: number;
@@ -30,103 +34,121 @@ interface Props {
 
 function fmt(value: number, currency: 'USD' | 'BRL'): string {
   const symbol = currency === 'USD' ? '$' : 'R$';
-  return `${symbol}${value.toLocaleString(currency === 'USD' ? 'en-US' : 'pt-BR', {
+  const sign = value < 0 ? '-' : '';
+  const abs = Math.abs(value);
+  return `${sign}${symbol}${abs.toLocaleString(currency === 'USD' ? 'en-US' : 'pt-BR', {
     minimumFractionDigits: 0,
-    maximumFractionDigits: Math.abs(value) < 10 ? 2 : 0,
+    maximumFractionDigits: abs < 10 ? 2 : 0,
   })}`;
 }
 function pct(v: number, digits: number = 1): string {
   return `${(v * 100).toFixed(digits)}%`;
 }
 
-interface Stats {
-  total: number;
-  passing: number;
-  failing: number;
-  passingPct: number;
-  avgGap: number; // diff médio entre MCL real e target ($/un)
+interface ScenarioRow {
+  target: number;
+  isPrincipal: boolean;
+  margin: number;
+  passes: boolean;
+  gap: number; // valor $/un acima/abaixo do target
+  maxMarketingPct: number; // % de marketing máximo possível dado o GCM atual
+  priceUpNeeded: number | null; // % aumento preço pra atingir
+  cogsDownNeeded: number | null; // % redução COGS pra atingir
+  marketingDownNeededPts: number | null; // pontos % redução em marketingPct
 }
 
-function computeStatsForTarget(
-  products: ProductUnitEconomics[],
+function computeScenario(
+  product: ProductUnitEconomics,
   assumptions: Assumptions,
   market: Market,
   marketingPerUnitReal: number,
-  targetMargin: number
-): Stats {
-  let passing = 0;
-  let total = 0;
-  let sumGap = 0;
-  for (const p of products) {
-    // ignora produtos sem preço (catálogo zero)
-    if (!p.unitGrossRevenue || p.unitGrossRevenue <= 0) continue;
-    const c = computeCascade(p, assumptions, market, marketingPerUnitReal);
-    const effRev = c.effectiveRevenue;
-    if (effRev <= 0) continue;
-    const actualMargin = c.netCmAssumption / effRev;
-    const targetCm = targetMargin * effRev;
-    const gap = c.netCmAssumption - targetCm; // > 0 = passa
-    total++;
-    sumGap += gap;
-    if (actualMargin >= targetMargin) passing++;
+  target: number,
+  isPrincipal: boolean
+): ScenarioRow {
+  const c = computeCascade(product, assumptions, market, marketingPerUnitReal);
+  const effRev = c.effectiveRevenue;
+  const margin = effRev > 0 ? c.netCmAssumption / effRev : 0;
+  const passes = margin >= target;
+  const gap = c.netCmAssumption - target * effRev;
+
+  // marketingPct_máximo: quando MCL_premissa = target × effRev → marketing = MCB - target×effRev
+  const maxMarketingPct = effRev > 0 ? (c.grossContributionMargin - target * effRev) / effRev : 0;
+
+  // Alavancas pra atingir target (apenas calcula se NÃO atinge atualmente):
+  let priceUpNeeded: number | null = null;
+  let cogsDownNeeded: number | null = null;
+  let marketingDownNeededPts: number | null = null;
+  if (!passes) {
+    // 1. Subir preço: assume que aumento de preço Δp aumenta receita e mantém custos fixos.
+    //    Δp × (1 - marketingPct) ≈ gap necessário
+    //    Δp / basePrice = % aumento
+    const denom = 1 - assumptions.marketingPct;
+    if (denom > 0 && c.basePrice > 0) {
+      priceUpNeeded = -gap / (c.basePrice * denom);
+    }
+    // 2. Reduzir COGS: Δ_cogs = -gap → % redução = gap/cogs
+    if (c.cogs > 0) {
+      cogsDownNeeded = -gap / c.cogs;
+    }
+    // 3. Reduzir marketingPct: Δ_marketing × effRev = -gap → Δpct = -gap/effRev
+    if (effRev > 0) {
+      marketingDownNeededPts = -gap / effRev;
+    }
   }
+
   return {
-    total,
-    passing,
-    failing: total - passing,
-    passingPct: total > 0 ? passing / total : 0,
-    avgGap: total > 0 ? sumGap / total : 0,
+    target,
+    isPrincipal,
+    margin,
+    passes,
+    gap,
+    maxMarketingPct,
+    priceUpNeeded,
+    cogsDownNeeded,
+    marketingDownNeededPts,
   };
 }
 
 export default function RecommendationsPanel({
-  products,
+  product,
+  cascade,
   market,
   assumptions,
   marketingPerUnitReal,
   currency,
 }: Props) {
-  // Targets por mercado:
-  // BR: break-even (margem 0%)
-  // US: 30% (principal), com cenários adicionais 15% e 20%
-  const scenarios = market === 'US' ? [0.15, 0.2, 0.3] : [0];
+  if (!product || !cascade) {
+    return (
+      <section className="card mt-6 p-5">
+        <div className="text-xs font-bold uppercase tracking-wider" style={{ color: '#ec4899' }}>
+          📊 Recomendações
+        </div>
+        <div className="text-[12px] mt-2" style={{ color: '#6b7280' }}>
+          Selecione um produto pra ver as recomendações.
+        </div>
+      </section>
+    );
+  }
 
-  const stats = useMemo(() => {
-    return scenarios.map((target) => ({
-      target,
-      ...computeStatsForTarget(products, assumptions, market, marketingPerUnitReal, target),
-    }));
-  }, [products, market, assumptions, marketingPerUnitReal, scenarios]);
-
-  // Encontra TOP/BOTTOM produtos pelo target principal
   const principalTarget = market === 'US' ? 0.3 : 0;
-  const productsWithMargin = useMemo(() => {
-    return products
-      .filter((p) => p.unitGrossRevenue > 0 && p.totalUnits > 0)
-      .map((p) => {
-        const c = computeCascade(p, assumptions, market, marketingPerUnitReal);
-        const margin = c.effectiveRevenue > 0 ? c.netCmAssumption / c.effectiveRevenue : 0;
-        return { product: p, cascade: c, margin };
-      });
-  }, [products, assumptions, market, marketingPerUnitReal]);
+  const targets: { value: number; isPrincipal: boolean }[] =
+    market === 'US'
+      ? [
+          { value: 0.15, isPrincipal: false },
+          { value: 0.2, isPrincipal: false },
+          { value: 0.3, isPrincipal: true },
+        ]
+      : [{ value: 0, isPrincipal: true }];
 
-  const losers = useMemo(
+  const scenarios = useMemo(
     () =>
-      [...productsWithMargin]
-        .filter((p) => p.margin < principalTarget)
-        .sort((a, b) => a.margin - b.margin)
-        .slice(0, 5),
-    [productsWithMargin, principalTarget]
-  );
-  const winners = useMemo(
-    () =>
-      [...productsWithMargin]
-        .filter((p) => p.margin >= principalTarget)
-        .sort((a, b) => b.margin - a.margin)
-        .slice(0, 5),
-    [productsWithMargin, principalTarget]
+      targets.map((t) =>
+        computeScenario(product, assumptions, market, marketingPerUnitReal, t.value, t.isPrincipal)
+      ),
+    [product, assumptions, market, marketingPerUnitReal, targets]
   );
 
+  const principal = scenarios.find((s) => s.isPrincipal)!;
   const targetLabel = market === 'US' ? '≥ 30% margem' : 'break-even (0%)';
 
   return (
@@ -135,35 +157,40 @@ export default function RecommendationsPanel({
         <div className="text-xs font-bold uppercase tracking-wider" style={{ color: '#ec4899' }}>
           📊 Recomendações — {market} · Alvo: {targetLabel}
         </div>
+        <div className="text-[12px] mt-1" style={{ color: '#374151' }}>
+          Produto: <strong>{product.productName}</strong>
+          <span className="ml-2 text-[11px]" style={{ color: '#9ca3af' }}>
+            ({product.totalUnits} un · preço médio {fmt(product.unitGrossRevenue, currency)} · COGS{' '}
+            {fmt(product.unitCogs, currency)})
+          </span>
+        </div>
         <div className="text-[11px] mt-1" style={{ color: '#6b7280' }}>
           {market === 'US'
-            ? 'US precisa de 30% de margem mínima. Cenários intermediários 15% e 20% como diagnóstico.'
-            : 'BR pode operar em break-even (margem 0%) — qualquer MC Líquida positiva é ganho.'}{' '}
-          MC Líq Premissa = MCB − marketingPct × receita.
+            ? 'US precisa de 30% de margem mínima. Cenários 15% e 20% como diagnóstico.'
+            : 'BR pode operar em break-even (margem 0%) — qualquer MC Líquida positiva é ganho.'}
         </div>
       </div>
 
-      {/* Cenários por target */}
+      {/* Cards de cenários */}
       <div className={`grid gap-3 ${market === 'US' ? 'grid-cols-3' : 'grid-cols-1'}`}>
-        {stats.map((s) => {
-          const isPrincipal = s.target === principalTarget;
-          const passRate = s.passingPct;
-          const tone =
-            passRate >= 0.7 ? '#10b981' : passRate >= 0.4 ? '#d97706' : '#dc2626';
+        {scenarios.map((s) => {
+          const tone = s.passes ? '#10b981' : s.margin >= s.target - 0.05 ? '#d97706' : '#dc2626';
+          const bg = s.isPrincipal ? '#fdf2f8' : '#fff';
+          const border = s.isPrincipal ? '#ec4899' : '#e5e3de';
           return (
             <div
               key={s.target}
               className="rounded-2xl p-4"
-              style={{
-                border: `1.5px solid ${isPrincipal ? '#ec4899' : '#e5e3de'}`,
-                background: isPrincipal ? '#fdf2f8' : '#fff',
-              }}
+              style={{ border: `1.5px solid ${border}`, background: bg }}
             >
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#6b7280' }}>
+                <span
+                  className="text-[10px] font-bold uppercase tracking-wider"
+                  style={{ color: '#6b7280' }}
+                >
                   {market === 'US' ? `Cenário ${pct(s.target, 0)}` : 'Break-even'}
                 </span>
-                {isPrincipal && (
+                {s.isPrincipal && (
                   <span
                     className="text-[9px] font-bold px-1.5 py-0.5 rounded-md"
                     style={{ background: '#ec4899', color: '#fff' }}
@@ -172,120 +199,113 @@ export default function RecommendationsPanel({
                   </span>
                 )}
               </div>
+
               <div
                 className="font-bold mt-2"
                 style={{ color: tone, fontSize: 'clamp(20px, 2vw, 28px)' }}
               >
-                {s.passing}/{s.total}
+                {pct(s.margin, 1)}
               </div>
-              <div className="text-[11px] mt-1" style={{ color: '#6b7280' }}>
-                {pct(passRate, 1)} dos SKUs atingem
+              <div className="text-[11px]" style={{ color: '#6b7280' }}>
+                margem atual{' '}
+                {s.passes ? (
+                  <span style={{ color: '#10b981', fontWeight: 600 }}>✓ atinge</span>
+                ) : (
+                  <span style={{ color: '#dc2626', fontWeight: 600 }}>✗ abaixo</span>
+                )}
               </div>
-              <div className="text-[11px] mt-1" style={{ color: '#9ca3af' }}>
-                Gap médio: {s.avgGap >= 0 ? '+' : ''}{fmt(s.avgGap, currency)}/un
+
+              <div className="mt-3 text-[11px] space-y-0.5" style={{ color: '#374151' }}>
+                <div>
+                  Gap: <strong>{fmt(s.gap, currency)}/un</strong>
+                </div>
+                <div>
+                  Mkt máximo:{' '}
+                  <strong>{s.maxMarketingPct > 0 ? pct(s.maxMarketingPct, 1) : '—'}</strong>
+                </div>
               </div>
+
+              {!s.passes && (
+                <div
+                  className="mt-3 text-[10.5px] space-y-0.5 pt-2"
+                  style={{ borderTop: '1px dashed #e5e3de', color: '#6b7280' }}
+                >
+                  <div className="font-semibold uppercase tracking-wider text-[9px] mb-1">
+                    Pra atingir:
+                  </div>
+                  {s.priceUpNeeded !== null && s.priceUpNeeded > 0 && s.priceUpNeeded < 1 && (
+                    <div>
+                      ↑ preço <strong>+{pct(s.priceUpNeeded, 1)}</strong>
+                    </div>
+                  )}
+                  {s.cogsDownNeeded !== null && s.cogsDownNeeded > 0 && s.cogsDownNeeded < 1 && (
+                    <div>
+                      ↓ COGS <strong>−{pct(s.cogsDownNeeded, 1)}</strong>
+                    </div>
+                  )}
+                  {s.marketingDownNeededPts !== null && s.marketingDownNeededPts > 0 && (
+                    <div>
+                      ↓ marketing <strong>−{pct(s.marketingDownNeededPts, 1)} pts</strong>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           );
         })}
       </div>
 
-      {/* TOP perdedores */}
-      {losers.length > 0 && (
-        <div className="mt-5">
-          <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#dc2626' }}>
-            ⚠ Produtos abaixo do alvo ({targetLabel}) — Top 5 piores
-          </div>
-          <div className="mt-2 grid gap-1.5">
-            {losers.map(({ product, cascade, margin }) => (
-              <div
-                key={product.motherSku}
-                className="flex items-center justify-between text-[12px] px-3 py-2 rounded-lg"
-                style={{ background: '#fef2f2' }}
-              >
-                <div className="flex-1 min-w-0 truncate" style={{ color: '#111827' }}>
-                  <span className="font-semibold">{product.productName}</span>
-                  <span className="ml-2 text-[10px]" style={{ color: '#9ca3af' }}>
-                    {product.totalUnits} un
-                  </span>
-                </div>
-                <div className="flex items-center gap-3 flex-shrink-0">
-                  <span style={{ color: '#dc2626', fontWeight: 600 }}>{pct(margin, 1)}</span>
-                  <span className="text-[10px]" style={{ color: '#6b7280' }}>
-                    MCL: {fmt(cascade.netCmAssumption, currency)}/un
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* TOP winners */}
-      {winners.length > 0 && (
-        <div className="mt-4">
-          <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#10b981' }}>
-            ✓ Produtos acima do alvo — Top 5 melhores
-          </div>
-          <div className="mt-2 grid gap-1.5">
-            {winners.map(({ product, cascade, margin }) => (
-              <div
-                key={product.motherSku}
-                className="flex items-center justify-between text-[12px] px-3 py-2 rounded-lg"
-                style={{ background: '#f0fdf4' }}
-              >
-                <div className="flex-1 min-w-0 truncate" style={{ color: '#111827' }}>
-                  <span className="font-semibold">{product.productName}</span>
-                  <span className="ml-2 text-[10px]" style={{ color: '#9ca3af' }}>
-                    {product.totalUnits} un
-                  </span>
-                </div>
-                <div className="flex items-center gap-3 flex-shrink-0">
-                  <span style={{ color: '#10b981', fontWeight: 600 }}>{pct(margin, 1)}</span>
-                  <span className="text-[10px]" style={{ color: '#6b7280' }}>
-                    MCL: {fmt(cascade.netCmAssumption, currency)}/un
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Recomendações táticas */}
+      {/* Recomendações táticas para esse produto */}
       <div className="mt-5 p-3 rounded-lg" style={{ background: '#f9fafb' }}>
-        <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#6b7280' }}>
-          Próximos passos
+        <div
+          className="text-[10px] font-bold uppercase tracking-wider"
+          style={{ color: '#6b7280' }}
+        >
+          Diagnóstico — {product.productName}
         </div>
         <ul className="mt-2 text-[12px] space-y-1.5" style={{ color: '#374151' }}>
-          {market === 'US' && (
+          {principal.passes ? (
+            <li>
+              ✅ Esse produto <strong>atinge</strong> o alvo {pct(principalTarget, 0)} —
+              margem atual {pct(principal.margin, 1)}. Candidato a escalar com mais ad spend
+              (mkt máximo: {pct(principal.maxMarketingPct, 1)}).
+            </li>
+          ) : (
             <>
               <li>
-                • SKUs <strong>abaixo de 15%</strong>: revisar preço, reduzir desconto, ou
-                descontinuar.
+                ⚠ Esse produto <strong>NÃO atinge</strong> o alvo {pct(principalTarget, 0)} —
+                margem atual {pct(principal.margin, 1)} · gap {fmt(principal.gap, currency)}/un.
               </li>
-              <li>
-                • SKUs entre <strong>15-30%</strong>: cortar marketing dirigido (campanhas que
-                puxam % alta) e priorizar tráfego orgânico/email.
-              </li>
-              <li>
-                • SKUs <strong>acima de 30%</strong>: candidatos a escalar com mais ad spend.
-              </li>
-            </>
-          )}
-          {market === 'BR' && (
-            <>
-              <li>
-                • SKUs <strong>negativos</strong>: subir preço, reduzir COGS, ou eliminar do
-                catálogo.
-              </li>
-              <li>
-                • SKUs com PIX share alto (&gt;50%): aproveitar a economia de cartão pra subir
-                desconto promocional e ganhar volume.
-              </li>
-              <li>
-                • Marketing pode ser mais agressivo: break-even = qualquer MC Líquida positiva
-                é lucro contribuído.
-              </li>
+              {market === 'US' && principal.margin < 0.15 && (
+                <li>
+                  • Margem abaixo de 15%: <strong>revisar preço, reduzir desconto</strong>, ou
+                  descontinuar.
+                </li>
+              )}
+              {market === 'US' && principal.margin >= 0.15 && principal.margin < 0.3 && (
+                <li>
+                  • Margem entre 15-30%: <strong>cortar marketing dirigido</strong> e priorizar
+                  tráfego orgânico/email.
+                </li>
+              )}
+              {market === 'BR' && principal.margin < 0 && (
+                <li>
+                  • MC Líquida negativa: <strong>subir preço, reduzir COGS</strong> ou eliminar do
+                  catálogo.
+                </li>
+              )}
+              {product.pixShare > 0.5 && market === 'BR' && (
+                <li>
+                  • PIX share {pct(product.pixShare, 1)}: aproveitar a economia de cartão pra
+                  promo agressiva e ganhar volume.
+                </li>
+              )}
+              {product.exchangeRate != null && product.exchangeRate > 0.3 && (
+                <li>
+                  • Taxa de troca alta ({pct(product.exchangeRate, 1)}): investigar
+                  fit/qualidade pra reduzir REDOs.
+                </li>
+              )}
             </>
           )}
         </ul>
