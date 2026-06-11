@@ -36,7 +36,7 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
   const { start, end } = defaultWindow();
   const startedAt = Date.now();
   try {
-    const cacheKey = `ue:${market}:${start}:${end}:d1-cat-ret30d-exchOnly30d:v6`;
+    const cacheKey = `ue:${market}:${start}:${end}:d1-cat-ret30d-exch30d-pix30d-coupon:v7`;
     const result = await memo(cacheKey, TTL_30M, async () => {
       // 6 fontes em paralelo:
       // 1) Shopify orders D-1 (sells)
@@ -53,7 +53,15 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
         }),
         getReturnRatesLast30d(market, end).catch((err) => {
           console.error('[ue] ret30d failed:', err);
-          return { byMother: new Map(), byVariant: new Map(), pages: 0, partial: true };
+          return {
+            byMother: new Map(),
+            byVariant: new Map(),
+            pixByMother: new Map(),
+            pixByVariant: new Map(),
+            pixShareOverall: 0,
+            pages: 0,
+            partial: true,
+          };
         }),
         getExchangeRatesLast30d(market, end).catch((err) => {
           console.error('[ue] exch30d failed:', err);
@@ -96,14 +104,19 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
         const sell = sellsByMother.get(cat.motherSku);
         const ret = returns30d.byMother.get(cat.motherSku);
         const exch = exchanges30d.byMother.get(cat.motherSku);
+        const pix = returns30d.pixByMother.get(cat.motherSku);
         const returnRate = ret?.returnRate ?? 0;
         const exchangeRate = exch?.exchangeRate ?? 0;
+        // pixShare 30d — fallback pra overall do market se SKU sem amostra
+        const pixShare30d =
+          pix && pix.totalQty > 0 ? pix.pixShare : returns30d.pixShareOverall;
         if (sell) {
           return {
             ...sell,
             productName: sell.productName || cat.productName,
             unitRefund: sell.unitGrossRevenue * returnRate,
             exchangeRate,
+            pixShare: pixShare30d, // sobrescreve pixShare D-1 pelo 30d
           } as ProductUnitEconomics;
         }
         return {
@@ -119,7 +132,7 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
           unitCogs: cat.unitCogs,
           unitRefund: cat.unitPrice * returnRate,
           exchangeRate,
-          pixShare: 0,
+          pixShare: pixShare30d,
           currency,
         };
       });
@@ -129,14 +142,18 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
         const sell = sellsByVariant.get(key);
         const ret = returns30d.byVariant.get(key);
         const exch = exchanges30d.byVariant.get(key);
+        const pix = returns30d.pixByVariant.get(key);
         const returnRate = ret?.returnRate ?? 0;
         const exchangeRate = exch?.exchangeRate ?? 0;
+        const pixShare30d =
+          pix && pix.totalQty > 0 ? pix.pixShare : returns30d.pixShareOverall;
         if (sell) {
           return {
             ...sell,
             productName: sell.productName || cat.productName,
             unitRefund: sell.unitGrossRevenue * returnRate,
             exchangeRate,
+            pixShare: pixShare30d,
           } as ProductUnitEconomics;
         }
         return {
@@ -152,7 +169,7 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
           unitCogs: cat.unitCogs,
           unitRefund: cat.unitPrice * returnRate,
           exchangeRate,
-          pixShare: 0,
+          pixShare: pixShare30d,
           currency,
         };
       });
@@ -192,6 +209,7 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
         exchangeRate30d: exchanges30d.overallRate,
         exchangeTotalQty30d: exchanges30d.overallTotalUnits,
         exchangeRedoQty30d: exchanges30d.overallRedoUnits,
+        pixShare30d: returns30d.pixShareOverall,
         totalMarketingSpend,
         metaSpend,
         googleSpend,

@@ -14,6 +14,8 @@ import type { ProductUnitEconomics, Market } from './queries';
 export interface Assumptions {
   /** Desconto comercial extra (SIMULADOR a partir do preço de lista). 0..1 */
   discountPct: number;
+  /** Cupom adicional aplicado APOS o desconto real do Shopify (SIMULADOR). 0..1 */
+  couponPct: number;
   /** Marketing % sobre receita (alternativa ao real atribuído). 0..1 */
   marketingPct: number;
   /** Fulfillment $/un (premissa pura — não existe no Shopify) */
@@ -32,7 +34,8 @@ export interface Assumptions {
 
 export const DEFAULT_ASSUMPTIONS: Record<Market, Assumptions> = {
   US: {
-    discountPct: 0, // desconto extra (simulador) — 0 = usa o real do Shopify
+    discountPct: 0,
+    couponPct: 0,
     marketingPct: 0.20,
     fulfillmentPerUnit: 8,
     shippingPerUnit: 12,
@@ -43,12 +46,13 @@ export const DEFAULT_ASSUMPTIONS: Record<Market, Assumptions> = {
   },
   BR: {
     discountPct: 0,
+    couponPct: 0,
     marketingPct: 0.20,
     fulfillmentPerUnit: 15, // BRL
     shippingPerUnit: 25, // BRL
     exchangePerUnit: 0,
     cardFeePct: 0.025,
-    pixSharePctOverride: null, // usa o real do Shopify
+    pixSharePctOverride: null, // usa o real (30d) do Shopify
     pixDiscountPct: 0.15,
   },
 };
@@ -93,13 +97,18 @@ export function computeCascade(
   // 1. Preço de lista (Shopify gross_revenue / units = preço médio bruto)
   const basePrice = product.unitGrossRevenue;
 
-  // 2. Desconto: REGRA — net_sales já é líquido de desconto Shopify.
-  //    O controle "discountPct" é simulador que SUBSTITUI a receita base.
-  //    Se discountPct > 0, aplica em cima do basePrice. Senão, usa o desconto real
-  //    que veio do Shopify (product.unitDiscount).
+  // 2. Desconto comercial (SUBSTITUI o desconto Shopify se discountPct > 0)
   const useSimulatedDiscount = assumptions.discountPct > 0;
-  const discount = useSimulatedDiscount ? basePrice * assumptions.discountPct : product.unitDiscount;
-  const priceAfterDiscount = basePrice - discount;
+  const baseDiscount = useSimulatedDiscount
+    ? basePrice * assumptions.discountPct
+    : product.unitDiscount;
+  const priceAfterBaseDiscount = basePrice - baseDiscount;
+
+  // 2b. Cupom adicional (Cassia 2026-06-11): aplicado APOS o desconto base.
+  //     Ex: desconto Shopify 20% + cupom 10% = preco baixa em (1 - 0.2) * 0.1 = 8% extra
+  const couponDiscount = priceAfterBaseDiscount * assumptions.couponPct;
+  const discount = baseDiscount + couponDiscount;
+  const priceAfterDiscount = priceAfterBaseDiscount - couponDiscount;
 
   // 3. PIX blend (BR apenas): receita efetiva ponderada
   const pixShare = market === 'BR'

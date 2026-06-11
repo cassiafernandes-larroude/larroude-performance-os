@@ -24,7 +24,7 @@ function getConfig(market: Market) {
   };
 }
 
-// Query mais leve: só line items, refunds e SKU
+// Query: line items, refunds, paymentGatewayNames (pra pixShare 30d)
 const ORDERS30D_QUERY = `
   query Orders30d($cursor: String, $query: String!) {
     orders(first: 250, after: $cursor, query: $query, sortKey: CREATED_AT, reverse: true) {
@@ -36,6 +36,7 @@ const ORDERS30D_QUERY = `
           test
           displayFinancialStatus
           tags
+          paymentGatewayNames
           customer { tags }
           lineItems(first: 50) {
             edges {
@@ -91,6 +92,11 @@ export async function getReturnRatesLast30d(
 ): Promise<{
   byMother: Map<string, { totalQty: number; refundedQty: number; returnRate: number }>;
   byVariant: Map<string, { totalQty: number; refundedQty: number; returnRate: number }>;
+  /** PIX share por mother SKU dos ultimos 30 dias (BR apenas; US sempre 0) */
+  pixByMother: Map<string, { totalQty: number; pixQty: number; pixShare: number }>;
+  pixByVariant: Map<string, { totalQty: number; pixQty: number; pixShare: number }>;
+  /** PIX share agregado do market */
+  pixShareOverall: number;
   pages: number;
   partial: boolean;
 }> {
@@ -108,6 +114,10 @@ export async function getReturnRatesLast30d(
 
   const motherAgg = new Map<string, { totalQty: number; refundedQty: number }>();
   const variantAgg = new Map<string, { totalQty: number; refundedQty: number }>();
+  const motherPix = new Map<string, { totalQty: number; pixQty: number }>();
+  const variantPix = new Map<string, { totalQty: number; pixQty: number }>();
+  let pixUnitsTotal = 0;
+  let unitsTotal = 0;
 
   let cursor: string | null = null;
   let hasNext = true;
@@ -141,6 +151,11 @@ export async function getReturnRatesLast30d(
       if (fs === 'VOIDED' || fs === 'REFUNDED') continue;
       const tagsCombined = (o.tags || []).concat(o.customer?.tags || []).join(' ').toLowerCase();
       if (EXCLUDED_TAGS.test(tagsCombined)) continue;
+
+      // PIX detection (BR): paymentGatewayNames contém "pix"
+      const isPix = market === 'BR'
+        ? (o.paymentGatewayNames || []).some((p: string) => /pix/i.test(p || ''))
+        : false;
 
       // Mapeia line item id → quantity + sku
       const lineMap = new Map<string, { qty: number; sku: string | null }>();
@@ -177,6 +192,19 @@ export async function getReturnRatesLast30d(
         vAcc.totalQty += info.qty;
         vAcc.refundedQty += refQty;
         variantAgg.set(vKey, vAcc);
+
+        // PIX share (BR apenas) — 30d rolling por SKU
+        const pixQ = isPix ? info.qty : 0;
+        unitsTotal += info.qty;
+        pixUnitsTotal += pixQ;
+        const mPix = motherPix.get(mSku) || { totalQty: 0, pixQty: 0 };
+        mPix.totalQty += info.qty;
+        mPix.pixQty += pixQ;
+        motherPix.set(mSku, mPix);
+        const vPix = variantPix.get(vKey) || { totalQty: 0, pixQty: 0 };
+        vPix.totalQty += info.qty;
+        vPix.pixQty += pixQ;
+        variantPix.set(vKey, vPix);
       }
     }
 
@@ -201,7 +229,27 @@ export async function getReturnRatesLast30d(
     });
   }
 
-  console.log(`[ue-ret30d ${market}] ${pages} pages, ${motherAgg.size} mothers, ${variantAgg.size} variants, partial=${partial}, ${Date.now() - t0}ms`);
+  const pixByMother = new Map<string, { totalQty: number; pixQty: number; pixShare: number }>();
+  for (const [k, v] of motherPix.entries()) {
+    pixByMother.set(k, {
+      totalQty: v.totalQty,
+      pixQty: v.pixQty,
+      pixShare: v.totalQty > 0 ? v.pixQty / v.totalQty : 0,
+    });
+  }
+  const pixByVariant = new Map<string, { totalQty: number; pixQty: number; pixShare: number }>();
+  for (const [k, v] of variantPix.entries()) {
+    pixByVariant.set(k, {
+      totalQty: v.totalQty,
+      pixQty: v.pixQty,
+      pixShare: v.totalQty > 0 ? v.pixQty / v.totalQty : 0,
+    });
+  }
+  const pixShareOverall = unitsTotal > 0 ? pixUnitsTotal / unitsTotal : 0;
 
-  return { byMother, byVariant, pages, partial };
+  console.log(
+    `[ue-ret30d ${market}] ${pages} pages, ${motherAgg.size} mothers, ${variantAgg.size} variants, pixShare30d=${(pixShareOverall * 100).toFixed(1)}%, partial=${partial}, ${Date.now() - t0}ms`
+  );
+
+  return { byMother, byVariant, pixByMother, pixByVariant, pixShareOverall, pages, partial };
 }

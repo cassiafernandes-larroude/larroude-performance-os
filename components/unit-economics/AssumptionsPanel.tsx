@@ -47,6 +47,14 @@ export default function AssumptionsPanel({ assumptions, market, onChange, onRese
           hint="0 = usa o real do Shopify"
         />
         <Field
+          label="Cupom adicional"
+          suffix="%"
+          value={(assumptions.couponPct ?? 0) * 100}
+          onChange={(n) => update('couponPct', n / 100)}
+          step={1}
+          hint="Aplicado APÓS desconto Shopify"
+        />
+        <Field
           label="Marketing %"
           suffix="% receita"
           value={assumptions.marketingPct * 100}
@@ -92,7 +100,7 @@ export default function AssumptionsPanel({ assumptions, market, onChange, onRese
               value={(assumptions.pixSharePctOverride ?? 0) * 100}
               onChange={(n) => update('pixSharePctOverride', n === 0 ? null : n / 100)}
               step={1}
-              hint="0 = usa o real do Shopify"
+              hint="0 = usa real 30d Shopify"
             />
             <Field
               label="Desconto PIX"
