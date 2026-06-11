@@ -48,10 +48,13 @@ export default function KpiCards({
   selectedProduct: ProductUnitEconomics | null;
 }) {
   // Cassia 2026-06-11: KPIs do topo referem ao produto selecionado.
-  // Return rate: cascade.returnRate (30d do produto)
+  // Return rate: usa direto product.returnRate30d (real 30d), com fallback pra cascade
   // Unidades: selectedProduct.totalUnits no D-1 + orders do produto
   // Marketing Total: marketingPct × effectiveUnits × pricePerUnit do produto
-  const returnRateValue = cascade?.returnRate ?? 0;
+  const returnRateValue =
+    selectedProduct?.returnRate30d ?? cascade?.returnRate ?? 0;
+  const returnTotal = selectedProduct?.returnTotalQty30d ?? 0;
+  const returnRefunded = selectedProduct?.returnRefundedQty30d ?? 0;
   const returnTone: Tone =
     returnRateValue > 0.08 ? 'danger' : returnRateValue > 0.05 ? 'warn' : 'neutral';
   const mcRealPositive = cascade ? cascade.netCmReal > 0 : false;
@@ -90,7 +93,11 @@ export default function KpiCards({
         <KpiCard
           label="RETURN RATE (30D)"
           value={pct(returnRateValue, 2)}
-          sub="Refunds qty / total qty · 30d rolling"
+          sub={
+            returnTotal > 0
+              ? `${returnRefunded.toLocaleString()} de ${returnTotal.toLocaleString()} un · 30d`
+              : 'Sem dados de devolução nos últimos 30d'
+          }
           tone={returnTone}
         />
         <UnitsGoalCard
@@ -232,7 +239,7 @@ function UnitsGoalCard({
           className="text-[10.5px] font-bold uppercase tracking-[0.08em] leading-tight"
           style={{ color: t.label }}
         >
-          UNIDADES
+          UNIDADES VENDIDAS ONTEM
         </div>
         {hasGoal && (
           <div

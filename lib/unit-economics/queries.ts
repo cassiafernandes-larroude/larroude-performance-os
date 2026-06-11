@@ -41,6 +41,12 @@ export interface ProductUnitEconomics {
   unitRefund: number;
   /** Taxa de troca (REDO) dos ultimos 30d — 0..1. Aplicada no cascade.exchange. */
   exchangeRate?: number;
+  /** Taxa de devolucao dos ultimos 30d — 0..1. Refunded qty / total qty por mother SKU. */
+  returnRate30d?: number;
+  /** Total qty 30d (refunded + bruto) usado no calculo de returnRate30d. */
+  returnTotalQty30d?: number;
+  /** Refunded qty 30d. */
+  returnRefundedQty30d?: number;
   /** % do volume pago em PIX (0..1). 0 para US. */
   pixShare: number;
   /** Currency */

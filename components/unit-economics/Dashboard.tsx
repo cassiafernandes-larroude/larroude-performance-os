@@ -28,9 +28,9 @@ interface ApiResponse {
   pagesProcessed?: number;
   catalogProductsCount?: number;
   catalogVariantsCount?: number;
-  returnRate30d?: number;
-  returnTotalQty30d?: number;
-  returnRefundedQty30d?: number;
+  returnRate30d?: number; // agg do market
+  returnTotalQty30d?: number; // agg do market
+  returnRefundedQty30d?: number; // agg do market
   exchangeRate30d?: number;
   exchangeTotalQty30d?: number;
   exchangeRedoQty30d?: number;

@@ -36,7 +36,7 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
   const { start, end } = defaultWindow();
   const startedAt = Date.now();
   try {
-    const cacheKey = `ue:${market}:${start}:${end}:d1-cat-ret30d-exch30d-pix30d-coupon:v8`;
+    const cacheKey = `ue:${market}:${start}:${end}:d1-cat-ret30d-exch30d-pix30d-coupon-rate30d:v9`;
     const result = await memo(cacheKey, TTL_30M, async () => {
       // 6 fontes em paralelo:
       // 1) Shopify orders D-1 (sells)
@@ -106,8 +106,9 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
         const exch = exchanges30d.byMother.get(cat.motherSku);
         const pix = returns30d.pixByMother.get(cat.motherSku);
         const returnRate = ret?.returnRate ?? 0;
+        const returnTotalQty30d = ret?.totalQty ?? 0;
+        const returnRefundedQty30d = ret?.refundedQty ?? 0;
         const exchangeRate = exch?.exchangeRate ?? 0;
-        // pixShare 30d — fallback pra overall do market se SKU sem amostra
         const pixShare30d =
           pix && pix.totalQty > 0 ? pix.pixShare : returns30d.pixShareOverall;
         if (sell) {
@@ -116,7 +117,10 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
             productName: sell.productName || cat.productName,
             unitRefund: sell.unitGrossRevenue * returnRate,
             exchangeRate,
-            pixShare: pixShare30d, // sobrescreve pixShare D-1 pelo 30d
+            returnRate30d: returnRate,
+            returnTotalQty30d,
+            returnRefundedQty30d,
+            pixShare: pixShare30d,
           } as ProductUnitEconomics;
         }
         return {
@@ -132,6 +136,9 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
           unitCogs: cat.unitCogs,
           unitRefund: cat.unitPrice * returnRate,
           exchangeRate,
+          returnRate30d: returnRate,
+          returnTotalQty30d,
+          returnRefundedQty30d,
           pixShare: pixShare30d,
           currency,
         };
@@ -144,6 +151,8 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
         const exch = exchanges30d.byVariant.get(key);
         const pix = returns30d.pixByVariant.get(key);
         const returnRate = ret?.returnRate ?? 0;
+        const returnTotalQty30d = ret?.totalQty ?? 0;
+        const returnRefundedQty30d = ret?.refundedQty ?? 0;
         const exchangeRate = exch?.exchangeRate ?? 0;
         const pixShare30d =
           pix && pix.totalQty > 0 ? pix.pixShare : returns30d.pixShareOverall;
@@ -153,6 +162,9 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
             productName: sell.productName || cat.productName,
             unitRefund: sell.unitGrossRevenue * returnRate,
             exchangeRate,
+            returnRate30d: returnRate,
+            returnTotalQty30d,
+            returnRefundedQty30d,
             pixShare: pixShare30d,
           } as ProductUnitEconomics;
         }
@@ -169,6 +181,9 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
           unitCogs: cat.unitCogs,
           unitRefund: cat.unitPrice * returnRate,
           exchangeRate,
+          returnRate30d: returnRate,
+          returnTotalQty30d,
+          returnRefundedQty30d,
           pixShare: pixShare30d,
           currency,
         };
