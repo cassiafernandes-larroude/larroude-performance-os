@@ -36,10 +36,14 @@ export default function KpiCards({
   data,
   cascade,
   assumptions,
+  unitsGoal,
+  onUnitsGoalChange,
 }: {
   data: ApiData;
   cascade: CascadeUnit | null;
   assumptions: Assumptions;
+  unitsGoal: number;
+  onUnitsGoalChange: (n: number) => void;
 }) {
   const returnRateValue = data.returnRate30d ?? cascade?.returnRate ?? 0;
   const returnTone: Tone =
@@ -47,12 +51,16 @@ export default function KpiCards({
   const mcRealPositive = cascade ? cascade.netCmReal > 0 : false;
   const mcPremPositive = cascade ? cascade.netCmAssumption > 0 : false;
 
-  // Marketing total reativo: muda quando marketingPct (premissa) muda.
-  // Premissa = marketingPct × totalRevenue (gross D-1)
-  // Real = data.totalMarketingSpend (Meta + Google atribuido)
-  const marketingPremissa = assumptions.marketingPct * data.totalRevenue;
-  const marketingPremissaPerUnit =
-    data.totalUnits > 0 ? marketingPremissa / data.totalUnits : 0;
+  // Marketing total reativo: muda quando marketingPct OU meta de unidades muda.
+  // Premissa = marketingPct × (meta || actual) × pricePerUnit
+  // Cassia 2026-06-11: "o marketing total deve considerar o numero da meta no bloco de unidades"
+  const pricePerUnit =
+    data.totalUnits > 0 ? data.totalRevenue / data.totalUnits : 0;
+  const effectiveUnits = unitsGoal > 0 ? unitsGoal : data.totalUnits;
+  const projectedRevenue = effectiveUnits * pricePerUnit;
+  const marketingPremissa = assumptions.marketingPct * projectedRevenue;
+  const marketingPremissaPerUnit = assumptions.marketingPct * pricePerUnit;
+  const usingGoal = unitsGoal > 0;
 
   return (
     <section className="mt-6">
@@ -86,11 +94,12 @@ export default function KpiCards({
           orders={data.totalOrders}
           market={data.market || 'US'}
           locale={data.currency === 'USD' ? 'en-US' : 'pt-BR'}
+          onGoalChange={onUnitsGoalChange}
         />
         <KpiCard
           label="MARKETING TOTAL"
           value={fmt(marketingPremissa, data.currency, { compact: true })}
-          sub={`${pct(assumptions.marketingPct)} da receita · ${fmt(marketingPremissaPerUnit, data.currency)} / un · Real: ${fmt(data.totalMarketingSpend, data.currency, { compact: true })}`}
+          sub={`${pct(assumptions.marketingPct)} × ${effectiveUnits.toLocaleString()} un (${usingGoal ? 'meta' : 'real'}) · ${fmt(marketingPremissaPerUnit, data.currency)}/un · Real: ${fmt(data.totalMarketingSpend, data.currency, { compact: true })}`}
           tone="alert"
         />
       </div>
@@ -159,11 +168,13 @@ function UnitsGoalCard({
   orders,
   market,
   locale,
+  onGoalChange,
 }: {
   actual: number;
   orders: number;
   market: Market;
   locale: string;
+  onGoalChange: (n: number) => void;
 }) {
   const STORAGE_KEY = `lpos-ue-units-goal-${market}`;
   const [goalStr, setGoalStr] = useState<string>('');
@@ -172,8 +183,15 @@ function UnitsGoalCard({
     if (typeof window === 'undefined') return;
     try {
       const v = window.localStorage.getItem(STORAGE_KEY);
-      if (v) setGoalStr(v);
+      if (v) {
+        setGoalStr(v);
+        const n = parseInt(v.replace(/\D/g, ''), 10);
+        onGoalChange(Number.isFinite(n) && n > 0 ? n : 0);
+      } else {
+        onGoalChange(0);
+      }
     } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [STORAGE_KEY]);
 
   function save(v: string) {
@@ -183,6 +201,8 @@ function UnitsGoalCard({
         window.localStorage.setItem(STORAGE_KEY, v);
       } catch {}
     }
+    const n = parseInt(v.replace(/\D/g, ''), 10);
+    onGoalChange(Number.isFinite(n) && n > 0 ? n : 0);
   }
 
   const goal = parseInt(goalStr.replace(/\D/g, ''), 10);

@@ -8,6 +8,7 @@ import AssumptionsPanel from './AssumptionsPanel';
 import CascadeView from './CascadeView';
 import KpiCards from './KpiCards';
 import ProductSelector from './ProductSelector';
+import RecommendationsPanel from './RecommendationsPanel';
 
 interface ApiResponse {
   market: Market;
@@ -56,6 +57,20 @@ export default function Dashboard({ freshness }: { freshness: string }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Meta de unidades por market (lida no UnitsGoalCard via localStorage).
+  // Marketing Total premissa = marketingPct × meta × pricePerUnit (Cassia 2026-06-11).
+  const [unitsGoal, setUnitsGoal] = useState<number>(0);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const v = window.localStorage.getItem(`lpos-ue-units-goal-${state.market}`);
+      const n = v ? parseInt(v.replace(/\D/g, ''), 10) : 0;
+      setUnitsGoal(Number.isFinite(n) && n > 0 ? n : 0);
+    } catch {
+      setUnitsGoal(0);
+    }
+  }, [state.market]);
 
   // localStorage rehydrate
   useEffect(() => {
@@ -206,7 +221,13 @@ export default function Dashboard({ freshness }: { freshness: string }) {
 
       {data && (
         <>
-          <KpiCards data={data} cascade={cascade} assumptions={assumptions} />
+          <KpiCards
+            data={data}
+            cascade={cascade}
+            assumptions={assumptions}
+            unitsGoal={unitsGoal}
+            onUnitsGoalChange={setUnitsGoal}
+          />
 
           <div className="grid grid-cols-1 lg:grid-cols-[300px,1fr] gap-4 mt-6">
             <ProductSelector
@@ -250,6 +271,14 @@ export default function Dashboard({ freshness }: { freshness: string }) {
                 },
               }))
             }
+          />
+
+          <RecommendationsPanel
+            products={data.products}
+            market={state.market}
+            assumptions={assumptions}
+            marketingPerUnitReal={data.marketingPerUnit}
+            currency={data.currency}
           />
         </>
       )}
