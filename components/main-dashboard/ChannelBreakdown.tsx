@@ -16,10 +16,10 @@ export default function ChannelBreakdown({ channels, topCampaigns, market }: Pro
     <section className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
       <div className="card p-5">
         <div className="text-xs font-bold uppercase tracking-wider text-steel mb-4">
-          Receita por canal · {market}
+          Revenue by channel · {market}
         </div>
         <div className="space-y-2.5">
-          {displayChannels.length === 0 && <div className="text-sm text-steel italic">Sem dados de canal no período.</div>}
+          {displayChannels.length === 0 && <div className="text-sm text-steel italic">No channel data in this period.</div>}
           {displayChannels.map((c) => (
             <div key={c.channel} className="grid grid-cols-12 items-center gap-3">
               <div className="col-span-3 text-xs text-ink truncate text-right pr-1">{c.channel}</div>

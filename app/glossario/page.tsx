@@ -29,10 +29,10 @@ export default function GlossarioPage() {
           <table className="w-full text-[13px]">
             <thead>
               <tr style={{ borderBottom: "1px solid var(--border)" }}>
-                <th className="text-left py-2.5 pr-4 font-semibold label-meta">SIGLA</th>
-                <th className="text-left py-2.5 pr-4 font-semibold label-meta">NOME</th>
-                <th className="text-left py-2.5 pr-4 font-semibold label-meta">FÓRMULA</th>
-                <th className="text-left py-2.5 font-semibold label-meta">NOTAS</th>
+                <th className="text-left py-2.5 pr-4 font-semibold label-meta">ACRONYM</th>
+                <th className="text-left py-2.5 pr-4 font-semibold label-meta">NAME</th>
+                <th className="text-left py-2.5 pr-4 font-semibold label-meta">FORMULA</th>
+                <th className="text-left py-2.5 font-semibold label-meta">NOTES</th>
               </tr>
             </thead>
             <tbody>

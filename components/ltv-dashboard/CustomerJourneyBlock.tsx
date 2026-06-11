@@ -21,7 +21,7 @@ function ProductList({
   showRepeatRate?: boolean;
 }) {
   if (!products.length) {
-    return <div className="empty">Sem dados.</div>;
+    return <div className="empty">No data.</div>;
   }
   const maxC = Math.max(...products.map((p) => p.customers), 1);
   return (
@@ -37,10 +37,10 @@ function ProductList({
           <thead>
             <tr>
               <th style={{ width: 32 }}>#</th>
-              <th>Produto</th>
-              <th className="num">Clientes</th>
-              {showRepeatRate && <th className="num">Taxa Repeat</th>}
-              <th className="num">Dias mediano</th>
+              <th>Product</th>
+              <th className="num">Customers</th>
+              {showRepeatRate && <th className="num">Repeat Rate</th>}
+              <th className="num">Median days</th>
             </tr>
           </thead>
           <tbody>
@@ -109,7 +109,7 @@ function TransitionMatrix({
   }
 
   if (!cells.length) {
-    return <div className="empty">Sem dados de transição.</div>;
+    return <div className="empty">No transition data.</div>;
   }
 
   return (
@@ -119,11 +119,11 @@ function TransitionMatrix({
           className="section-badge"
           style={{ background: '#5d4ec5', color: '#fff' }}
         >
-          D · TRANSIÇÃO 1ª → 2ª
+          D · TRANSITION 1ST → 2ND
         </span>
-        <h3>Quem compra X, leva o quê depois</h3>
+        <h3>Who buys X, takes what next</h3>
         <span className="section-meta">
-          Top 15 produtos da 1ª compra × Top 15 destinos na 2ª · % dos clientes (linha) que escolheram cada produto (coluna)
+          Top 15 products on 1st purchase × Top 15 destinations on 2nd · % of customers (row) who picked each product (column)
         </span>
       </div>
       <div className="hm-scroll">
@@ -131,7 +131,7 @@ function TransitionMatrix({
           <thead>
             <tr>
               <th className="hm-col-name" style={{ textAlign: 'left' }}>
-                1ª compra ↓ \ 2ª →
+                1st purchase ↓ \ 2nd →
               </th>
               {toKeys.map((to) => (
                 <th
@@ -178,7 +178,7 @@ function TransitionMatrix({
                         fontSize: 11,
                         fontWeight: 600,
                       }}
-                      title={`${formatNumber(c.customers, market)} clientes · ${c.pctOfFirst.toFixed(1)}%`}
+                      title={`${formatNumber(c.customers, market)} customers · ${c.pctOfFirst.toFixed(1)}%`}
                     >
                       <div>{c.pctOfFirst.toFixed(1)}%</div>
                       <div style={{ fontSize: 9, fontWeight: 400, opacity: 0.8 }}>
@@ -323,7 +323,7 @@ function MediaRecommendations({
       recState.accepted.size + recState.ignored.size + recState.applied.size;
     if (total === 0) return;
     const confirmed = window.confirm(
-      `Resetar todas as ${total} marcações (aceitas, ignoradas e aplicadas) para esse mercado?`,
+      `Reset all ${total} marks (accepted, ignored, and applied) for this market?`,
     );
     if (!confirmed) return;
     update(() => ({ accepted: new Set(), ignored: new Set(), applied: new Set() }));
@@ -343,22 +343,22 @@ function MediaRecommendations({
     <div className="card-section">
       <div className="section-head">
         <span className="section-badge" style={{ background: '#c47a2a', color: '#fff' }}>
-          F · RECOMENDAÇÕES
+          F · RECOMMENDATIONS
         </span>
-        <h3>Comunicações de mídia · ações sugeridas</h3>
+        <h3>Media communications · suggested actions</h3>
         <span className="section-meta">
-          Flows automáticos com base nas transições reais
+          Automatic flows based on real transitions
           {hasAnyState && (
             <>
               {' · '}
               <span style={{ color: '#2c7a5b', fontWeight: 600 }}>
-                {acceptedCount} aceitas
+                {acceptedCount} accepted
               </span>
               {appliedCount > 0 && (
                 <>
                   {' · '}
                   <span style={{ color: '#5d4ec5', fontWeight: 600 }}>
-                    {appliedCount} aplicadas
+                    {appliedCount} applied
                   </span>
                 </>
               )}
@@ -377,7 +377,7 @@ function MediaRecommendations({
                       padding: 0,
                     }}
                   >
-                    {ignoredCount} ignorada{ignoredCount !== 1 ? 's' : ''} (restaurar)
+                    {ignoredCount} ignored (restore)
                   </button>
                 </>
               )}
@@ -387,7 +387,7 @@ function MediaRecommendations({
         {hasAnyState && (
           <button
             onClick={resetAll}
-            title="Resetar todas as marcações (aceitas, ignoradas e aplicadas)"
+            title="Reset all marks (accepted, ignored, and applied)"
             style={{
               background: '#fff',
               border: '1px solid #c47a2a',
@@ -403,7 +403,7 @@ function MediaRecommendations({
               marginLeft: 8,
             }}
           >
-            <span style={{ fontSize: 14 }}>↻</span> Resetar tudo
+            <span style={{ fontSize: 14 }}>↻</span> Reset all
           </button>
         )}
       </div>
@@ -427,10 +427,10 @@ function MediaRecommendations({
           const channelName = `Flow E-mail + ${secondaryChannel}`;
           const channel =
             days <= 21
-              ? { name: channelName, color: '#d44a8a', icon: '⚡', urgency: 'alta' }
+              ? { name: channelName, color: '#d44a8a', icon: '⚡', urgency: 'high' }
               : days <= 45
-                ? { name: channelName, color: '#5d4ec5', icon: '📩', urgency: 'média' }
-                : { name: channelName, color: '#2c7a5b', icon: '🎯', urgency: 'longa' };
+                ? { name: channelName, color: '#5d4ec5', icon: '📩', urgency: 'medium' }
+                : { name: channelName, color: '#2c7a5b', icon: '🎯', urgency: 'long' };
 
           // Visual de selecionado (aceito)
           const cardBg = isApplied
@@ -491,11 +491,11 @@ function MediaRecommendations({
               {/* From → To */}
               <div style={{ fontSize: 12.5, lineHeight: 1.5, color: '#3a2a1c' }}>
                 <div>
-                  <span style={{ color: '#8a8580' }}>Quem comprou:</span>{' '}
+                  <span style={{ color: '#8a8580' }}>Who bought:</span>{' '}
                   <strong>{rec.fromName}</strong>
                 </div>
                 <div>
-                  <span style={{ color: '#8a8580' }}>Oferecer:</span>{' '}
+                  <span style={{ color: '#8a8580' }}>Offer:</span>{' '}
                   <strong style={{ color: channel.color }}>{rec.toName}</strong>
                 </div>
               </div>
@@ -512,7 +512,7 @@ function MediaRecommendations({
                 }}
               >
                 <div>
-                  <div style={{ color: '#8a8580', fontSize: 10 }}>AUDIÊNCIA</div>
+                  <div style={{ color: '#8a8580', fontSize: 10 }}>AUDIENCE</div>
                   <div style={{ fontWeight: 600 }}>
                     {formatNumber(rec.customers, market)} ({rec.pctOfFirst.toFixed(1)}%)
                   </div>
@@ -524,7 +524,7 @@ function MediaRecommendations({
                   </div>
                 </div>
                 <div>
-                  <div style={{ color: '#8a8580', fontSize: 10 }}>MEDIANA</div>
+                  <div style={{ color: '#8a8580', fontSize: 10 }}>MEDIAN</div>
                   <div style={{ fontWeight: 600 }}>{days} d</div>
                 </div>
               </div>
@@ -541,24 +541,24 @@ function MediaRecommendations({
                   borderRadius: 8,
                 }}
               >
-                <strong>Ação:</strong>{' '}
+                <strong>Action:</strong>{' '}
                 {days <= 21 ? (
                   <>
-                    Janela curta (urgência alta) — disparar e-mail D+{triggerStart} +{' '}
-                    {secondaryChannel} D+{Math.round(days * 0.6)} oferecendo{' '}
+                    Short window (high urgency) — fire email D+{triggerStart} +{' '}
+                    {secondaryChannel} D+{Math.round(days * 0.6)} offering{' '}
                     <em>{rec.toName}</em>.
                   </>
                 ) : days <= 45 ? (
                   <>
-                    Janela média — flow E-mail D+{triggerStart} + reforço{' '}
-                    {secondaryChannel} D+{Math.round(days * 0.7)} com{' '}
+                    Medium window — email flow D+{triggerStart} + reinforcement{' '}
+                    {secondaryChannel} D+{Math.round(days * 0.7)} with{' '}
                     <em>{rec.toName}</em>.
                   </>
                 ) : (
                   <>
-                    Janela longa — flow E-mail sequencial (D+{triggerStart}, D+
+                    Long window — sequential email flow (D+{triggerStart}, D+
                     {Math.round(days * 0.7)}) + {secondaryChannel} D+
-                    {Math.round(days * 0.9)} com <em>{rec.toName}</em>.
+                    {Math.round(days * 0.9)} with <em>{rec.toName}</em>.
                   </>
                 )}
               </div>
@@ -592,7 +592,7 @@ function MediaRecommendations({
                       onChange={() => toggleApplied(id)}
                       style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#2c7a5b' }}
                     />
-                    {isApplied ? '✓ Aplicada' : 'Marcar como aplicada'}
+                    {isApplied ? '✓ Applied' : 'Mark as applied'}
                   </label>
                   <button
                     onClick={() => ignore(id)}
@@ -606,9 +606,9 @@ function MediaRecommendations({
                       cursor: 'pointer',
                       fontWeight: 600,
                     }}
-                    title="Remover esta recomendação"
+                    title="Remove this recommendation"
                   >
-                    Ignorar
+                    Ignore
                   </button>
                 </div>
               ) : (
@@ -634,7 +634,7 @@ function MediaRecommendations({
                       cursor: 'pointer',
                     }}
                   >
-                    ✓ Aceitar
+                    ✓ Accept
                   </button>
                   <button
                     onClick={() => ignore(id)}
@@ -650,7 +650,7 @@ function MediaRecommendations({
                       cursor: 'pointer',
                     }}
                   >
-                    ✕ Ignorar
+                    ✕ Ignore
                   </button>
                 </div>
               )}
@@ -695,23 +695,23 @@ function NextPurchaseExplorer({
   const maxC = Math.max(...destinations.map(d => d.customers), 1);
 
   if (!transitions.length) {
-    return <div className="empty">Sem dados.</div>;
+    return <div className="empty">No data.</div>;
   }
 
   return (
     <div className="card-section">
       <div className="section-head">
         <span className="section-badge" style={{ background: '#1f6f8b', color: '#fff' }}>
-          E · EXPLORADOR
+          E · EXPLORER
         </span>
-        <h3>O que vem depois de…?</h3>
+        <h3>What comes after…?</h3>
         <span className="section-meta">
-          Selecione um produto da 1ª compra para ver os destinos mais comuns na 2ª
+          Pick a product from the 1st purchase to see the most common 2nd destinations
         </span>
       </div>
 
       <div style={{ padding: '12px 0 16px', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-        <label style={{ fontSize: 12, fontWeight: 600, color: '#666' }}>1ª compra:</label>
+        <label style={{ fontSize: 12, fontWeight: 600, color: '#666' }}>1st purchase:</label>
         <select
           value={selected}
           onChange={(e) => setSelected(e.target.value)}
@@ -727,29 +727,29 @@ function NextPurchaseExplorer({
         >
           {fromOptions.map(o => (
             <option key={o.sku} value={o.sku}>
-              {o.name} · {formatNumber(o.total, market)} clientes
+              {o.name} · {formatNumber(o.total, market)} customers
             </option>
           ))}
         </select>
         {selectedFrom && (
           <span style={{ fontSize: 12, color: '#888' }}>
-            Total: {formatNumber(selectedFrom.total, market)} clientes que fizeram 2ª compra após este produto
+            Total: {formatNumber(selectedFrom.total, market)} customers who made a 2nd purchase after this product
           </span>
         )}
       </div>
 
       {destinations.length === 0 ? (
-        <div className="empty">Sem destinos com volume mínimo para este produto.</div>
+        <div className="empty">No destinations with minimum volume for this product.</div>
       ) : (
         <div className="table-scroll">
           <table className="prod-table">
             <thead>
               <tr>
                 <th style={{ width: 32 }}>#</th>
-                <th>Produto da 2ª compra</th>
-                <th className="num">Clientes</th>
-                <th className="num">% dos que fizeram 2ª</th>
-                <th className="num">Dias mediano</th>
+                <th>2nd purchase product</th>
+                <th className="num">Customers</th>
+                <th className="num">% of those with 2nd</th>
+                <th className="num">Median days</th>
               </tr>
             </thead>
             <tbody>
@@ -802,7 +802,7 @@ export default function CustomerJourneyBlock({
     return (
       <div className="card" style={{ padding: 40, textAlign: 'center' }}>
         <span className="spinner" />
-        Carregando jornada do cliente...
+        Loading customer journey...
       </div>
     );
   }
@@ -810,25 +810,25 @@ export default function CustomerJourneyBlock({
 
   return (
     <>
-      {/* KPIs tempo entre compras */}
+      {/* KPIs time between purchases */}
       <div className="kpi-grid">
         <KpiCard
-          label="Tempo 1ª → 2ª compra"
+          label="Time 1st → 2nd purchase"
           value={journey.medianDays1to2 > 0 ? `${journey.medianDays1to2} d` : '—'}
-          sub="Mediana de dias entre 1ª e 2ª compra"
+          sub="Median days between 1st and 2nd purchase"
           highlight
         />
         <KpiCard
-          label="Tempo 2ª → 3ª compra"
+          label="Time 2nd → 3rd purchase"
           value={journey.medianDays2to3 > 0 ? `${journey.medianDays2to3} d` : '—'}
-          sub="Mediana de dias entre 2ª e 3ª compra"
+          sub="Median days between 2nd and 3rd purchase"
         />
       </div>
 
       <div style={{ marginTop: 16 }}>
         <ProductList
-          title="Top 5 Produtos de Entrada (1ª compra)"
-          badge="A · ENTRADA"
+          title="Top 5 Entry Products (1st purchase)"
+          badge="A · ENTRY"
           badgeColor="#2c7a5b"
           products={journey.entryProducts}
           market={market}
@@ -838,15 +838,15 @@ export default function CustomerJourneyBlock({
 
       <div className="charts-grid two-col" style={{ marginTop: 16 }}>
         <ProductList
-          title="Top 5 da 2ª compra"
-          badge="B · 2ª COMPRA"
+          title="Top 5 on 2nd purchase"
+          badge="B · 2ND PURCHASE"
           badgeColor="#d44a8a"
           products={journey.secondPurchaseProducts}
           market={market}
         />
         <ProductList
-          title="Top 5 da 3ª compra"
-          badge="C · 3ª COMPRA"
+          title="Top 5 on 3rd purchase"
+          badge="C · 3RD PURCHASE"
           badgeColor="#d97757"
           products={journey.thirdPurchaseProducts}
           market={market}

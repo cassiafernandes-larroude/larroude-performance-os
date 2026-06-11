@@ -3,9 +3,9 @@ import { Placeholder } from "@/components/layout/Placeholder";
 export default function AlertasPage() {
   return (
     <Placeholder
-      title="Alertas"
-      subtitle="Webhooks Slack para diagnósticos críticos · regras customizáveis"
-      phase="Fase 3"
+      title="Alerts"
+      subtitle="Slack webhooks for critical diagnostics · customizable rules"
+      phase="Phase 3"
     />
   );
 }
