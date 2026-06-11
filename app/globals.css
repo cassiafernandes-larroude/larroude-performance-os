@@ -143,6 +143,134 @@ body {
   }
 }
 
+/* ==================== PADRONIZAÇÃO GLOBAL ====================
+ * Cassia 2026-06-11: "padronize todos os dashboards para que tenham as mesmas
+ *                     fontes e mesmo layout dos quadros principais de kpi"
+ *                     "e mesmo tamanho na fonte dos titulos"
+ *
+ * Pattern de referência = Unit Economics / Produtos para Apostar.
+ */
+
+/* Títulos H1 de todos os dashboards: mesma escala */
+.main-dashboard-root h1.font-display,
+.cac-root h1.font-display,
+.ltv-root h1.font-display {
+  font-size: 40px;
+  line-height: 1.1;
+  letter-spacing: -0.025em;
+  font-weight: 700;
+}
+@media (max-width: 1023px) {
+  .main-dashboard-root h1.font-display,
+  .cac-root h1.font-display,
+  .ltv-root h1.font-display {
+    font-size: 28px !important;
+  }
+}
+@media (max-width: 640px) {
+  .main-dashboard-root h1.font-display,
+  .cac-root h1.font-display,
+  .ltv-root h1.font-display {
+    font-size: 24px !important;
+  }
+}
+
+/* KPI cards padrão (Unit Economics / Inventory pattern) */
+.kpi-card-uniform {
+  background: #ffffff;
+  border: 1px solid #e5e3de;
+  border-radius: 16px;
+  padding: 20px 18px;
+  min-height: 130px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.kpi-card-uniform .kpi-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  color: #6b7280;
+}
+.kpi-card-uniform .kpi-value {
+  font-size: clamp(24px, 2.6vw, 36px);
+  font-weight: 700;
+  color: #111827;
+  line-height: 1;
+  margin-top: 8px;
+  font-variant-numeric: tabular-nums;
+}
+.kpi-card-uniform .kpi-sub {
+  font-size: 11px;
+  color: #9ca3af;
+  line-height: 1.3;
+  margin-top: 8px;
+}
+
+/* Aplica padronização nos KPI cards legacy (Main Dashboard, CAC, LTV) */
+.kpi-grid .card,
+.cac-root .kpi-card,
+.ltv-root .kpi-card {
+  background: #ffffff;
+  border: 1px solid #e5e3de;
+  border-radius: 16px;
+  padding: 20px 18px !important;
+  min-height: 130px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.kpi-grid .card .text-\[8\.5px\],
+.cac-root .kpi-label,
+.ltv-root .kpi-label {
+  font-size: 10.5px !important;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  color: #6b7280;
+}
+.kpi-grid .card .text-xl,
+.cac-root .kpi-value,
+.ltv-root .kpi-value {
+  font-size: clamp(24px, 2.6vw, 36px) !important;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1 !important;
+  margin-top: 8px;
+  font-variant-numeric: tabular-nums;
+}
+.kpi-grid .card .text-\[9px\],
+.cac-root .kpi-sub,
+.ltv-root .kpi-sub {
+  font-size: 11px !important;
+  color: #9ca3af;
+  line-height: 1.3 !important;
+  margin-top: 8px;
+}
+
+/* Em mobile, KPI cards menores */
+@media (max-width: 640px) {
+  .kpi-card-uniform,
+  .kpi-grid .card,
+  .cac-root .kpi-card,
+  .ltv-root .kpi-card {
+    padding: 14px 12px !important;
+    min-height: 100px;
+    border-radius: 12px;
+  }
+  .kpi-card-uniform .kpi-value,
+  .kpi-grid .card .text-xl,
+  .cac-root .kpi-value,
+  .ltv-root .kpi-value {
+    font-size: clamp(18px, 5vw, 26px) !important;
+  }
+}
+
 /* ==================== PILLS ==================== */
 .pill {
   border-radius: 999px;
