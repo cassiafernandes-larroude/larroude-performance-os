@@ -40,13 +40,13 @@ export default function ProductSelector({ products, variants, selectedMotherSku,
   return (
     <aside className="card p-3" style={{ maxHeight: '70vh', overflow: 'auto' }}>
       <div className="text-xs font-bold uppercase tracking-wider text-steel mb-2">
-        Produtos ({products.length})
+        Products ({products.length})
       </div>
       <input
         type="search"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        placeholder="Buscar mother SKU ou nome…"
+        placeholder="Search mother SKU or name…"
         className="w-full rounded-lg px-3 py-2 text-[12px] mb-2"
         style={{ border: '1px solid #e5e3de', background: '#faf8f3' }}
       />
@@ -82,7 +82,7 @@ export default function ProductSelector({ products, variants, selectedMotherSku,
           );
         })}
         {filteredProducts.length === 0 && (
-          <div className="text-xs text-steel italic p-2">Nenhum produto encontrado.</div>
+          <div className="text-xs text-steel italic p-2">No products found.</div>
         )}
       </div>
     </aside>

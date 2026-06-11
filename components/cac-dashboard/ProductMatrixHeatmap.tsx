@@ -133,22 +133,22 @@ export default function ProductMatrixHeatmap({
   }
 
   if (!productDaily.length) {
-    return <div className="empty">Sem dados diários no período.</div>;
+    return <div className="empty">No daily data in this period.</div>;
   }
 
   return (
     <div className="card-section">
       <div className="section-head">
-        <h3>Matriz Diária · CAC por Produto × Dia</h3>
+        <h3>Daily Matrix · CAC by Product × Day</h3>
         <span className="section-meta">
-          Verde = CAC baixo · Vermelho = CAC alto · Cinza = sem novo cliente
+          Green = low CAC · Red = high CAC · Gray = no new customer
         </span>
       </div>
       <div className="hm-scroll">
         <table className="hm-table">
           <thead>
             <tr>
-              <th className="hm-col-name">Produto</th>
+              <th className="hm-col-name">Product</th>
               {dates.map((d) => (
                 <th key={d} className="hm-col-day">{dayLabel(d)}</th>
               ))}
@@ -156,12 +156,12 @@ export default function ProductMatrixHeatmap({
           </thead>
           <tbody>
             <tr className="hm-section-row">
-              <td colSpan={dates.length + 1}>A · TOP 15 POR VOLUME</td>
+              <td colSpan={dates.length + 1}>A · TOP 15 BY VOLUME</td>
             </tr>
             {rowsA.map(renderRow)}
             {rowsB.length > 0 && (
               <tr className="hm-section-row">
-                <td colSpan={dates.length + 1}>B · MENOR CAC (NÃO EM A)</td>
+                <td colSpan={dates.length + 1}>B · LOWEST CAC (NOT IN A)</td>
               </tr>
             )}
             {rowsB.map(renderRow)}

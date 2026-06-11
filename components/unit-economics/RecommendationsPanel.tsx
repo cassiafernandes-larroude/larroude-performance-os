@@ -51,17 +51,17 @@ export default function RecommendationsPanel({
     return (
       <section className="card mt-6 p-3 sm:p-5">
         <div className="text-xs font-bold uppercase tracking-wider" style={{ color: '#ec4899' }}>
-          📊 Cenários de Desconto
+          📊 Discount Scenarios
         </div>
         <div className="text-[12px] mt-2" style={{ color: '#6b7280' }}>
-          Selecione um produto pra ver os cenários.
+          Select a product to see scenarios.
         </div>
       </section>
     );
   }
 
   const targetMargin = market === 'US' ? 0.3 : 0;
-  const targetLabel = market === 'US' ? '≥ 30% margem' : 'break-even (0%)';
+  const targetLabel = market === 'US' ? '≥ 30% margin' : 'break-even (0%)';
 
   // Cenário "real" sem desconto extra — referência
   const realScenario = useMemo(() => {
@@ -90,24 +90,24 @@ export default function RecommendationsPanel({
     <section className="card mt-6 p-3 sm:p-5">
       <div className="mb-4">
         <div className="text-xs font-bold uppercase tracking-wider" style={{ color: '#ec4899' }}>
-          📊 Cenários de Desconto — {market} · Alvo: {targetLabel}
+          📊 Discount Scenarios — {market} · Target: {targetLabel}
         </div>
         <div className="text-[12px] mt-1" style={{ color: '#374151' }}>
-          Produto: <strong>{product.productName}</strong>
+          Product: <strong>{product.productName}</strong>
           <span className="ml-2 text-[11px]" style={{ color: '#9ca3af' }}>
-            ({product.totalUnits} un · preço de lista {fmt(product.unitGrossRevenue, currency)} ·
+            ({product.totalUnits} un · list price {fmt(product.unitGrossRevenue, currency)} ·
             COGS {fmt(product.unitCogs, currency)})
           </span>
         </div>
         <div className="text-[11px] mt-1" style={{ color: '#6b7280' }}>
-          Cenário atual: margem{' '}
+          Current scenario: margin{' '}
           <strong style={{ color: realScenario.margin >= targetMargin ? '#10b981' : '#dc2626' }}>
             {pct(realScenario.margin, 1)}
           </strong>{' '}
-          · MC Líq Premissa {fmt(realScenario.cascade.netCmAssumption, currency)}/un.
+          · Net CM Assumed {fmt(realScenario.cascade.netCmAssumption, currency)}/un.
           {market === 'US'
-            ? ' US precisa de 30% mínimo.'
-            : ' BR pode operar em break-even (qualquer MCL positiva).'}
+            ? ' US needs at least 30%.'
+            : ' BR can operate at break-even (any positive Net CM).'}
         </div>
       </div>
 
@@ -128,7 +128,7 @@ export default function RecommendationsPanel({
                   className="text-[10px] font-bold uppercase tracking-wider"
                   style={{ color: '#6b7280' }}
                 >
-                  Desconto {pct(s.discountPct, 0)}
+                  Discount {pct(s.discountPct, 0)}
                 </span>
                 {s.passes ? (
                   <span
@@ -142,7 +142,7 @@ export default function RecommendationsPanel({
                     className="text-[9px] font-bold px-1.5 py-0.5 rounded-md"
                     style={{ background: '#dc2626', color: '#fff' }}
                   >
-                    ABAIXO
+                    BELOW
                   </span>
                 )}
               </div>
@@ -154,20 +154,20 @@ export default function RecommendationsPanel({
                 {pct(s.margin, 1)}
               </div>
               <div className="text-[11px]" style={{ color: '#6b7280' }}>
-                margem resultante
+                resulting margin
               </div>
 
               <div className="mt-3 text-[11px] space-y-0.5" style={{ color: '#374151' }}>
                 <div className="flex justify-between">
-                  <span style={{ color: '#6b7280' }}>Preço final:</span>
+                  <span style={{ color: '#6b7280' }}>Final price:</span>
                   <strong>{fmt(s.cascade.effectiveRevenue, currency)}</strong>
                 </div>
                 <div className="flex justify-between">
-                  <span style={{ color: '#6b7280' }}>MCB/un:</span>
+                  <span style={{ color: '#6b7280' }}>Gross CM/un:</span>
                   <strong>{fmt(s.cascade.grossContributionMargin, currency)}</strong>
                 </div>
                 <div className="flex justify-between">
-                  <span style={{ color: '#6b7280' }}>MC Líq Prem:</span>
+                  <span style={{ color: '#6b7280' }}>Net CM Asm:</span>
                   <strong style={{ color: tone }}>
                     {fmt(s.cascade.netCmAssumption, currency)}
                   </strong>
@@ -182,45 +182,45 @@ export default function RecommendationsPanel({
         })}
       </div>
 
-      {/* Próximos passos */}
+      {/* Next steps */}
       <div className="mt-5 p-3 rounded-lg" style={{ background: '#f9fafb' }}>
         <div
           className="text-[10px] font-bold uppercase tracking-wider"
           style={{ color: '#6b7280' }}
         >
-          Diagnóstico — {product.productName}
+          Diagnostic — {product.productName}
         </div>
         <ul className="mt-2 text-[12px] space-y-1.5" style={{ color: '#374151' }}>
           {scenarios.filter((s) => s.passes).length === 0 && (
             <li>
-              ⚠ Nenhum cenário de desconto (30-60%) atinge o alvo {pct(targetMargin, 0)}.
-              Precisa <strong>subir preço, reduzir COGS</strong> ou revisar custos antes de
-              aplicar promoção.
+              ⚠ No discount scenario (30-60%) hits the target {pct(targetMargin, 0)}.
+              Need to <strong>raise price, reduce COGS</strong> or review costs before
+              running any promotion.
             </li>
           )}
           {scenarios.filter((s) => s.passes).length > 0 && (
             <li>
-              ✓ Desconto máximo viável:{' '}
+              ✓ Max viable discount:{' '}
               <strong>
                 {pct(
                   Math.max(...scenarios.filter((s) => s.passes).map((s) => s.discountPct)),
                   0
                 )}
               </strong>{' '}
-              (mantendo margem ≥ {pct(targetMargin, 0)}).
+              (keeping margin ≥ {pct(targetMargin, 0)}).
             </li>
           )}
           {market === 'BR' && product.pixShare > 0.5 && (
             <li>
-              • PIX share {pct(product.pixShare, 1)}: economia de taxa cartão permite descontos
-              mais agressivos do que o cálculo padrão.
+              • PIX share {pct(product.pixShare, 1)}: card-fee savings allow more aggressive
+              discounts than the default calc.
             </li>
           )}
           {product.exchangeRate != null && product.exchangeRate > 0.3 && (
             <li>
-              • Taxa de <strong>troca (Exchange-Only)</strong> {pct(product.exchangeRate, 1)} alta —
-              <em> métrica distinta de devoluções</em>. Cuidado com promoções que aumentem volume sem
-              fit garantido.
+              • <strong>Exchange-Only</strong> rate {pct(product.exchangeRate, 1)} is high —
+              <em> a distinct metric from returns</em>. Be careful with promotions that scale
+              volume without ensured fit.
             </li>
           )}
         </ul>

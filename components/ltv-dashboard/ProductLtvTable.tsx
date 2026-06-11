@@ -61,48 +61,48 @@ function ProductSection({
           {badge}
         </span>
         <h3>{title}</h3>
-        <span className="section-meta">Clique no cabeçalho para ordenar</span>
+        <span className="section-meta">Click headers to sort</span>
       </div>
       <div className="table-scroll">
         <table className="prod-table">
           <thead>
             <tr>
               <th style={{ width: 32 }}>#</th>
-              <th>Produto</th>
+              <th>Product</th>
               {isVolumeView ? (
                 <>
                   <th className="num" onClick={() => toggle('units')}>
-                    Unidades{arrow('units')}
+                    Units{arrow('units')}
                   </th>
                   <th className="num" onClick={() => toggle('revenue')}>
-                    Receita{arrow('revenue')}
+                    Revenue{arrow('revenue')}
                   </th>
                   <th className="num" onClick={() => toggle('customers')}>
-                    Clientes{arrow('customers')}
+                    Customers{arrow('customers')}
                   </th>
                   <th className="num" onClick={() => toggle('customerLtvAvg')}>
-                    LTV médio{arrow('customerLtvAvg')}
+                    Avg LTV{arrow('customerLtvAvg')}
                   </th>
                   <th className="num" onClick={() => toggle('customerLtvMedian')}>
-                    LTV mediano{arrow('customerLtvMedian')}
+                    Median LTV{arrow('customerLtvMedian')}
                   </th>
                 </>
               ) : (
                 <>
                   <th className="num" onClick={() => toggle('customerLtvAvg')}>
-                    LTV médio{arrow('customerLtvAvg')}
+                    Avg LTV{arrow('customerLtvAvg')}
                   </th>
                   <th className="num" onClick={() => toggle('customerLtvMedian')}>
-                    LTV mediano{arrow('customerLtvMedian')}
+                    Median LTV{arrow('customerLtvMedian')}
                   </th>
                   <th className="num" onClick={() => toggle('customers')}>
-                    Clientes{arrow('customers')}
+                    Customers{arrow('customers')}
                   </th>
                   <th className="num" onClick={() => toggle('units')}>
-                    Unidades{arrow('units')}
+                    Units{arrow('units')}
                   </th>
                   <th className="num" onClick={() => toggle('revenue')}>
-                    Receita{arrow('revenue')}
+                    Revenue{arrow('revenue')}
                   </th>
                 </>
               )}
@@ -209,13 +209,13 @@ export default function ProductLtvTable({
   );
 
   if (!products.length) {
-    return <div className="empty">Sem produtos no período.</div>;
+    return <div className="empty">No products in this period.</div>;
   }
 
   return (
     <div className="cac-product-grid">
       <ProductSection
-        title={`Top 15 Produtos · Maior LTV (≥${minCustomers} clientes)`}
+        title={`Top 15 Products · Highest LTV (≥${minCustomers} customers)`}
         badge="A · LTV"
         badgeColor="#d44a8a"
         rows={topLtv}

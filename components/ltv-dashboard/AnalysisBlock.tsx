@@ -4,10 +4,10 @@ import type { CategoryLtv, CustomerJourney, LtvKpiSummary, Market } from '@/lib/
 import { formatMoney, formatPercent, formatNumber } from '@/lib/ltv-dashboard/format';
 
 /**
- * Heurísticas para gerar insights automáticos.
- * Não é "machine learning" — é interpretação de KPIs vs benchmarks de fashion DTC.
- * `tempo1to2` vem da Jornada (histórico completo, mesma definição do bloco "Tempo 1ª → 2ª")
- * — garante que TODO o dashboard usa a mesma metodologia.
+ * Heuristics to generate automatic insights.
+ * Not "machine learning" — it's interpretation of KPIs vs fashion DTC benchmarks.
+ * `tempo1to2` comes from Journey (full history, same definition used in the "Time 1st → 2nd" block)
+ * — guarantees the WHOLE dashboard uses the same methodology.
  */
 function buildInsights(
   summary: LtvKpiSummary,
@@ -22,31 +22,31 @@ function buildInsights(
     if (summary.ltvCacRatio >= 3) {
       insights.push({
         kind: 'good',
-        title: `LTV / CAC saudável (${summary.ltvCacRatio.toFixed(2)}x)`,
-        body: `Cada ${formatMoney(summary.cac, market, true)} investido retorna ${formatMoney(
+        title: `Healthy LTV / CAC (${summary.ltvCacRatio.toFixed(2)}x)`,
+        body: `Each ${formatMoney(summary.cac, market, true)} invested returns ${formatMoney(
           summary.ltvPredictive,
           market,
           true
-        )} ao longo da vida do cliente. Ratio ≥3x indica espaço para escalar aquisição.`,
+        )} over the customer's lifetime. Ratio ≥3x means room to scale acquisition.`,
       });
     } else if (summary.ltvCacRatio >= 2) {
       insights.push({
         kind: 'warn',
-        title: `LTV / CAC apertado (${summary.ltvCacRatio.toFixed(2)}x)`,
-        body: `Ratio entre 2x e 3x sinaliza margem reduzida. Considere otimizar criativos antes de escalar ou trabalhar o CAC para baixo.`,
+        title: `Tight LTV / CAC (${summary.ltvCacRatio.toFixed(2)}x)`,
+        body: `Ratio between 2x and 3x signals thin margin. Consider optimizing creatives before scaling, or push CAC down.`,
       });
     } else {
       insights.push({
         kind: 'bad',
-        title: `LTV / CAC abaixo do saudável (${summary.ltvCacRatio.toFixed(2)}x)`,
-        body: `Você está gastando mais para adquirir do que recupera. Reduza CAC (corte campanhas com CPA alto) ou suba o LTV (upsell, win-back).`,
+        title: `LTV / CAC below healthy (${summary.ltvCacRatio.toFixed(2)}x)`,
+        body: `You're spending more to acquire than you recover. Reduce CAC (cut high-CPA campaigns) or raise LTV (upsell, win-back).`,
       });
     }
   } else {
     insights.push({
       kind: 'info',
-      title: 'LTV / CAC indisponível',
-      body: 'Spend Meta+Google ainda não foi sincronizado para o período. KPI fica fora até o próximo refresh.',
+      title: 'LTV / CAC unavailable',
+      body: 'Meta+Google spend has not yet been synced for this period. KPI is out until the next refresh.',
     });
   }
 
@@ -55,26 +55,26 @@ function buildInsights(
   if (rr >= 35) {
     insights.push({
       kind: 'good',
-      title: `Returning rate alta (${formatPercent(rr)})`,
-      body: `Sua base é leal — acima do benchmark fashion DTC (25-35%). Capture isso: subscriptions, programa de fidelidade, lançamentos exclusivos.`,
+      title: `High returning rate (${formatPercent(rr)})`,
+      body: `Your base is loyal — above the fashion DTC benchmark (25-35%). Capture it: subscriptions, loyalty program, exclusive launches.`,
     });
   } else if (rr >= 25) {
     insights.push({
       kind: 'good',
-      title: `Returning rate saudável (${formatPercent(rr)})`,
-      body: `Dentro do benchmark fashion DTC (25-35%). Mantenha cadência de e-mail/CRM para nutrir retenção.`,
+      title: `Healthy returning rate (${formatPercent(rr)})`,
+      body: `Within the fashion DTC benchmark (25-35%). Keep your email/CRM cadence to nurture retention.`,
     });
   } else if (rr >= 15) {
     insights.push({
       kind: 'warn',
-      title: `Returning rate abaixo do benchmark (${formatPercent(rr)})`,
-      body: `Cuidado: abaixo de 25% indica problema de retenção. Revisar pós-compra, e-mails de win-back, qualidade percebida.`,
+      title: `Returning rate below benchmark (${formatPercent(rr)})`,
+      body: `Caution: under 25% signals a retention problem. Review post-purchase experience, win-back emails, perceived quality.`,
     });
   } else {
     insights.push({
       kind: 'bad',
-      title: `Returning rate baixa (${formatPercent(rr)})`,
-      body: `Crítico. Clientes não voltam. Auditar: experiência pós-compra, qualidade do produto, percepção de marca.`,
+      title: `Low returning rate (${formatPercent(rr)})`,
+      body: `Critical. Customers aren't coming back. Audit: post-purchase experience, product quality, brand perception.`,
     });
   }
 
@@ -82,36 +82,36 @@ function buildInsights(
   if (summary.purchaseFrequency >= 1.5) {
     insights.push({
       kind: 'good',
-      title: `Frequência de compra forte (${summary.purchaseFrequency.toFixed(2)})`,
-      body: `Clientes voltam mais de 1.5x em média — ótimo para um vertical fashion. Considere segmentar high-frequency buyers para early-access.`,
+      title: `Strong purchase frequency (${summary.purchaseFrequency.toFixed(2)})`,
+      body: `Customers come back more than 1.5x on average — great for a fashion vertical. Consider segmenting high-frequency buyers for early access.`,
     });
   } else if (summary.purchaseFrequency < 1.15) {
     insights.push({
       kind: 'warn',
-      title: `Frequência baixa (${summary.purchaseFrequency.toFixed(2)})`,
-      body: `Maioria dos clientes compra apenas uma vez no período. Foco em segunda compra: e-mail series 30/60/90 dias, ofertas de cross-sell.`,
+      title: `Low frequency (${summary.purchaseFrequency.toFixed(2)})`,
+      body: `Most customers buy only once in the period. Focus on the 2nd purchase: 30/60/90-day email series, cross-sell offers.`,
     });
   }
 
-  // Tempo 1ª → 2ª compra (lifetime — IDÊNTICO ao bloco Jornada)
+  // Time 1st → 2nd purchase (lifetime — IDENTICAL to the Journey block)
   if (tempo1to2 > 0) {
     if (tempo1to2 <= 30) {
       insights.push({
         kind: 'good',
-        title: `Tempo 1ª → 2ª compra curto (${tempo1to2}d)`,
-        body: `Clientes fazem a 2ª compra em menos de 30 dias na mediana. Ativar flows de cross-sell em ~${Math.max(7, Math.round(tempo1to2 * 0.6))} dias da 1ª compra captura essa janela.`,
+        title: `Short time 1st → 2nd purchase (${tempo1to2}d)`,
+        body: `Customers make their 2nd purchase in under 30 days on median. Trigger cross-sell flows around D+${Math.max(7, Math.round(tempo1to2 * 0.6))} after the 1st purchase to capture this window.`,
       });
     } else if (tempo1to2 >= 60) {
       insights.push({
         kind: 'info',
-        title: `Tempo 1ª → 2ª compra longo (${tempo1to2}d)`,
-        body: `Mediana entre 1ª e 2ª compra acima de 60 dias. Normal em fashion premium. Garanta flow de nurture (E-mail D+30, D+60) + win-back ativando em ~${Math.round(tempo1to2 * 1.3)} dias.`,
+        title: `Long time 1st → 2nd purchase (${tempo1to2}d)`,
+        body: `Median between 1st and 2nd purchase above 60 days. Normal in premium fashion. Ensure nurture flow (email D+30, D+60) + win-back firing around D+${Math.round(tempo1to2 * 1.3)}.`,
       });
     } else {
       insights.push({
         kind: 'good',
-        title: `Tempo 1ª → 2ª compra moderado (${tempo1to2}d)`,
-        body: `Mediana entre 1ª e 2ª compra de ${tempo1to2} dias. Flow de cross-sell deve disparar em ~${Math.round(tempo1to2 * 0.5)}-${Math.round(tempo1to2 * 0.7)} dias da 1ª compra.`,
+        title: `Moderate time 1st → 2nd purchase (${tempo1to2}d)`,
+        body: `Median between 1st and 2nd purchase of ${tempo1to2} days. Cross-sell flow should fire around D+${Math.round(tempo1to2 * 0.5)}-${Math.round(tempo1to2 * 0.7)} after the 1st purchase.`,
       });
     }
   }
@@ -126,18 +126,18 @@ function buildInsights(
     if (topByVolume) {
       insights.push({
         kind: 'info',
-        title: `Categoria líder em volume: ${topByVolume.categoryName}`,
-        body: `${formatNumber(topByVolume.units, market)} unidades vendidas, ${formatNumber(
+        title: `Volume leading category: ${topByVolume.categoryName}`,
+        body: `${formatNumber(topByVolume.units, market)} units sold, ${formatNumber(
           topByVolume.customers,
           market
-        )} clientes únicos. ${
+        )} unique customers. ${
           topByLtv && topByLtv.categoryCode !== topByVolume.categoryCode
-            ? `Mas quem traz clientes de maior LTV é "${topByLtv.categoryName}" (${formatMoney(
+            ? `But the category bringing higher-LTV customers is "${topByLtv.categoryName}" (${formatMoney(
                 topByLtv.customerLtvAvg,
                 market,
                 true
-              )} médio). Considere investir mais em ${topByLtv.categoryName} no funil de aquisição.`
-            : 'Mesma categoria lidera volume E LTV — concentre esforço de marketing aqui.'
+              )} avg). Consider investing more in ${topByLtv.categoryName} in the acquisition funnel.`
+            : 'The same category leads volume AND LTV — concentrate marketing effort here.'
         }`,
       });
     }
@@ -149,32 +149,32 @@ function buildInsights(
     if (sustainableCac > summary.cac * 1.2) {
       insights.push({
         kind: 'good',
-        title: `Espaço para subir CAC até ${formatMoney(sustainableCac, market, true)}`,
-        body: `Mantendo ratio LTV/CAC ≥3x, você pode aumentar o CAC atual (${formatMoney(
+        title: `Room to raise CAC up to ${formatMoney(sustainableCac, market, true)}`,
+        body: `Keeping LTV/CAC ratio ≥3x, you can raise the current CAC (${formatMoney(
           summary.cac,
           market,
           true
-        )}) em até ${(((sustainableCac - summary.cac) / summary.cac) * 100).toFixed(0)}% e ainda continuar saudável. Considere subir bid em campanhas top-performers.`,
+        )}) by up to ${(((sustainableCac - summary.cac) / summary.cac) * 100).toFixed(0)}% and still stay healthy. Consider raising bids on top-performing campaigns.`,
       });
     } else if (sustainableCac < summary.cac * 0.85) {
       insights.push({
         kind: 'warn',
-        title: `CAC acima do sustentável (${formatMoney(sustainableCac, market, true)})`,
-        body: `Para manter LTV/CAC ≥3x, o CAC ideal seria ${formatMoney(
+        title: `CAC above sustainable (${formatMoney(sustainableCac, market, true)})`,
+        body: `To keep LTV/CAC ≥3x, the ideal CAC would be ${formatMoney(
           sustainableCac,
           market,
           true
-        )}. Atual está ${(((summary.cac - sustainableCac) / sustainableCac) * 100).toFixed(0)}% acima. Reduza budget de campanhas com CPA alto.`,
+        )}. Current is ${(((summary.cac - sustainableCac) / sustainableCac) * 100).toFixed(0)}% above. Cut budget on high-CPA campaigns.`,
       });
     } else {
       insights.push({
         kind: 'info',
-        title: `CAC estável próximo ao teto saudável`,
-        body: `Atual ${formatMoney(summary.cac, market, true)} ≈ teto recomendado ${formatMoney(
+        title: `CAC stable near the healthy ceiling`,
+        body: `Current ${formatMoney(summary.cac, market, true)} ≈ recommended ceiling ${formatMoney(
           sustainableCac,
           market,
           true
-        )}. Não escalar agressivamente sem antes melhorar conversão/retenção.`,
+        )}. Don't scale aggressively without first improving conversion/retention.`,
       });
     }
   }
@@ -209,7 +209,7 @@ export default function AnalysisBlock({
   if (!summary) {
     return null;
   }
-  // tempo 1→2 da Jornada (lifetime, mesma metodologia em todo dashboard)
+  // time 1→2 from Journey (lifetime, same methodology across the dashboard)
   const tempo1to2 = journey?.medianDays1to2 ?? 0;
   const insights = buildInsights(summary, categories, market, tempo1to2);
   if (insights.length === 0) return null;
@@ -221,11 +221,11 @@ export default function AnalysisBlock({
           className="section-badge"
           style={{ background: '#1a1a1a', color: '#fff' }}
         >
-          🧠 ANÁLISE
+          🧠 ANALYSIS
         </span>
-        <h3>Análise & Recomendações</h3>
+        <h3>Analysis & Recommendations</h3>
         <span className="section-meta">
-          Insights automáticos baseados em benchmarks fashion DTC · {insights.length} pontos
+          Automatic insights based on fashion DTC benchmarks · {insights.length} points
         </span>
       </div>
       <div

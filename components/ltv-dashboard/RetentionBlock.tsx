@@ -18,29 +18,29 @@ export default function RetentionBlock({
   return (
     <div className="kpi-grid">
       <KpiCard
-        label="Returning Rate (vida toda)"
+        label="Returning Rate (lifetime)"
         value={retention ? formatPercent(retention.returningRateAllTime) : '—'}
         sub={
           retention
-            ? `${formatNumber(retention.lifetimeCustomers, market)} clientes únicos no histórico`
-            : '% clientes com ≥ 2 pedidos no histórico'
+            ? `${formatNumber(retention.lifetimeCustomers, market)} unique customers in history`
+            : '% customers with ≥ 2 orders in history'
         }
         highlight
       />
       <KpiCard
-        label="Repeat purchase 90 dias"
+        label="Repeat purchase 90 days"
         value={retention ? formatPercent(retention.repeat90d) : '—'}
-        sub="% clientes cuja 2ª compra ocorreu em até 90 dias da 1ª"
+        sub="% customers whose 2nd purchase happened within 90 days of the 1st"
       />
       <KpiCard
-        label="Repeat purchase 12 meses"
+        label="Repeat purchase 12 months"
         value={retention ? formatPercent(retention.repeat12m) : '—'}
-        sub="% clientes cuja 2ª compra ocorreu em até 365 dias da 1ª"
+        sub="% customers whose 2nd purchase happened within 365 days of the 1st"
       />
       <KpiCard
-        label="Purchase frequency anual"
+        label="Annual Purchase Frequency"
         value={retention ? retention.purchaseFrequencyAnnual.toFixed(2) : '—'}
-        sub="orders ÷ customers nos últimos 12 meses"
+        sub="orders ÷ customers over the last 12 months"
         highlight
       />
     </div>

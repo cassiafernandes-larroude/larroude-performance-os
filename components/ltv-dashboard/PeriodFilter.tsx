@@ -47,8 +47,8 @@ export default function PeriodFilter({
   const setPreset = (p: Exclude<Preset, 'custom'>) => onChange(presetRange(p, maxDate));
 
   return (
-    <div className="period-bar" role="group" aria-label="Filtro de período">
-      <span className="period-label">Período</span>
+    <div className="period-bar" role="group" aria-label="Period filter">
+      <span className="period-label">Period</span>
       <button
         className={`period-btn ${value.preset === '3M' ? 'active' : ''}`}
         onClick={() => setPreset('3M')}
@@ -74,9 +74,9 @@ export default function PeriodFilter({
         value={value.start}
         max={value.end}
         onChange={(e) => onChange({ preset: 'custom', start: e.target.value, end: value.end })}
-        aria-label="Data inicial"
+        aria-label="Start date"
       />
-      <span style={{ color: '#8a8a8a', fontSize: 12 }}>até</span>
+      <span style={{ color: '#8a8a8a', fontSize: 12 }}>to</span>
       <input
         type="date"
         className="date-input"
@@ -84,16 +84,16 @@ export default function PeriodFilter({
         min={value.start}
         max={maxDate}
         onChange={(e) => onChange({ preset: 'custom', start: value.start, end: e.target.value })}
-        aria-label="Data final"
+        aria-label="End date"
       />
       <span className="period-desc">
         {value.preset === 'custom'
-          ? 'Período customizado'
+          ? 'Custom period'
           : value.preset === '3M'
-          ? 'Últimos 3 meses'
+          ? 'Last 3 months'
           : value.preset === '6M'
-          ? 'Últimos 6 meses'
-          : 'Últimos 12 meses (rolling)'}
+          ? 'Last 6 months'
+          : 'Last 12 months (rolling)'}
       </span>
     </div>
   );

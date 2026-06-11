@@ -15,7 +15,7 @@ export default function MonthlyChart({
   market: Market;
 }) {
   if (!data.length) {
-    return <div className="empty">Sem dados mensais.</div>;
+    return <div className="empty">No monthly data.</div>;
   }
 
   const barData = data.map((d) => ({ date: d.month, value: Number(d.ltvAvg) }));
@@ -26,7 +26,7 @@ export default function MonthlyChart({
 
   return (
     <BarLineChart
-      title="LTV médio mensal"
+      title="Monthly Avg LTV"
       data={barData}
       color="#d44a8a"
       unit="currency"

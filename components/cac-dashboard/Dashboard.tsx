@@ -74,7 +74,7 @@ export default function Dashboard({ freshness }: { freshness: string }) {
       })
       .catch((err: Error) => {
         if (cancelled) return;
-        setError(err.message || 'Erro ao buscar dados');
+        setError(err.message || 'Error fetching data');
         setLoading(false);
       });
 
@@ -141,24 +141,24 @@ export default function Dashboard({ freshness }: { freshness: string }) {
             className="card"
             style={{ borderColor: '#b3382f', background: '#fff5f5', color: '#b3382f' }}
           >
-            <strong>Erro:</strong> {error}
+            <strong>Error:</strong> {error}
           </div>
         )}
 
         <div className="section-label">
           <span>📊</span>
-          <span>CAC Geral · {market === 'US' ? 'United States' : 'Brasil'} · {periodLabel}</span>
+          <span>Overall CAC · {market === 'US' ? 'United States' : 'Brazil'} · {periodLabel}</span>
         </div>
 
         <div className="kpi-grid">
           <KpiCard
             label="CAC"
             value={loading ? '—' : summary ? formatMoney(summary.cac, market, true) : '—'}
-            sub="Spend total / novos clientes"
+            sub="Total spend / new customers"
             highlight
           />
           <KpiCard
-            label="Spend total"
+            label="Total spend"
             value={loading ? '—' : summary ? formatMoney(summary.spend, market) : '—'}
             sub={
               summary
@@ -167,24 +167,24 @@ export default function Dashboard({ freshness }: { freshness: string }) {
             }
           />
           <KpiCard
-            label="Novos clientes"
+            label="New customers"
             value={loading ? '—' : summary ? formatNumber(summary.newCustomers, market) : '—'}
             sub="Shopify · numberOfOrders == 1"
           />
           <KpiCard
-            label="Pedidos"
+            label="Orders"
             value={loading ? '—' : summary ? formatNumber(summary.orders, market) : '—'}
-            sub="Shopify · não cancelados"
+            sub="Shopify · non-cancelled"
           />
           <KpiCard
-            label="Receita bruta"
+            label="Gross revenue"
             value={loading ? '—' : summary ? formatMoney(summary.revenue, market) : '—'}
             sub="Shopify · current total price"
           />
           <KpiCard
             label="CPO"
             value={loading ? '—' : summary ? formatMoney(summary.cpo, market, true) : '—'}
-            sub="Spend / pedidos"
+            sub="Spend / orders"
           />
         </div>
 
@@ -200,18 +200,18 @@ export default function Dashboard({ freshness }: { freshness: string }) {
               borderRadius: 8,
             }}
           >
-            ⚠️ Google Ads spend via fallback BigQuery — preencha <code>GADS_REFRESH_TOKEN</code> para usar a API direta.
+            ⚠️ Google Ads spend via BigQuery fallback — fill in <code>GADS_REFRESH_TOKEN</code> to use the direct API.
           </div>
         )}
 
         <div className="chart-card">
           <div className="chart-title">
-            <h3>CAC · evolução no período</h3>
+            <h3>CAC · trend over period</h3>
             <span className="meta">{loading ? <span className="spinner" /> : null}</span>
           </div>
           <div className="chart-area">
             {loading ? (
-              <div className="empty">Carregando...</div>
+              <div className="empty">Loading...</div>
             ) : data ? (
               <DailyChart data={data.daily} market={market} windowDays={windowDays} />
             ) : (
@@ -222,7 +222,7 @@ export default function Dashboard({ freshness }: { freshness: string }) {
 
         <div className="section-label">
           <span>👟</span>
-          <span>CAC por produto · {periodLabel}</span>
+          <span>CAC by product · {periodLabel}</span>
         </div>
 
         {productKpis && (
@@ -230,17 +230,17 @@ export default function Dashboard({ freshness }: { freshness: string }) {
             <KpiCard
               label="CAC Blended · Top Volume"
               value={formatMoney(productKpis.cacTopVolume, market, true)}
-              sub={`15 mais vendidos · ${formatNumber(productKpis.newTopVolume, market)} novos`}
+              sub={`15 best sellers · ${formatNumber(productKpis.newTopVolume, market)} new`}
               highlight
             />
             <KpiCard
-              label="CAC Blended · Menor CAC"
+              label="CAC Blended · Lowest CAC"
               value={
                 productKpis.cacLowerCac > 0
                   ? formatMoney(productKpis.cacLowerCac, market, true)
                   : '—'
               }
-              sub={`15 mais eficientes · ${formatNumber(productKpis.newLowerCac, market)} novos`}
+              sub={`15 most efficient · ${formatNumber(productKpis.newLowerCac, market)} new`}
               highlight
             />
             <KpiCard
@@ -248,16 +248,16 @@ export default function Dashboard({ freshness }: { freshness: string }) {
               value={formatMoney(productKpis.spendTopVolume, market)}
               sub={
                 summary && summary.spend > 0
-                  ? `${((productKpis.spendTopVolume / summary.spend) * 100).toFixed(1)}% do total`
+                  ? `${((productKpis.spendTopVolume / summary.spend) * 100).toFixed(1)}% of total`
                   : ''
               }
             />
             <KpiCard
-              label="Spend Menor CAC"
+              label="Spend Lowest CAC"
               value={formatMoney(productKpis.spendLowerCac, market)}
               sub={
                 summary && summary.spend > 0
-                  ? `${((productKpis.spendLowerCac / summary.spend) * 100).toFixed(1)}% do total`
+                  ? `${((productKpis.spendLowerCac / summary.spend) * 100).toFixed(1)}% of total`
                   : ''
               }
             />
@@ -267,7 +267,7 @@ export default function Dashboard({ freshness }: { freshness: string }) {
         {loading ? (
           <div className="card" style={{ padding: 40, textAlign: 'center' }}>
             <span className="spinner" />
-            Carregando produtos...
+            Loading products...
           </div>
         ) : data ? (
           <>
@@ -294,11 +294,11 @@ export default function Dashboard({ freshness }: { freshness: string }) {
         ) : null}
 
         <footer className="footer">
-          Larroudé · CAC Dashboard · Spend via Meta Marketing API + Google Ads API · Pedidos via Shopify Admin GraphQL · Histórico 12M via BigQuery (
+          Larroudé · CAC Dashboard · Spend via Meta Marketing API + Google Ads API · Orders via Shopify Admin GraphQL · 12M history via BigQuery (
           <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
             larroude-data-platform
           </span>
-          ) · atualizado diariamente às 08:00 BRT
+          ) · refreshed daily at 08:00 BRT
         </footer>
       </div>
     </main>

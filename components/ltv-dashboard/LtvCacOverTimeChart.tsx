@@ -45,7 +45,7 @@ export default function LtvCacOverTimeChart({
   if (!hasData) {
     return (
       <div className="empty">
-        Sem dados de spend Meta+Google para o período. LTV/CAC indisponível.
+        No Meta+Google spend data for this period. LTV/CAC unavailable.
       </div>
     );
   }
@@ -59,7 +59,7 @@ export default function LtvCacOverTimeChart({
       market={market}
       height={280}
       referenceLines={[
-        { value: 3, color: '#2c7a5b', label: 'Saudável 3x', dashed: true },
+        { value: 3, color: '#2c7a5b', label: 'Healthy 3x', dashed: true },
         { value: 1, color: '#b3382f', label: 'Breakeven 1x', dashed: true },
       ]}
     />

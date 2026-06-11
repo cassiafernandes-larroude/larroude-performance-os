@@ -49,31 +49,31 @@ function ProductSection({ title, badge, badgeColor, rows, highlightField, market
       <div className="section-head">
         <span className="section-badge" style={{ background: badgeColor, color: '#fff' }}>{badge}</span>
         <h3>{title}</h3>
-        <span className="section-meta">Clique no cabeçalho para ordenar</span>
+        <span className="section-meta">Click headers to sort</span>
       </div>
       <div className="table-scroll">
         <table className="prod-table">
           <thead>
             <tr>
               <th style={{ width: 32 }}>#</th>
-              <th>Produto</th>
+              <th>Product</th>
               {isVolumeView ? (
                 <>
-                  <th className="num" onClick={() => toggle('units')}>Unidades{arrow('units')}</th>
-                  <th className="num" onClick={() => toggle('revenue')}>Receita{arrow('revenue')}</th>
-                  <th className="num" onClick={() => toggle('newCustomers')}>Novos Clientes{arrow('newCustomers')}</th>
-                  <th className="num" onClick={() => toggle('allocatedSpend')}>Spend Alocado{arrow('allocatedSpend')}</th>
+                  <th className="num" onClick={() => toggle('units')}>Units{arrow('units')}</th>
+                  <th className="num" onClick={() => toggle('revenue')}>Revenue{arrow('revenue')}</th>
+                  <th className="num" onClick={() => toggle('newCustomers')}>New Customers{arrow('newCustomers')}</th>
+                  <th className="num" onClick={() => toggle('allocatedSpend')}>Allocated Spend{arrow('allocatedSpend')}</th>
                   <th className="num" onClick={() => toggle('cac')}>CAC{arrow('cac')}</th>
-                  <th className="num" onClick={() => toggle('revenuePerCustomer')}>Receita/Cliente{arrow('revenuePerCustomer')}</th>
+                  <th className="num" onClick={() => toggle('revenuePerCustomer')}>Revenue/Customer{arrow('revenuePerCustomer')}</th>
                 </>
               ) : (
                 <>
                   <th className="num" onClick={() => toggle('cac')}>CAC{arrow('cac')}</th>
-                  <th className="num" onClick={() => toggle('newCustomers')}>Novos Clientes{arrow('newCustomers')}</th>
-                  <th className="num" onClick={() => toggle('allocatedSpend')}>Spend Alocado{arrow('allocatedSpend')}</th>
-                  <th className="num" onClick={() => toggle('units')}>Unidades{arrow('units')}</th>
-                  <th className="num" onClick={() => toggle('revenue')}>Receita{arrow('revenue')}</th>
-                  <th className="num" onClick={() => toggle('revenuePerCustomer')}>Receita/Cliente{arrow('revenuePerCustomer')}</th>
+                  <th className="num" onClick={() => toggle('newCustomers')}>New Customers{arrow('newCustomers')}</th>
+                  <th className="num" onClick={() => toggle('allocatedSpend')}>Allocated Spend{arrow('allocatedSpend')}</th>
+                  <th className="num" onClick={() => toggle('units')}>Units{arrow('units')}</th>
+                  <th className="num" onClick={() => toggle('revenue')}>Revenue{arrow('revenue')}</th>
+                  <th className="num" onClick={() => toggle('revenuePerCustomer')}>Revenue/Customer{arrow('revenuePerCustomer')}</th>
                 </>
               )}
             </tr>
@@ -147,13 +147,13 @@ export default function ProductTable({
   );
 
   if (!products.length) {
-    return <div className="empty">Sem produtos no período.</div>;
+    return <div className="empty">No products in this period.</div>;
   }
 
   return (
     <div className="cac-product-grid">
       <ProductSection
-        title={`Top 15 Produtos · por Unidades Vendidas`}
+        title={`Top 15 Products · by Units Sold`}
         badge="A · VOLUME"
         badgeColor="#2c7a5b"
         rows={topVolume}
@@ -163,8 +163,8 @@ export default function ProductTable({
         onSelect={(sku) => setHighlightSku(highlightSku === sku ? null : sku)}
       />
       <ProductSection
-        title={`Top 15 Produtos · Menor CAC (≥${minNew} novos)`}
-        badge="B · EFICIÊNCIA"
+        title={`Top 15 Products · Lowest CAC (≥${minNew} new)`}
+        badge="B · EFFICIENCY"
         badgeColor="#d44a8a"
         rows={lowerCac}
         highlightField="cac"

@@ -12,7 +12,7 @@ export default function Header({
   freshness: string;
 }) {
   const fresh = freshness
-    ? new Date(freshness + 'T12:00:00').toLocaleDateString('pt-BR', {
+    ? new Date(freshness + 'T12:00:00').toLocaleDateString('en-US', {
         day: '2-digit',
         month: 'long',
         year: 'numeric',
@@ -39,11 +39,11 @@ export default function Header({
           aria-pressed={market === 'BR'}
         >
           <span className="flag">BR</span>
-          Brasil
+          Brazil
         </button>
       </div>
       <div className="subtitle">
-        Customer Lifetime Value (LTV), AOV e Repeat Purchase Rate por loja e por produto · dados de <b>{fresh}</b> ·
+        Customer Lifetime Value (LTV), AOV and Repeat Purchase Rate by store and product · data from <b>{fresh}</b> ·
         Shopify orders via BigQuery
       </div>
     </header>

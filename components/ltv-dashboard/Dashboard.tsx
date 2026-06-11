@@ -97,7 +97,7 @@ export default function Dashboard({ freshness }: { freshness: string }) {
       })
       .catch((err: Error) => {
         if (cancelled) return;
-        setError(err.message || 'Erro ao buscar dados');
+        setError(err.message || 'Error fetching data');
         setLoading(false);
       });
 
@@ -194,18 +194,18 @@ export default function Dashboard({ freshness }: { freshness: string }) {
             className="card"
             style={{ borderColor: '#b3382f', background: '#fff5f5', color: '#b3382f' }}
           >
-            <strong>Erro:</strong> {error}
+            <strong>Error:</strong> {error}
           </div>
         )}
 
         <div className="section-label">
           <span>{'\u{1F4B0}'}</span>
-          <span>LTV Geral · {market === 'US' ? 'United States' : 'Brasil'} · {periodLabel}</span>
+          <span>Overall LTV · {market === 'US' ? 'United States' : 'Brazil'} · {periodLabel}</span>
         </div>
 
         <div className="kpi-grid">
           <KpiCard
-            label="LTV Preditivo"
+            label="Predictive LTV"
             value={
               loading
                 ? '—'
@@ -215,13 +215,13 @@ export default function Dashboard({ freshness }: { freshness: string }) {
             }
             sub={
               summary
-                ? `AOV × Freq × Lifetime · ${formatNumber(summary.predictiveCustomers, market)} clientes`
+                ? `AOV × Freq × Lifetime · ${formatNumber(summary.predictiveCustomers, market)} customers`
                 : 'AOV × Purchase Frequency × Customer Lifetime'
             }
             highlight
           />
           <KpiCard
-            label="LTV Histórico"
+            label="Historical LTV"
             value={
               loading
                 ? '—'
@@ -231,7 +231,7 @@ export default function Dashboard({ freshness }: { freshness: string }) {
             }
             sub={
               summary
-                ? `net_sales / ${formatNumber(summary.totalCustomers, market)} clientes (inclui retornos)`
+                ? `net_sales / ${formatNumber(summary.totalCustomers, market)} customers (incl. returns)`
                 : 'net_sales / total customers'
             }
           />
@@ -240,12 +240,12 @@ export default function Dashboard({ freshness }: { freshness: string }) {
             value={loading ? '—' : summary ? formatMoney(summary.aov, market, true) : '—'}
             sub={
               summary
-                ? `${formatNumber(summary.totalOrders, market)} pedidos · net_sales / orders`
+                ? `${formatNumber(summary.totalOrders, market)} orders · net_sales / orders`
                 : 'net_sales / orders'
             }
           />
           <KpiCard
-            label="Frequência de compra"
+            label="Purchase Frequency"
             value={
               loading
                 ? '—'
@@ -253,7 +253,7 @@ export default function Dashboard({ freshness }: { freshness: string }) {
                 ? summary.purchaseFrequency.toFixed(2)
                 : '—'
             }
-            sub="orders / customers no período"
+            sub="orders / customers in period"
           />
           <KpiCard
             label="Customer Lifetime"
@@ -266,7 +266,7 @@ export default function Dashboard({ freshness }: { freshness: string }) {
             }
             sub={
               summary
-                ? `1 / (1 − ${summary.returningCustomerRate.toFixed(1)}% returning) · em anos`
+                ? `1 / (1 − ${summary.returningCustomerRate.toFixed(1)}% returning) · in years`
                 : '1 / (1 − returning rate)'
             }
           />
@@ -281,8 +281,8 @@ export default function Dashboard({ freshness }: { freshness: string }) {
             }
             sub={
               summary && summary.cac > 0
-                ? `CAC ${formatMoney(summary.cac, market, true)} · saudável ≥ 3`
-                : 'Spend Meta+Google indisponível'
+                ? `CAC ${formatMoney(summary.cac, market, true)} · healthy ≥ 3`
+                : 'Meta+Google spend unavailable'
             }
             highlight
           />
@@ -300,7 +300,7 @@ export default function Dashboard({ freshness }: { freshness: string }) {
               borderRadius: 8,
             }}
           >
-            ⚠️ Google Ads spend via fallback BigQuery — preencha <code>GADS_REFRESH_TOKEN</code> para usar a API direta (afeta o LTV/CAC).
+            ⚠️ Google Ads spend via BigQuery fallback — fill in <code>GADS_REFRESH_TOKEN</code> to use the direct API (affects LTV/CAC).
           </div>
         )}
         {summary?.sources?.googleAds === 'unavailable' && (
@@ -315,26 +315,26 @@ export default function Dashboard({ freshness }: { freshness: string }) {
               borderRadius: 8,
             }}
           >
-            ℹ️ Spend Meta+Google indisponível neste período — KPI LTV/CAC não calculado.
+            ℹ️ Meta+Google spend unavailable for this period — LTV/CAC KPI not computed.
           </div>
         )}
 
         {/* Retenção — métricas absolutas, não dependem da janela */}
         <div className="section-label">
           <span>{'\u{1F501}'}</span>
-          <span>Retenção (histórico completo · exclui trocas e recompras de mesmo produto+cor)</span>
+          <span>Retention (full history · excludes exchanges and same product+color repurchases)</span>
         </div>
         <RetentionBlock retention={data?.retention} market={market} />
 
         <div className="charts-grid two-col">
           <div className="chart-card">
             <div className="chart-title">
-              <h3>AOV diário + LTV dos compradores (últimos 28 dias)</h3>
+              <h3>Daily AOV + Buyer LTV (last 28 days)</h3>
               <span className="meta">{loading ? <span className="spinner" /> : null}</span>
             </div>
             <div className="chart-area">
               {loading ? (
-                <div className="empty">Carregando...</div>
+                <div className="empty">Loading...</div>
               ) : data ? (
                 <DailyChart data={data.daily} market={market} />
               ) : (
@@ -345,12 +345,12 @@ export default function Dashboard({ freshness }: { freshness: string }) {
 
           <div className="chart-card">
             <div className="chart-title">
-              <h3>LTV mensal + Repeat Rate (rolling 12M)</h3>
-              <span className="meta">histórico via BigQuery</span>
+              <h3>Monthly LTV + Repeat Rate (rolling 12M)</h3>
+              <span className="meta">history via BigQuery</span>
             </div>
             <div className="chart-area">
               {loading ? (
-                <div className="empty">Carregando...</div>
+                <div className="empty">Loading...</div>
               ) : data ? (
                 <MonthlyChart data={data.monthly} market={market} />
               ) : (
@@ -363,9 +363,9 @@ export default function Dashboard({ freshness }: { freshness: string }) {
         {/* LTV/CAC overtime — chart com linha do ratio e referência 3x */}
         <div className="chart-card">
           <div className="chart-title">
-            <h3>LTV / CAC overtime (últimos 12 meses)</h3>
+            <h3>LTV / CAC overtime (last 12 months)</h3>
             <span className="meta">
-              referência: 🟢 ≥3x saudável · 🔴 ≤1x breakeven
+              reference: 🟢 ≥3x healthy · 🔴 ≤1x breakeven
             </span>
           </div>
           <div className="chart-area" style={{ height: 300 }}>
@@ -384,23 +384,23 @@ export default function Dashboard({ freshness }: { freshness: string }) {
           <>
             <div className="section-label">
               <span>{'\u{1F4CA}'}</span>
-              <span>Distribuição de LTV · {periodLabel}</span>
+              <span>LTV Distribution · {periodLabel}</span>
             </div>
             <div className="kpi-grid">
               <KpiCard
-                label="LTV Mediano (P50)"
+                label="Median LTV (P50)"
                 value={formatMoney(summary.ltvMedian, market, true)}
-                sub="50% dos clientes gastam até esse valor"
+                sub="50% of customers spend up to this value"
               />
               <KpiCard
                 label="LTV P75"
                 value={formatMoney(summary.ltvP75, market, true)}
-                sub="Top 25% gasta acima desse valor"
+                sub="Top 25% spend above this value"
               />
               <KpiCard
                 label="LTV P90"
                 value={formatMoney(summary.ltvP90, market, true)}
-                sub="Top 10% — clientes high-value"
+                sub="Top 10% — high-value customers"
               />
             </div>
           </>
@@ -408,13 +408,13 @@ export default function Dashboard({ freshness }: { freshness: string }) {
 
         <div className="section-label">
           <span>{'\u{1F45F}'}</span>
-          <span>LTV por produto · {periodLabel}</span>
+          <span>LTV by product · {periodLabel}</span>
         </div>
 
         {loadingProducts ? (
           <div className="card" style={{ padding: 40, textAlign: 'center' }}>
             <span className="spinner" />
-            Carregando produtos... (a primeira carga pode levar 15-30s)
+            Loading products... (first load may take 15-30s)
           </div>
         ) : productsData ? (
           <>
@@ -453,7 +453,7 @@ export default function Dashboard({ freshness }: { freshness: string }) {
         {/* Jornada do Cliente — produtos de entrada, 2ª/3ª compra, transições */}
         <div className="section-label">
           <span>{'\u{1F6D2}'}</span>
-          <span>Jornada do Cliente · histórico completo · só recompras de cor diferente (exclui trocas e line items devolvidos)</span>
+          <span>Customer Journey · full history · only repurchases of a different color (excludes exchanges and returned line items)</span>
         </div>
         <CustomerJourneyBlock
           journey={journeyData?.journey ?? null}
@@ -466,7 +466,7 @@ export default function Dashboard({ freshness }: { freshness: string }) {
           <div>
             <div className="section-label">
               <span>{'\u{1F4A1}'}</span>
-              <span>Análise & Recomendações</span>
+              <span>Analysis & Recommendations</span>
             </div>
             <AnalysisBlock
               summary={summary}
@@ -478,11 +478,11 @@ export default function Dashboard({ freshness }: { freshness: string }) {
         )}
 
         <footer className="footer">
-          Larroudé · LTV Dashboard · Pedidos via BigQuery (
+          Larroudé · LTV Dashboard · Orders via BigQuery (
           <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
             larroude-data-platform.shopify_&lt;market&gt;.orders
           </span>
-          ) · Spend Meta+Google APIs (LTV/CAC) · atualizado diariamente às 08:00 BRT
+          ) · Meta+Google APIs spend (LTV/CAC) · refreshed daily at 08:00 BRT
         </footer>
       </div>
     </main>

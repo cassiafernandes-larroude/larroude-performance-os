@@ -41,7 +41,7 @@ export default function CategoryLtvTable({
   const maxLtv = Math.max(...categories.map((r) => r.customerLtvAvg), 1);
 
   if (!categories.length) {
-    return <div className="empty">Sem categorias no período.</div>;
+    return <div className="empty">No categories in this period.</div>;
   }
 
   return (
@@ -51,11 +51,11 @@ export default function CategoryLtvTable({
           className="section-badge"
           style={{ background: '#5d4ec5', color: '#fff' }}
         >
-          B · CATEGORIA
+          B · CATEGORY
         </span>
-        <h3>Top 5 · LTV por Categoria</h3>
+        <h3>Top 5 · LTV by Category</h3>
         <span className="section-meta">
-          Sandália · Mule · Bota · Sapatilha · Scarpin · Mocassim · Slingback · Tênis
+          Sandal · Mule · Boot · Flat · Pump · Loafer · Slingback · Sneaker
         </span>
       </div>
       <div className="table-scroll">
@@ -63,21 +63,21 @@ export default function CategoryLtvTable({
           <thead>
             <tr>
               <th style={{ width: 32 }}>#</th>
-              <th>Categoria</th>
+              <th>Category</th>
               <th className="num" onClick={() => toggle('units')}>
-                Unidades{arrow('units')}
+                Units{arrow('units')}
               </th>
               <th className="num" onClick={() => toggle('revenue')}>
-                Receita{arrow('revenue')}
+                Revenue{arrow('revenue')}
               </th>
               <th className="num" onClick={() => toggle('customers')}>
-                Clientes{arrow('customers')}
+                Customers{arrow('customers')}
               </th>
               <th className="num" onClick={() => toggle('customerLtvAvg')}>
-                LTV médio{arrow('customerLtvAvg')}
+                Avg LTV{arrow('customerLtvAvg')}
               </th>
               <th className="num" onClick={() => toggle('customerLtvMedian')}>
-                LTV mediano{arrow('customerLtvMedian')}
+                Median LTV{arrow('customerLtvMedian')}
               </th>
             </tr>
           </thead>

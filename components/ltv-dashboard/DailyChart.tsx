@@ -16,7 +16,7 @@ export default function DailyChart({
   market: Market;
 }) {
   if (!data.length) {
-    return <div className="empty">Sem dados no período.</div>;
+    return <div className="empty">No data in this period.</div>;
   }
 
   const last28 = data.slice(-28);
@@ -29,7 +29,7 @@ export default function DailyChart({
 
   return (
     <BarLineChart
-      title="AOV diário"
+      title="Daily AOV"
       data={barData}
       color="#2c7a5b"
       unit="currency"
@@ -37,7 +37,7 @@ export default function DailyChart({
       height={260}
       line={{
         data: lineData,
-        name: 'LTV dos compradores',
+        name: 'Buyer LTV',
         color: '#d97757',
         unit: 'currency',
         yAxis: 'right',

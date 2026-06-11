@@ -90,7 +90,7 @@ export default function DailyChart({
   }, [data, windowDays]);
 
   if (!barData.length) {
-    return <div className="empty">Sem dados no período.</div>;
+    return <div className="empty">No data in this period.</div>;
   }
 
   return (

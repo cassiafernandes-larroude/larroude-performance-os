@@ -10,10 +10,10 @@ import { formatDate, formatMoney, formatNumber } from '@/lib/cac-dashboard/forma
 type Metric = 'cac' | 'newCustomers' | 'allocatedSpend' | 'revenue' | 'units';
 const METRIC_LABELS: Record<Metric, string> = {
   cac: 'CAC',
-  newCustomers: 'Novos Clientes',
-  allocatedSpend: 'Spend Alocado',
-  revenue: 'Receita',
-  units: 'Unidades',
+  newCustomers: 'New Customers',
+  allocatedSpend: 'Allocated Spend',
+  revenue: 'Revenue',
+  units: 'Units',
 };
 
 export default function ProductTrendChart({
@@ -94,18 +94,18 @@ export default function ProductTrendChart({
   };
 
   if (!unionMeta.length) {
-    return <div className="empty">Sem produtos disponíveis para análise.</div>;
+    return <div className="empty">No products available for analysis.</div>;
   }
 
   return (
     <div className="card-section">
       <div className="section-head">
-        <h3>Tendência Diária · CAC por Produto</h3>
-        <span className="section-meta">Selecione um produto da união A∪B</span>
+        <h3>Daily Trend · CAC by Product</h3>
+        <span className="section-meta">Select a product from the A∪B union</span>
       </div>
       <div className="trend-controls">
         <label>
-          <span>Produto:</span>
+          <span>Product:</span>
           <select value={selected} onChange={(e) => setSelected(e.target.value)}>
             {unionMeta.map((m) => (
               <option key={m.sku} value={m.sku}>{m.label}</option>
@@ -113,7 +113,7 @@ export default function ProductTrendChart({
           </select>
         </label>
         <label>
-          <span>Métrica:</span>
+          <span>Metric:</span>
           <select value={metric} onChange={(e) => setMetric(e.target.value as Metric)}>
             {(Object.keys(METRIC_LABELS) as Metric[]).map((m) => (
               <option key={m} value={m}>{METRIC_LABELS[m]}</option>
