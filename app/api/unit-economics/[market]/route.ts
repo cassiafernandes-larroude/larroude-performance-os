@@ -36,7 +36,7 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
   const { start, end } = defaultWindow();
   const startedAt = Date.now();
   try {
-    const cacheKey = `ue:${market}:${start}:${end}:d1-cat-ret30d-exch30d-pix30d-coupon:v7`;
+    const cacheKey = `ue:${market}:${start}:${end}:d1-cat-ret30d-exch30d-pix30d-coupon:v8`;
     const result = await memo(cacheKey, TTL_30M, async () => {
       // 6 fontes em paralelo:
       // 1) Shopify orders D-1 (sells)
@@ -209,7 +209,8 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
         exchangeRate30d: exchanges30d.overallRate,
         exchangeTotalQty30d: exchanges30d.overallTotalUnits,
         exchangeRedoQty30d: exchanges30d.overallRedoUnits,
-        pixShare30d: returns30d.pixShareOverall,
+        pixShare30d: returns30d.pixShareOverall ?? 0,
+        buildVersion: 'v7-pix30d-coupon',
         totalMarketingSpend,
         metaSpend,
         googleSpend,
