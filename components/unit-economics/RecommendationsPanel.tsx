@@ -218,8 +218,9 @@ export default function RecommendationsPanel({
           )}
           {product.exchangeRate != null && product.exchangeRate > 0.3 && (
             <li>
-              • Taxa de troca {pct(product.exchangeRate, 1)} alta: cuidado com promoções que
-              aumentem volume sem fit garantido.
+              • Taxa de <strong>troca (Exchange-Only)</strong> {pct(product.exchangeRate, 1)} alta —
+              <em> métrica distinta de devoluções</em>. Cuidado com promoções que aumentem volume sem
+              fit garantido.
             </li>
           )}
         </ul>

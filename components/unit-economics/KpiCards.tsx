@@ -55,6 +55,8 @@ export default function KpiCards({
     selectedProduct?.returnRate30d ?? cascade?.returnRate ?? 0;
   const returnTotal = selectedProduct?.returnTotalQty30d ?? 0;
   const returnRefunded = selectedProduct?.returnRefundedQty30d ?? 0;
+  // Exchange rate (Exchange-Only) é separado de returns. Ambos mostrados pra clareza.
+  const exchangeRateValue = selectedProduct?.exchangeRate ?? 0;
   const returnTone: Tone =
     returnRateValue > 0.08 ? 'danger' : returnRateValue > 0.05 ? 'warn' : 'neutral';
   const mcRealPositive = cascade ? cascade.netCmReal > 0 : false;
@@ -91,12 +93,12 @@ export default function KpiCards({
           tone={mcPremPositive ? 'success' : 'danger'}
         />
         <KpiCard
-          label="RETURN RATE (30D)"
+          label="DEVOLUÇÕES (30D)"
           value={pct(returnRateValue, 2)}
           sub={
             returnTotal > 0
-              ? `${returnRefunded.toLocaleString()} de ${returnTotal.toLocaleString()} un · 30d`
-              : 'Sem dados de devolução nos últimos 30d'
+              ? `${returnRefunded.toLocaleString()} de ${returnTotal.toLocaleString()} un · Trocas (Exchange-Only): ${pct(exchangeRateValue, 1)}`
+              : `Sem devoluções · Trocas: ${pct(exchangeRateValue, 1)}`
           }
           tone={returnTone}
         />
