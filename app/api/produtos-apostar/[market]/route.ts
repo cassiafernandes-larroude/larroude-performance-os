@@ -6,7 +6,9 @@
  * Cassia 2026-06-11: "sugestões devem ser baseadas em performance de venda
  *                     nos últimos 28d"
  *
- * Score = units_28d × margemBrutaPct × (1 - returnRate) × (1 - exchangeRate × 0.3)
+ * Score = units_28d_regulares × margemBrutaPct × (1 - returnRate30d) × (1 - exchangeRate30d × 0.3)
+ * Cassia 2026-06-11: units_28d exclui Exchange-Only — só conta demanda orgânica/paid real
+ * (orders REDO sao operacionais de CX, nao respondem a campanhas).
  *
  * Junta: catálogo (price, COGS, compareAt) + sales 28d + returns 30d + exchanges 30d.
  */
@@ -38,7 +40,7 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
 
   const startedAt = Date.now();
   try {
-    const cacheKey = `apostar:${market}:${endDate}:v1`;
+    const cacheKey = `apostar:${market}:${endDate}:noExchangeOnly:v2`;
     const result = await memo(cacheKey, TTL_6H, async () => {
       const [catalog, sales28, returns30d, exchanges30d] = await Promise.all([
         getShopifyCatalog(market),

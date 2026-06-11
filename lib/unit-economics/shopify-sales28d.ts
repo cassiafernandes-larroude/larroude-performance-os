@@ -96,7 +96,9 @@ export async function getSalesLast28d(
   const start = new Date(end.getTime() - 27 * 86400000);
   start.setUTCHours(0, 0, 0, 0);
   const startISO = start.toISOString().slice(0, 10);
-  const queryFilter = `created_at:>=${startISO}T00:00:00Z AND created_at:<=${endDate}T23:59:59Z AND -tag:b2b AND -tag:wholesale AND -tag:marketplace AND -tag:redo AND -tag:influencer`;
+  // Cassia 2026-06-11: excluir Exchange-Only do volume base. Tag 'redo' nao existe
+  // na Larroude — a tag real de troca eh 'Exchange-Only'.
+  const queryFilter = `created_at:>=${startISO}T00:00:00Z AND created_at:<=${endDate}T23:59:59Z AND -tag:b2b AND -tag:wholesale AND -tag:marketplace AND -tag:Exchange-Only AND -tag:influencer`;
 
   const t0 = Date.now();
   const byMother = new Map<string, Sales28dBucket>();

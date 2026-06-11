@@ -261,12 +261,14 @@ export default function Dashboard() {
             className="font-mono text-[11px] p-2 rounded"
             style={{ background: '#fff', border: '1px solid #fed7aa' }}
           >
-            score = units_28d × margemBrutaPct × (1 − returnRate30d) × (1 − exchangeRate30d × 0.3)
+            score = units_28d (SEM Exchange-Only) × margemBrutaPct × (1 − returnRate30d) × (1 − exchangeRate30d × 0.3)
           </div>
           <ul className="space-y-1 pl-4 list-disc">
             <li>
-              <strong>units_28d</strong> — unidades vendidas DTC nos últimos 28 dias (volume
-              comprovado).
+              <strong>units_28d (regulares)</strong> — unidades vendidas DTC nos últimos 28
+              dias, <strong>excluindo orders com tag Exchange-Only</strong> (Cassia 2026-06-11).
+              Orders Exchange-Only são operacionais de CX (cliente trocando outro produto) e
+              não respondem a campanhas de marketing — não devem inflar o ranking.
             </li>
             <li>
               <strong>margemBrutaPct</strong> — (preço médio pago 28d − COGS catálogo) / preço
