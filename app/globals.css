@@ -175,99 +175,98 @@ body {
   }
 }
 
-/* KPI cards padrão (Unit Economics / Inventory pattern) */
-.kpi-card-uniform {
-  background: #ffffff;
-  border: 1px solid #e5e3de;
-  border-radius: 16px;
-  padding: 20px 18px;
-  min-height: 130px;
-  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
+/* ==================== KPI CARDS UNIFORMES (Channel Share pattern) ====================
+ * Cassia 2026-06-11: "é nesse formato que todos os quadros de kpis devem estar.
+ *                     poucos quadros → todos na mesma linha; muitos quadros → menores"
+ *
+ * Pattern compacto: padding leve, value bold mas não gigante, wrap automatico.
+ */
+
+/* Grid wrapper auto-responsive — encaixa quantos couberem por linha */
+.kpi-grid-auto {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
 }
-.kpi-card-uniform .kpi-label {
-  font-size: 10.5px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  line-height: 1.2;
-  color: #6b7280;
-}
-.kpi-card-uniform .kpi-value {
-  font-size: clamp(24px, 2.6vw, 36px);
-  font-weight: 700;
-  color: #111827;
-  line-height: 1;
-  margin-top: 8px;
-  font-variant-numeric: tabular-nums;
-}
-.kpi-card-uniform .kpi-sub {
-  font-size: 11px;
-  color: #9ca3af;
-  line-height: 1.3;
-  margin-top: 8px;
+@media (min-width: 1024px) {
+  .kpi-grid-auto {
+    gap: 12px;
+  }
 }
 
-/* Aplica padronização nos KPI cards legacy (Main Dashboard, CAC, LTV) */
+/* KPI card padrão único */
+.kpi-card-uniform,
 .kpi-grid .card,
 .cac-root .kpi-card,
 .ltv-root .kpi-card {
   background: #ffffff;
-  border: 1px solid #e5e3de;
-  border-radius: 16px;
-  padding: 20px 18px !important;
-  min-height: 130px;
-  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+  border: 0.8px solid #e5e3de;
+  border-radius: 12px;
+  padding: 12px 14px !important;
+  min-height: 0;
+  box-shadow: none;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  gap: 4px;
 }
+
+/* Label (titulo do KPI): uppercase compacto */
+.kpi-card-uniform .kpi-label,
 .kpi-grid .card .text-\[8\.5px\],
 .cac-root .kpi-label,
 .ltv-root .kpi-label {
-  font-size: 10.5px !important;
-  font-weight: 700;
+  font-size: 10px !important;
+  font-weight: 600 !important;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  line-height: 1.2;
+  letter-spacing: 0.05em;
+  line-height: 1.2 !important;
   color: #6b7280;
+  margin-bottom: 0 !important;
+  min-height: 0 !important;
 }
+
+/* Value: numero principal */
+.kpi-card-uniform .kpi-value,
 .kpi-grid .card .text-xl,
 .cac-root .kpi-value,
 .ltv-root .kpi-value {
-  font-size: clamp(24px, 2.6vw, 36px) !important;
+  font-size: clamp(20px, 1.8vw, 26px) !important;
   font-weight: 700;
   color: #111827;
-  line-height: 1 !important;
-  margin-top: 8px;
+  line-height: 1.15 !important;
   font-variant-numeric: tabular-nums;
+  margin: 0 !important;
 }
+
+/* Sub: contexto pequeno */
+.kpi-card-uniform .kpi-sub,
 .kpi-grid .card .text-\[9px\],
 .cac-root .kpi-sub,
 .ltv-root .kpi-sub {
   font-size: 11px !important;
   color: #9ca3af;
   line-height: 1.3 !important;
-  margin-top: 8px;
+  margin: 0 !important;
 }
 
-/* Em mobile, KPI cards menores */
+/* Em mobile, ainda mais compacto */
 @media (max-width: 640px) {
+  .kpi-grid-auto {
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 6px;
+  }
   .kpi-card-uniform,
   .kpi-grid .card,
   .cac-root .kpi-card,
   .ltv-root .kpi-card {
-    padding: 14px 12px !important;
-    min-height: 100px;
-    border-radius: 12px;
+    padding: 10px 12px !important;
+    border-radius: 10px;
   }
   .kpi-card-uniform .kpi-value,
   .kpi-grid .card .text-xl,
   .cac-root .kpi-value,
   .ltv-root .kpi-value {
-    font-size: clamp(18px, 5vw, 26px) !important;
+    font-size: clamp(18px, 5vw, 24px) !important;
   }
 }
 

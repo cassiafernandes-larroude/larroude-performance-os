@@ -73,7 +73,7 @@ export default function KpiCards({
 
   return (
     <section className="mt-6">
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
+      <div className="kpi-grid-auto">
         <KpiCard
           label="MC BRUTA / un"
           value={cascade ? fmt(cascade.grossContributionMargin, data.currency) : '—'}
@@ -144,33 +144,12 @@ function KpiCard({
 }) {
   const t = TONE[tone];
   return (
-    <div
-      className="rounded-2xl flex flex-col justify-between"
-      style={{
-        background: t.bg,
-        border: `1px solid ${t.border}`,
-        padding: '20px 18px',
-        minHeight: 130,
-        boxShadow: '0 1px 2px rgba(16,24,40,.04)',
-      }}
-    >
-      <div
-        className="text-[10.5px] font-bold uppercase tracking-[0.08em] leading-tight"
-        style={{ color: t.label }}
-      >
+    <div className="kpi-card-uniform" style={{ borderTop: `3px solid ${t.label}` }}>
+      <div className="kpi-label" style={{ color: t.label }}>
         {label}
       </div>
-      <div
-        className="font-bold leading-none mt-2"
-        style={{ color: '#111827', fontSize: 'clamp(24px, 2.6vw, 36px)' }}
-      >
-        {value}
-      </div>
-      {sub && (
-        <div className="text-[11px] leading-tight mt-2" style={{ color: '#9ca3af' }}>
-          {sub}
-        </div>
-      )}
+      <div className="kpi-value">{value}</div>
+      {sub && <div className="kpi-sub">{sub}</div>}
     </div>
   );
 }
@@ -226,41 +205,22 @@ function UnitsGoalCard({
   const t = TONE[tone];
 
   return (
-    <div
-      className="rounded-2xl flex flex-col justify-between"
-      style={{
-        background: t.bg,
-        border: `1px solid ${t.border}`,
-        padding: '20px 18px',
-        minHeight: 130,
-        boxShadow: '0 1px 2px rgba(16,24,40,.04)',
-      }}
-    >
+    <div className="kpi-card-uniform" style={{ borderTop: `3px solid ${t.label}` }}>
       <div className="flex items-center justify-between gap-2">
-        <div
-          className="text-[10.5px] font-bold uppercase tracking-[0.08em] leading-tight"
-          style={{ color: t.label }}
-        >
+        <div className="kpi-label" style={{ color: t.label }}>
           UNIDADES VENDIDAS ONTEM
         </div>
         {hasGoal && (
-          <div
+          <span
             className="text-[10px] font-bold px-1.5 py-0.5 rounded-md"
             style={{ background: t.label, color: '#fff' }}
           >
             {(attainment * 100).toFixed(0)}%
-          </div>
+          </span>
         )}
       </div>
-
-      <div
-        className="font-bold leading-none mt-2"
-        style={{ color: '#111827', fontSize: 'clamp(24px, 2.6vw, 36px)' }}
-      >
-        {actual.toLocaleString(locale)}
-      </div>
-
-      <div className="text-[11px] leading-tight mt-2 flex items-center gap-1.5" style={{ color: '#9ca3af' }}>
+      <div className="kpi-value">{actual.toLocaleString(locale)}</div>
+      <div className="kpi-sub flex items-center gap-1.5">
         <span>Meta:</span>
         <input
           type="text"
@@ -269,7 +229,7 @@ function UnitsGoalCard({
           value={goalStr}
           onChange={(e) => save(e.target.value)}
           className="flex-1 min-w-0 text-[11px] font-semibold border rounded px-1.5 py-0.5 outline-none focus:border-pink-400"
-          style={{ borderColor: '#e5e3de', color: '#111827', background: '#fafafa', maxWidth: 90 }}
+          style={{ borderColor: '#e5e3de', color: '#111827', background: '#fafafa', maxWidth: 80 }}
           title="Meta de unidades de venda no dia"
         />
         <span className="opacity-70">· {orders.toLocaleString(locale)} ped</span>
