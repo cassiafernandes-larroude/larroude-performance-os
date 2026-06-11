@@ -9,6 +9,7 @@ import CascadeView from './CascadeView';
 import KpiCards from './KpiCards';
 import ProductSelector from './ProductSelector';
 import RecommendationsPanel from './RecommendationsPanel';
+import TodaySalesCard from './TodaySalesCard';
 
 interface ApiResponse {
   market: Market;
@@ -57,6 +58,15 @@ export default function Dashboard({ freshness }: { freshness: string }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Vendas HOJE (D0) — endpoint dedicado, refresh independente.
+  const [today, setToday] = useState<{
+    date: string;
+    totalUnits: number;
+    totalOrders: number;
+    totalRevenue: number;
+    products: { motherSku: string; units: number; orders: number; revenue: number }[];
+    generatedAt: string;
+  } | null>(null);
   // Meta de unidades por market (lida no UnitsGoalCard via localStorage).
   // Marketing Total premissa = marketingPct × meta × pricePerUnit (Cassia 2026-06-11).
   const [unitsGoal, setUnitsGoal] = useState<number>(0);
@@ -118,6 +128,22 @@ export default function Dashboard({ freshness }: { freshness: string }) {
       });
   }
 
+  // Fetch vendas HOJE (independente do D-1 principal)
+  function fetchToday(force: boolean = false) {
+    const url = `/api/unit-economics/${state.market}/today${force ? `?_=${Date.now()}` : ''}`;
+    fetch(url, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (json && !json.error) setToday(json);
+      })
+      .catch(() => {});
+  }
+
+  useEffect(() => {
+    fetchToday(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.market]);
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -148,6 +174,7 @@ export default function Dashboard({ freshness }: { freshness: string }) {
   function handleRefresh() {
     setRefreshing(true);
     fetchData(true);
+    fetchToday(true);
   }
   function handleExportPdf() {
     if (typeof window !== 'undefined') window.print();
@@ -172,6 +199,19 @@ export default function Dashboard({ freshness }: { freshness: string }) {
     if (!selectedProduct || !data) return null;
     return computeCascade(selectedProduct, assumptions, state.market, data.marketingPerUnit);
   }, [selectedProduct, assumptions, state.market, data]);
+
+  // Vendas hoje do produto selecionado (D0)
+  const productToday = useMemo(() => {
+    if (!today || !state.selectedMotherSku) return null;
+    return (
+      today.products.find((p) => p.motherSku === state.selectedMotherSku) ?? {
+        motherSku: state.selectedMotherSku,
+        units: 0,
+        orders: 0,
+        revenue: 0,
+      }
+    );
+  }, [today, state.selectedMotherSku]);
 
   const variantCascades = useMemo(() => {
     if (!data) return [];
@@ -228,6 +268,14 @@ export default function Dashboard({ freshness }: { freshness: string }) {
             unitsGoal={unitsGoal}
             onUnitsGoalChange={setUnitsGoal}
             selectedProduct={selectedProduct}
+          />
+
+          <TodaySalesCard
+            today={today}
+            productToday={productToday}
+            product={selectedProduct}
+            currency={data.currency}
+            onRefresh={() => fetchToday(true)}
           />
 
           <div className="grid grid-cols-1 lg:grid-cols-[300px,1fr] gap-4 mt-6">
