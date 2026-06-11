@@ -245,12 +245,18 @@ export default function Dashboard() {
       </header>
 
       {error && (
-        <div className="card p-4" style={{ borderColor: '#b3382f', background: '#fff5f5', color: '#b3382f' }}>
+        <div
+          className="p-4 rounded-2xl"
+          style={{ border: '0.8px solid #b3382f', background: '#fff5f5', color: '#b3382f' }}
+        >
           <strong>Erro:</strong> {error}
         </div>
       )}
       {loading && !data && (
-        <div className="card p-8 text-center text-sm" style={{ color: '#6b7280' }}>
+        <div
+          className="p-8 text-center text-sm rounded-2xl"
+          style={{ background: '#fff', border: '0.8px solid #e5e3de', color: '#6b7280' }}
+        >
           Carregando candidatos do Shopify (28d)...
         </div>
       )}
@@ -258,7 +264,10 @@ export default function Dashboard() {
       {data && (
         <div className="grid grid-cols-1 lg:grid-cols-[360px,1fr] gap-4">
           {/* Lista de candidatos */}
-          <aside className="card p-3">
+          <aside
+            className="p-3 rounded-2xl"
+            style={{ background: '#fff', border: '0.8px solid #e5e3de' }}
+          >
             <div className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: '#6b7280' }}>
               Top 30 candidatos (score)
             </div>
@@ -301,7 +310,10 @@ export default function Dashboard() {
             {selected && calc && (
               <>
                 {/* Header do produto */}
-                <section className="card p-4 sm:p-5">
+                <section
+                  className="p-4 sm:p-5 rounded-2xl"
+                  style={{ background: '#fff', border: '0.8px solid #e5e3de' }}
+                >
                   <div className="flex items-baseline justify-between gap-2 flex-wrap">
                     <div>
                       <div className="text-xs font-mono" style={{ color: '#9ca3af' }}>
@@ -327,7 +339,10 @@ export default function Dashboard() {
                 </section>
 
                 {/* Inputs da aposta */}
-                <section className="card p-4 sm:p-5">
+                <section
+                  className="p-4 sm:p-5 rounded-2xl"
+                  style={{ background: '#fff', border: '0.8px solid #e5e3de' }}
+                >
                   <div className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: '#ec4899' }}>
                     🎯 Parâmetros da Aposta
                   </div>
@@ -386,7 +401,10 @@ export default function Dashboard() {
                 </section>
 
                 {/* Projeção */}
-                <section className="card p-4 sm:p-5">
+                <section
+                  className="p-4 sm:p-5 rounded-2xl"
+                  style={{ background: '#fff', border: '0.8px solid #e5e3de' }}
+                >
                   <div className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: '#ec4899' }}>
                     📊 Projeção da Aposta
                   </div>
