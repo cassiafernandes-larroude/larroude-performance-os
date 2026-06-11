@@ -151,26 +151,35 @@ body {
  * Pattern de referência = Unit Economics / Produtos para Apostar.
  */
 
-/* Títulos H1 de todos os dashboards: mesma escala */
+/* Títulos H1 de todos os dashboards: mesma escala.
+ * Cobre tanto .font-display (Main/UE/Apostar) quanto .title (CAC/LTV legacy). */
 .main-dashboard-root h1.font-display,
 .cac-root h1.font-display,
-.ltv-root h1.font-display {
-  font-size: 40px;
-  line-height: 1.1;
-  letter-spacing: -0.025em;
-  font-weight: 700;
+.ltv-root h1.font-display,
+.cac-root h1.title,
+.ltv-root h1.title {
+  font-size: 40px !important;
+  line-height: 1.1 !important;
+  letter-spacing: -0.025em !important;
+  font-weight: 700 !important;
+  color: var(--ink) !important;
+  margin: 0 !important;
 }
 @media (max-width: 1023px) {
   .main-dashboard-root h1.font-display,
   .cac-root h1.font-display,
-  .ltv-root h1.font-display {
+  .ltv-root h1.font-display,
+  .cac-root h1.title,
+  .ltv-root h1.title {
     font-size: 28px !important;
   }
 }
 @media (max-width: 640px) {
   .main-dashboard-root h1.font-display,
   .cac-root h1.font-display,
-  .ltv-root h1.font-display {
+  .ltv-root h1.font-display,
+  .cac-root h1.title,
+  .ltv-root h1.title {
     font-size: 24px !important;
   }
 }
