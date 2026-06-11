@@ -323,7 +323,8 @@ export default function Dashboard({ freshness }: { freshness: string }) {
           />
 
           <RecommendationsPanel
-            products={data.products}
+            product={selectedProduct}
+            cascade={cascade}
             market={state.market}
             assumptions={assumptions}
             marketingPerUnitReal={data.marketingPerUnit}

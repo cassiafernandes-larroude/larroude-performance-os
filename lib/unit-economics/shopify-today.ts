@@ -37,12 +37,15 @@ const TODAY_QUERY = `
           displayFinancialStatus
           tags
           customer { tags }
-          totalPriceSet { shopMoney { amount } }
+          totalPriceSet { shopMoney { amount currencyCode } }
           lineItems(first: 50) {
             edges {
               node {
                 sku
                 quantity
+                title
+                discountedUnitPriceSet { shopMoney { amount } }
+                originalUnitPriceSet { shopMoney { amount } }
                 variant { sku }
               }
             }
@@ -146,10 +149,20 @@ export async function getTodaySales(
         if (!mSku) continue;
         if (/^x-/i.test(mSku) || /^[0-9]+$/.test(mSku)) continue;
 
+        // Revenue por line item: discounted (preço efetivo pago) × qty.
+        // Se discounted vier 0/null, fallback pra original.
+        const discPrice =
+          parseFloat(li.node.discountedUnitPriceSet?.shopMoney?.amount || '0') || 0;
+        const origPrice =
+          parseFloat(li.node.originalUnitPriceSet?.shopMoney?.amount || '0') || 0;
+        const effPrice = discPrice > 0 ? discPrice : origPrice;
+        const lineRev = effPrice * qty;
+
         totalUnits += qty;
 
         const mAcc = byMother.get(mSku) || { units: 0, orders: 0, revenue: 0 };
         mAcc.units += qty;
+        mAcc.revenue += lineRev;
         byMother.set(mSku, mAcc);
         let mOrders = orderIdsByMother.get(mSku);
         if (!mOrders) {
@@ -161,6 +174,7 @@ export async function getTodaySales(
         const vKey = `${mSku}|${sku}`;
         const vAcc = byVariant.get(vKey) || { units: 0, orders: 0, revenue: 0 };
         vAcc.units += qty;
+        vAcc.revenue += lineRev;
         byVariant.set(vKey, vAcc);
         let vOrders = orderIdsByVariant.get(vKey);
         if (!vOrders) {
