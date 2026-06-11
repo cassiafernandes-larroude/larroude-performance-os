@@ -23,7 +23,7 @@ export default function KpiCard({ kpi }: Props) {
       {kpi.delta != null ? (
         <div className="text-[9px] font-medium mt-0.5" style={{ color: deltaColor }}>
           <span className="mr-1">{arrow}</span>
-          <span>{d.text} vs anterior</span>
+          <span>{d.text} vs prior</span>
         </div>
       ) : kpi.hint ? (
         <div className="text-[9px] text-steel mt-0.5 leading-tight">{kpi.hint}</div>

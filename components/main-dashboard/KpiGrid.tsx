@@ -10,7 +10,7 @@ export default function KpiGrid({ kpis, market }: Props) {
     <section className="mt-4">
       <div className="flex items-center gap-2 mb-3">
         <h2 className="text-sm font-bold text-ink tracking-wide">
-          {market === 'US' ? '🇺🇸 ESTADOS UNIDOS' : '🇧🇷 BRASIL'}
+          {market === 'US' ? '🇺🇸 UNITED STATES' : '🇧🇷 BRAZIL'}
         </h2>
         <span className="text-[10px] font-bold px-2 py-0.5 bg-accent-soft text-accent rounded-full uppercase">
           {market === 'US' ? 'USD' : 'BRL'}

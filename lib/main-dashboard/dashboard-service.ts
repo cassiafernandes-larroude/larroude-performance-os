@@ -372,7 +372,7 @@ export async function getDashboardPayload(
   const kpis: KpiValue[] = [
     { label: 'AMOUNT SPENT', value: fmtCurrency(spend, market, { compact: true }), raw: spend, delta: pctChange(spend, pSpend), hint: 'Meta + Google (todas contas)', tone: 'default' },
     { label: 'META SPEND', value: fmtCurrency(finalMetaSpend, market, { compact: true }), raw: finalMetaSpend, delta: pctChange(finalMetaSpend, finalMetaSpendPrev), hint: market === 'US' ? 'Larroude US + Pre-Order US' : 'Larroude BR + Pre-Order BR + Brand BR (USD→BRL)', tone: 'default' },
-    { label: 'GOOGLE SPEND', value: fmtCurrency(finalGoogleSpend, market, { compact: true }), raw: finalGoogleSpend, delta: pctChange(finalGoogleSpend, finalGoogleSpendPrev), hint: market === 'US' ? 'Google Ads US' : 'Google Ads BR (BRL nativo)', tone: 'default' },
+    { label: 'GOOGLE SPEND', value: fmtCurrency(finalGoogleSpend, market, { compact: true }), raw: finalGoogleSpend, delta: pctChange(finalGoogleSpend, finalGoogleSpendPrev), hint: market === 'US' ? 'Google Ads US' : 'Google Ads BR (native BRL)', tone: 'default' },
     { label: 'ROAS GROSS SALES', value: fmtMultiple(roasGross), raw: roasGross, delta: pctChange(roasGross, pRoasGross), tone: 'default' },
     { label: 'ROAS ORDER REVENUE', value: fmtMultiple(roasOrder), raw: roasOrder, hint: 'Order Revenue / Spend', tone: 'accent' },
     { label: 'ROAS TOTAL SALES', value: fmtMultiple(roasTotal), raw: roasTotal, hint: 'Total Sales / Spend', tone: 'warn' },
@@ -380,8 +380,8 @@ export async function getDashboardPayload(
     { label: 'TOTAL SALES', value: fmtCurrency(totalSales, market, { compact: true }), raw: totalSales, delta: pctChange(totalSales, pTotal), tone: 'default' },
     { label: 'ORDERS', value: fmtNumber(orders), raw: orders, delta: pctChange(orders, pOrders), tone: 'default' },
     { label: 'AOV', value: fmtCurrency(aov, market), raw: aov, delta: pctChange(aov, pAov), tone: 'good' },
-    { label: 'CAC (SPEND/NEW CUST.)', value: fmtCurrency(cac, market), raw: cac, hint: 'Spend / Novos Clientes Shopify', tone: 'default', invertDelta: true },
-    { label: 'TAXA DE CONVERSÃO', value: cvr > 0 ? fmtPercent(cvr, 2) : '—', raw: cvr, delta: cvr > 0 && pCvr > 0 ? pctChange(cvr, pCvr) : null, hint: `Fonte: ${cvrSource}`, tone: 'good' },
+    { label: 'CAC (SPEND/NEW CUST.)', value: fmtCurrency(cac, market), raw: cac, hint: 'Spend / Shopify New Customers', tone: 'default', invertDelta: true },
+    { label: 'CONVERSION RATE', value: cvr > 0 ? fmtPercent(cvr, 2) : '—', raw: cvr, delta: cvr > 0 && pCvr > 0 ? pctChange(cvr, pCvr) : null, hint: `Source: ${cvrSource}`, tone: 'good' },
     { label: 'CTR', value: fmtPercent(ctr, 2), raw: ctr, delta: pctChange(ctr, pCtr), tone: 'accent' },
     { label: 'UNITS SOLD', value: fmtNumber(units), raw: units, delta: pctChange(units, pUnits), tone: 'good' },
     // Cassia 2026-06-11: NEW CUSTOMER ORDERS removed from Main Dashboard.
