@@ -22,10 +22,10 @@ export default function AssumptionsPanel({ assumptions, market, onChange, onRese
       <div className="flex items-baseline justify-between mb-4">
         <div>
           <div className="text-xs font-bold uppercase tracking-wider text-accent">
-            ⚙️ PREMISSAS EDITÁVEIS — recalcula ao vivo
+            ⚙️ EDITABLE ASSUMPTIONS — recalculates live
           </div>
           <div className="text-[11px] text-steel mt-1">
-            Defaults validados em REGRAS-LARROUDE-OS.md seção 8.
+            Defaults validated in REGRAS-LARROUDE-OS.md section 8.
           </div>
         </div>
         <button
@@ -39,24 +39,24 @@ export default function AssumptionsPanel({ assumptions, market, onChange, onRese
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
         <Field
-          label="Desconto comercial"
+          label="Discount"
           suffix="%"
           value={assumptions.discountPct * 100}
           onChange={(n) => update('discountPct', n / 100)}
           step={1}
-          hint="0 = usa o real do Shopify"
+          hint="0 = uses Shopify real"
         />
         <Field
-          label="Cupom adicional"
+          label="Extra coupon"
           suffix="%"
           value={(assumptions.couponPct ?? 0) * 100}
           onChange={(n) => update('couponPct', n / 100)}
           step={1}
-          hint="Aplicado APÓS desconto Shopify"
+          hint="Applied AFTER Shopify discount"
         />
         <Field
           label="Marketing %"
-          suffix="% receita"
+          suffix="% revenue"
           value={assumptions.marketingPct * 100}
           onChange={(n) => update('marketingPct', n / 100)}
           step={1}
@@ -70,7 +70,7 @@ export default function AssumptionsPanel({ assumptions, market, onChange, onRese
           step={1}
         />
         <Field
-          label="Frete (custo)"
+          label="Shipping (cost)"
           prefix={currency}
           suffix="/un"
           value={assumptions.shippingPerUnit}
@@ -78,7 +78,7 @@ export default function AssumptionsPanel({ assumptions, market, onChange, onRese
           step={1}
         />
         <Field
-          label="Taxa de cartão"
+          label="Card fee"
           suffix="%"
           value={assumptions.cardFeePct * 100}
           onChange={(n) => update('cardFeePct', n / 100)}
@@ -86,12 +86,12 @@ export default function AssumptionsPanel({ assumptions, market, onChange, onRese
         />
         {market === 'BR' && (
           <Field
-            label="Desconto PIX"
+            label="PIX discount"
             suffix="%"
             value={assumptions.pixDiscountPct * 100}
             onChange={(n) => update('pixDiscountPct', n / 100)}
             step={1}
-            hint="% PIX vem real do Shopify 30d"
+            hint="PIX % comes from Shopify 30d real"
           />
         )}
       </div>

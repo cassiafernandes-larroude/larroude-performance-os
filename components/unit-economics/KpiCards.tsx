@@ -208,7 +208,7 @@ function UnitsGoalCard({
     <div className="kpi-card-uniform" style={{ borderTop: `3px solid ${t.label}` }}>
       <div className="flex items-center justify-between gap-2">
         <div className="kpi-label" style={{ color: t.label }}>
-          UNIDADES VENDIDAS ONTEM
+          UNITS SOLD YESTERDAY
         </div>
         {hasGoal && (
           <span
@@ -221,7 +221,7 @@ function UnitsGoalCard({
       </div>
       <div className="kpi-value">{actual.toLocaleString(locale)}</div>
       <div className="kpi-sub flex items-center gap-1.5">
-        <span>Meta:</span>
+        <span>Target:</span>
         <input
           type="text"
           inputMode="numeric"
@@ -230,9 +230,9 @@ function UnitsGoalCard({
           onChange={(e) => save(e.target.value)}
           className="flex-1 min-w-0 text-[11px] font-semibold border rounded px-1.5 py-0.5 outline-none focus:border-pink-400"
           style={{ borderColor: '#e5e3de', color: '#111827', background: '#fafafa', maxWidth: 80 }}
-          title="Meta de unidades de venda no dia"
+          title="Sales units target for the day"
         />
-        <span className="opacity-70">· {orders.toLocaleString(locale)} ped</span>
+        <span className="opacity-70">· {orders.toLocaleString(locale)} ord.</span>
       </div>
     </div>
   );

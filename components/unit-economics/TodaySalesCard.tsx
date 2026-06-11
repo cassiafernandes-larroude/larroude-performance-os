@@ -77,7 +77,7 @@ export default function TodaySalesCard({
         style={{ borderColor: '#fbbf24', background: '#fffbeb' }}
       >
         <div className="text-xs font-bold uppercase tracking-wider" style={{ color: '#ea580c' }}>
-          🟠 Vendas HOJE — selecione um produto
+          🟠 SALES TODAY — select a product
         </div>
       </section>
     );
@@ -105,12 +105,12 @@ export default function TodaySalesCard({
       <div className="flex items-start justify-between gap-4 flex-wrap mb-3">
         <div>
           <div className="text-xs font-bold uppercase tracking-wider" style={{ color: '#ea580c' }}>
-            🟠 Vendas HOJE — {product.productName}
+            🟠 SALES TODAY — {product.productName}
           </div>
           <div className="text-[11px] mt-0.5" style={{ color: '#92400e' }}>
-            {dateLabel} · Live · cache 5min{' '}
+            {dateLabel} · Live · 5min cache{' '}
             {today?.generatedAt && (
-              <span style={{ opacity: 0.7 }}>· atualizado {fmtTime(today.generatedAt, locale)}</span>
+              <span style={{ opacity: 0.7 }}>· updated {fmtTime(today.generatedAt, locale)}</span>
             )}
           </div>
         </div>
@@ -125,36 +125,36 @@ export default function TodaySalesCard({
             <path d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-6.7-3" />
             <polyline points="3 21 3 15 9 15" />
           </svg>
-          Atualizar agora
+          Refresh now
         </button>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-        <Cell label="Unidades" value={u.toLocaleString(locale)} tone="warn" />
-        <Cell label="Pedidos" value={o.toLocaleString(locale)} tone="warn" />
-        <Cell label="Receita bruta" value={fmt(rev, currency, true)} tone="warn" />
+        <Cell label="Units" value={u.toLocaleString(locale)} tone="warn" />
+        <Cell label="Orders" value={o.toLocaleString(locale)} tone="warn" />
+        <Cell label="Gross revenue" value={fmt(rev, currency, true)} tone="warn" />
         <Cell
-          label="Ticket médio"
+          label="Avg ticket"
           value={o > 0 ? fmt(aov, currency) : '—'}
-          sub={o > 0 ? `${aupo.toFixed(1)} un/pedido` : ''}
+          sub={o > 0 ? `${aupo.toFixed(1)} un/order` : ''}
           tone="warn"
         />
       </div>
 
       {/* Comparação com D-1 */}
       <div className="mt-3 text-[11px]" style={{ color: '#92400e' }}>
-        <span>D-1 (ontem): </span>
+        <span>D-1 (yesterday): </span>
         <span style={{ fontWeight: 600 }}>
-          {product.totalUnits.toLocaleString(locale)} un · {product.totalOrders.toLocaleString(locale)} ped
+          {product.totalUnits.toLocaleString(locale)} un · {product.totalOrders.toLocaleString(locale)} ord.
           {product.totalUnits > 0 && (
             <span style={{ marginLeft: 8 }}>
-              · {fmt(product.unitGrossRevenue, currency)} preço médio
+              · {fmt(product.unitGrossRevenue, currency)} avg price
             </span>
           )}
         </span>
         {product.totalUnits > 0 && u !== product.totalUnits && (
           <span style={{ marginLeft: 8, color: u > product.totalUnits ? '#10b981' : '#dc2626' }}>
-            {u > product.totalUnits ? '▲' : '▼'} {Math.abs(u - product.totalUnits).toLocaleString(locale)} un vs ontem
+            {u > product.totalUnits ? '▲' : '▼'} {Math.abs(u - product.totalUnits).toLocaleString(locale)} un vs yesterday
           </span>
         )}
       </div>

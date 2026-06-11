@@ -1,8 +1,9 @@
 import type { Market } from "@/types/metric";
-import { runQuery, hasBigQueryCredentials } from "@/lib/bigquery/client";
+import { hasBigQueryCredentials } from "@/lib/bigquery/client";
 import { getMetricBundle } from "@/lib/data/metrics";
 import { getNorthStarBundle } from "@/lib/data/northstar";
 import { cached } from "@/lib/cache";
+import { queryChannelMix } from "@/lib/main-dashboard/queries";
 
 const TZ: Record<Market, string> = { US: "America/New_York", BR: "America/Sao_Paulo" };
 
@@ -53,7 +54,7 @@ const MOCK: Record<Market, Omit<ExecutiveBundle, "market" | "period" | "source">
 };
 
 export async function getExecutiveBundle(market: Market): Promise<ExecutiveBundle> {
-  return cached(`executive-v5:${market}`, 1800, async () => {
+  return cached(`executive-v6-mainChannel:${market}`, 1800, async () => {
     // Periodo 28d completo (igual Overview)
     const today = new Date();
     const to = new Date(today.getTime() - 24 * 3600 * 1000);
@@ -80,56 +81,31 @@ export async function getExecutiveBundle(market: Market): Promise<ExecutiveBundl
       const northStar = await getNorthStarBundle(market);
       const ltvPredictive = northStar.ltv_predictive;
 
-      // 3. Channel mix (mesma query do dashboard principal)
-      const dataset = market === "US" ? "stg_shopify" : "stg_shopify_br";
-      const tz = TZ[market];
+      // 3. Channel mix — REUSA queryChannelMix do Main Dashboard (mesma classificação).
+      // Cassia 2026-06-11: replicar divisão de faturamento por canal do Main.
       let channels: ChannelRow[] = [];
       try {
-        const channelSql = `
-          WITH parsed AS (
-            SELECT CAST(total_price AS NUMERIC) AS revenue,
-              LOWER(IFNULL(landing_site, '')) AS landing,
-              LOWER(IFNULL(referring_site, '')) AS referrer
-            FROM \`larroude-data-prod.${dataset}.orders\`
-            WHERE DATE(created_at, '${tz}') BETWEEN @from AND @to
-              AND financial_status NOT IN ('voided','refunded')
-              AND (
-                JSON_VALUE(customer, '$.tags') IS NULL
-                OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(customer, '$.tags')), r'b2b|wholesale|marketplace|redo')
-              )
-              AND NOT REGEXP_CONTAINS(LOWER(IFNULL(tags, '')), r'b2b|wholesale|marketplace|redo')
-              AND CAST(total_price AS NUMERIC) < ${market === "US" ? 30000 : 25000}
-              ${market === "BR" ? `
-              AND LOWER(IFNULL(financial_status, '')) NOT IN ('pending', 'expired', 'authorized')` : ""}
-          ),
-          classified AS (
-            SELECT revenue,
-              CASE
-                WHEN NOT REGEXP_CONTAINS(landing, r'utm_source=') THEN 'Sem UTM / Direto'
-                WHEN REGEXP_CONTAINS(landing, r'utm_source=(meta|facebook|ig_paid|ig_ads|fb_ads|fb|instagram_paid|fb_paid)') THEN 'Meta Ads'
-                WHEN REGEXP_CONTAINS(landing, r'utm_source=(instagram|facebook|meta|fb|ig)') AND REGEXP_CONTAINS(landing, r'utm_medium=(paid|cpc|cpm|social_paid|paidsocial|paid_social)') THEN 'Meta Ads'
-                WHEN REGEXP_CONTAINS(landing, r'utm_source=(instagram|facebook|meta|fb|ig)') AND NOT REGEXP_CONTAINS(landing, r'utm_medium=') THEN 'Meta Ads'
-                WHEN REGEXP_CONTAINS(landing, r'utm_source=klaviyo') THEN 'Klaviyo Email'
-                WHEN REGEXP_CONTAINS(landing, r'utm_source=google') OR REGEXP_CONTAINS(landing, r'gclid=') THEN 'Google Ads'
-                WHEN REGEXP_CONTAINS(landing, r'utm_source=attentive') OR REGEXP_CONTAINS(landing, r'utm_medium=sms') THEN 'SMS Attentive'
-                WHEN REGEXP_CONTAINS(landing, r'utm_source=awin') THEN 'Awin Affiliate'
-                WHEN REGEXP_CONTAINS(landing, r'utm_source=shopmy') THEN 'ShopMy'
-                WHEN REGEXP_CONTAINS(landing, r'criteo') OR REGEXP_CONTAINS(referrer, r'criteo') THEN 'Criteo'
-                ELSE 'Outros'
-              END AS channel
-            FROM parsed
-          )
-          SELECT channel, SUM(revenue) AS revenue, COUNT(*) AS orders
-          FROM classified GROUP BY channel ORDER BY revenue DESC LIMIT 10
-        `;
-        const chRows = await runQuery<{ channel: string; revenue: number | string; orders: number }>(channelSql, { from: range.from, to: range.to });
+        const chRows = await queryChannelMix(market, range.from, range.to);
         const totalRev = chRows.reduce((s, r) => s + Number(r.revenue), 0);
-        channels = chRows.map((r) => ({
-          channel: r.channel,
-          revenue: Number(r.revenue),
-          orders: Number(r.orders),
-          share_pct: totalRev > 0 ? (Number(r.revenue) / totalRev) * 100 : 0,
-        }));
+        // Consolida Orgânico Search + Social → 'Orgânico' (mesma regra do Main).
+        const consolidated = new Map<string, { revenue: number; orders: number }>();
+        for (const r of chRows) {
+          const channelName = (r.channel === 'Orgânico Search' || r.channel === 'Orgânico Social')
+            ? 'Orgânico'
+            : r.channel;
+          const ex = consolidated.get(channelName) ?? { revenue: 0, orders: 0 };
+          ex.revenue += Number(r.revenue);
+          ex.orders += Number(r.orders);
+          consolidated.set(channelName, ex);
+        }
+        channels = Array.from(consolidated.entries())
+          .map(([channel, v]) => ({
+            channel,
+            revenue: v.revenue,
+            orders: v.orders,
+            share_pct: totalRev > 0 ? (v.revenue / totalRev) * 100 : 0,
+          }))
+          .sort((a, b) => b.revenue - a.revenue);
       } catch (err) {
         console.warn("channel mix failed:", err);
       }

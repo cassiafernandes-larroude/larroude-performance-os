@@ -122,7 +122,7 @@ export default function Dashboard({ freshness }: { freshness: string }) {
         }
       })
       .catch((err: Error) => {
-        setError(err.message || 'Erro ao buscar dados');
+        setError(err.message || 'Error fetching data');
         setLoading(false);
         setRefreshing(false);
       });
@@ -163,7 +163,7 @@ export default function Dashboard({ freshness }: { freshness: string }) {
       })
       .catch((err: Error) => {
         if (cancelled) return;
-        setError(err.message || 'Erro ao buscar dados');
+        setError(err.message || 'Error fetching data');
         setLoading(false);
       });
     return () => {
@@ -238,13 +238,13 @@ export default function Dashboard({ freshness }: { freshness: string }) {
           className="card mt-4 p-4"
           style={{ borderColor: '#b3382f', background: '#fff5f5', color: '#b3382f' }}
         >
-          <strong>Erro:</strong> {error}
+          <strong>Error:</strong> {error}
         </div>
       )}
 
       {loading && !data && (
         <div className="card mt-4 p-8 text-center text-sm" style={{ color: '#6b7280' }}>
-          Carregando dados de hoje do Shopify… (cache 30min depois da 1ª carga)
+          Loading today's data from Shopify… (30min cache after 1st load)
         </div>
       )}
 
@@ -253,9 +253,9 @@ export default function Dashboard({ freshness }: { freshness: string }) {
           className="card mt-4 p-3 text-sm"
           style={{ borderColor: '#d97706', background: '#fffbeb', color: '#92400e' }}
         >
-          <strong>⚠ Dados parciais:</strong> processadas {data.pagesProcessed} páginas (
-          {data.totalOrders.toLocaleString('en-US')} orders) antes do limite de tempo. Médias por
-          unidade ainda são representativas.
+          <strong>⚠ Partial data:</strong> processed {data.pagesProcessed} pages (
+          {data.totalOrders.toLocaleString('en-US')} orders) before timeout. Per-unit averages
+          are still representative.
         </div>
       )}
 
@@ -296,7 +296,7 @@ export default function Dashboard({ freshness }: { freshness: string }) {
                 />
               ) : (
                 <div className="card p-8 text-center text-sm" style={{ color: '#6b7280' }}>
-                  Selecione um produto para ver a cascata.
+                  Select a product to see the cascade.
                 </div>
               )}
             </div>

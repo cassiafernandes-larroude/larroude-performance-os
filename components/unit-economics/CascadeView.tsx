@@ -31,21 +31,21 @@ export default function CascadeView({ product, cascade, variantCascades, currenc
 
   // Rows: label, value, type
   const rows: { label: string; value: number; type: 'add' | 'sub' | 'total' | 'highlight' }[] = [
-    { label: 'Preço base (Shopify)', value: cascade.basePrice, type: 'add' },
-    { label: 'Desconto comercial', value: -cascade.discount, type: 'sub' },
-    { label: 'Receita efetiva (após PIX blend se BR)', value: cascade.effectiveRevenue, type: 'total' },
-    { label: 'Impostos', value: -cascade.tax, type: 'sub' },
-    { label: 'Devoluções', value: -cascade.refund, type: 'sub' },
-    { label: '= Receita Líquida / un', value: cascade.netRevenue, type: 'highlight' },
+    { label: 'Base price (Shopify)', value: cascade.basePrice, type: 'add' },
+    { label: 'Discount', value: -cascade.discount, type: 'sub' },
+    { label: 'Effective revenue (after PIX blend if BR)', value: cascade.effectiveRevenue, type: 'total' },
+    { label: 'Tax', value: -cascade.tax, type: 'sub' },
+    { label: 'Returns', value: -cascade.refund, type: 'sub' },
+    { label: '= Net Revenue / un', value: cascade.netRevenue, type: 'highlight' },
     { label: 'COGS', value: -cascade.cogs, type: 'sub' },
-    { label: 'Duties (tarifas importação)', value: -cascade.duties, type: 'sub' },
-    { label: 'Taxa de cartão', value: -cascade.cardFee, type: 'sub' },
-    { label: 'Frete (premissa)', value: -cascade.shipping, type: 'sub' },
-    { label: 'Fulfillment (premissa)', value: -cascade.fulfillment, type: 'sub' },
-    { label: 'Custo de troca (premissa)', value: -cascade.exchange, type: 'sub' },
-    { label: '= MC BRUTA / un', value: cascade.grossContributionMargin, type: 'highlight' },
-    { label: 'Marketing (real, rateado)', value: -cascade.marketingReal, type: 'sub' },
-    { label: '= MC LÍQUIDA REAL / un', value: cascade.netCmReal, type: 'highlight' },
+    { label: 'Duties (import fees)', value: -cascade.duties, type: 'sub' },
+    { label: 'Card fee', value: -cascade.cardFee, type: 'sub' },
+    { label: 'Shipping (assumed)', value: -cascade.shipping, type: 'sub' },
+    { label: 'Fulfillment (assumed)', value: -cascade.fulfillment, type: 'sub' },
+    { label: 'Exchange cost (real 30d)', value: -cascade.exchange, type: 'sub' },
+    { label: '= GROSS CM / un', value: cascade.grossContributionMargin, type: 'highlight' },
+    { label: 'Marketing (real, allocated)', value: -cascade.marketingReal, type: 'sub' },
+    { label: '= NET CM REAL / un', value: cascade.netCmReal, type: 'highlight' },
   ];
 
   return (
@@ -94,7 +94,7 @@ export default function CascadeView({ product, cascade, variantCascades, currenc
         style={{ background: '#fff7e0', border: '1px solid #f3e7c4' }}
       >
         <div className="text-[12px]">
-          <strong>MC Líquida (Premissa Marketing %):</strong>
+          <strong>Net CM (Marketing % assumption):</strong>
           <span className="ml-1 text-[11px] text-steel">
             Marketing = {fmt(cascade.marketingAssumption, currency)} / un
           </span>
@@ -111,7 +111,7 @@ export default function CascadeView({ product, cascade, variantCascades, currenc
             onClick={() => setShowVariants(!showVariants)}
             className="text-xs font-bold uppercase tracking-wider text-accent hover:opacity-70"
           >
-            {showVariants ? '▾' : '▸'} Drill-down por SKU ({variantCascades.length})
+            {showVariants ? '▾' : '▸'} Drill-down by SKU ({variantCascades.length})
           </button>
           {showVariants && (
             <div className="mt-3 overflow-x-auto thin-scroll">
@@ -121,10 +121,10 @@ export default function CascadeView({ product, cascade, variantCascades, currenc
                     <th className="px-2 py-2">SKU</th>
                     <th className="px-2 py-2">Variant</th>
                     <th className="px-2 py-2 text-right">Un</th>
-                    <th className="px-2 py-2 text-right">Preço</th>
+                    <th className="px-2 py-2 text-right">Price</th>
                     <th className="px-2 py-2 text-right">COGS</th>
-                    <th className="px-2 py-2 text-right">MC Bruta</th>
-                    <th className="px-2 py-2 text-right">MC Líq Real</th>
+                    <th className="px-2 py-2 text-right">Gross CM</th>
+                    <th className="px-2 py-2 text-right">Net CM Real</th>
                   </tr>
                 </thead>
                 <tbody>
