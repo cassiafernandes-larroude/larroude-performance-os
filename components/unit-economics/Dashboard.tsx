@@ -30,6 +30,9 @@ interface ApiResponse {
   returnRate30d?: number;
   returnTotalQty30d?: number;
   returnRefundedQty30d?: number;
+  exchangeRate30d?: number;
+  exchangeTotalQty30d?: number;
+  exchangeRedoQty30d?: number;
   products: ProductUnitEconomics[];
   variants: ProductUnitEconomics[];
   meta?: { generatedAt: string; durationMs: number };

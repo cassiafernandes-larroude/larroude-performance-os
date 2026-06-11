@@ -39,6 +39,8 @@ export interface ProductUnitEconomics {
   unitDuties: number;
   unitCogs: number;
   unitRefund: number;
+  /** Taxa de troca (REDO) dos ultimos 30d — 0..1. Aplicada no cascade.exchange. */
+  exchangeRate?: number;
   /** % do volume pago em PIX (0..1). 0 para US. */
   pixShare: number;
   /** Currency */

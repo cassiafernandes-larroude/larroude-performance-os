@@ -127,7 +127,14 @@ export function computeCascade(
   // 8. Premissas puras
   const shipping = assumptions.shippingPerUnit;
   const fulfillment = assumptions.fulfillmentPerUnit;
-  const exchange = assumptions.exchangePerUnit;
+  // Custo de troca (Cassia 2026-06-10): usa exchangeRate REAL dos ultimos 30d.
+  // Cada unidade trocada custa (shipping + fulfillment) extra (logistica reversa).
+  // Fallback pra premissa pura se nao houver dado real.
+  const exchangeRate = product.exchangeRate ?? 0;
+  const exchange =
+    exchangeRate > 0
+      ? exchangeRate * (shipping + fulfillment)
+      : assumptions.exchangePerUnit;
 
   // Margem de Contribuição Bruta
   const grossContributionMargin = netRevenue - cogs - duties - cardFee - shipping - fulfillment - exchange;

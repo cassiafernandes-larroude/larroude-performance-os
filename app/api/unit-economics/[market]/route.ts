@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUnitEconomicsFromShopify, type Market } from '@/lib/unit-economics/shopify';
 import { getShopifyCatalog } from '@/lib/unit-economics/shopify-catalog';
 import { getReturnRatesLast30d } from '@/lib/unit-economics/shopify-returns30d';
+import { getExchangeRatesLast30d } from '@/lib/unit-economics/shopify-exchanges30d';
 import { queryMetaAdsTotal } from '@/lib/main-dashboard/meta-ads';
 import { queryGoogleAdsTotalViaSupermetrics } from '@/lib/main-dashboard/supermetrics';
 import { getMetaSpendAdjustment } from '@/lib/shared/meta-adjustments';
@@ -35,15 +36,16 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
   const { start, end } = defaultWindow();
   const startedAt = Date.now();
   try {
-    const cacheKey = `ue:${market}:${start}:${end}:d1-cat-ret30d:v4`;
+    const cacheKey = `ue:${market}:${start}:${end}:d1-cat-ret30d-exch30d:v5`;
     const result = await memo(cacheKey, TTL_30M, async () => {
-      // 5 fontes em paralelo:
-      // 1) Shopify Admin GraphQL — orders do D-1 (sells)
-      // 2) Shopify Admin GraphQL — catalogo TODOS (price + COGS)
-      // 3) Shopify Admin GraphQL — refunds 30d (return rate)
-      // 4) Meta API direto
-      // 5) Google Supermetrics
-      const [sells, catalog, returns30d, metaTotal, googleTotal] = await Promise.all([
+      // 6 fontes em paralelo:
+      // 1) Shopify orders D-1 (sells)
+      // 2) Shopify catalogo TODOS (price + COGS)
+      // 3) Shopify refunds 30d (return rate por SKU)
+      // 4) Shopify exchanges 30d (REDO rate por SKU)
+      // 5) Meta API direto
+      // 6) Google Supermetrics
+      const [sells, catalog, returns30d, exchanges30d, metaTotal, googleTotal] = await Promise.all([
         getUnitEconomicsFromShopify(market, start, end),
         getShopifyCatalog(market).catch((err) => {
           console.error('[ue] catalog failed:', err);
@@ -52,6 +54,18 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
         getReturnRatesLast30d(market, end).catch((err) => {
           console.error('[ue] ret30d failed:', err);
           return { byMother: new Map(), byVariant: new Map(), pages: 0, partial: true };
+        }),
+        getExchangeRatesLast30d(market, end).catch((err) => {
+          console.error('[ue] exch30d failed:', err);
+          return {
+            byMother: new Map(),
+            byVariant: new Map(),
+            overallRate: 0,
+            overallRedoUnits: 0,
+            overallTotalUnits: 0,
+            pages: 0,
+            partial: true,
+          };
         }),
         queryMetaAdsTotal(market as MainMarket, start, end).catch((err) => {
           console.error('[ue] Meta failed:', err);
@@ -81,17 +95,17 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
       const mergedProducts: ProductUnitEconomics[] = catalog.products.map((cat) => {
         const sell = sellsByMother.get(cat.motherSku);
         const ret = returns30d.byMother.get(cat.motherSku);
+        const exch = exchanges30d.byMother.get(cat.motherSku);
         const returnRate = ret?.returnRate ?? 0;
+        const exchangeRate = exch?.exchangeRate ?? 0;
         if (sell) {
-          // Vendeu D-1: usa real, mas sobrescreve return rate com 30d
           return {
             ...sell,
             productName: sell.productName || cat.productName,
-            // unitRefund: aproximação = grossRevenue * returnRate30d
             unitRefund: sell.unitGrossRevenue * returnRate,
+            exchangeRate,
           } as ProductUnitEconomics;
         }
-        // Sem venda D-1: catalogo
         return {
           motherSku: cat.motherSku,
           variantSku: null,
@@ -104,6 +118,7 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
           unitDuties: 0,
           unitCogs: cat.unitCogs,
           unitRefund: cat.unitPrice * returnRate,
+          exchangeRate,
           pixShare: 0,
           currency,
         };
@@ -113,12 +128,15 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
         const key = `${cat.motherSku}|${cat.variantSku}`;
         const sell = sellsByVariant.get(key);
         const ret = returns30d.byVariant.get(key);
+        const exch = exchanges30d.byVariant.get(key);
         const returnRate = ret?.returnRate ?? 0;
+        const exchangeRate = exch?.exchangeRate ?? 0;
         if (sell) {
           return {
             ...sell,
             productName: sell.productName || cat.productName,
             unitRefund: sell.unitGrossRevenue * returnRate,
+            exchangeRate,
           } as ProductUnitEconomics;
         }
         return {
@@ -133,6 +151,7 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
           unitDuties: 0,
           unitCogs: cat.unitCogs,
           unitRefund: cat.unitPrice * returnRate,
+          exchangeRate,
           pixShare: 0,
           currency,
         };
@@ -163,13 +182,16 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
         totalRevenue: sells.totalRevenue,
         totalRefunds: sells.totalRefunds,
         cogsCoverage: sells.cogsCoverage,
-        partial: sells.partial || catalog.partial || returns30d.partial,
-        pagesProcessed: sells.pagesProcessed + catalog.pages + returns30d.pages,
+        partial: sells.partial || catalog.partial || returns30d.partial || exchanges30d.partial,
+        pagesProcessed: sells.pagesProcessed + catalog.pages + returns30d.pages + exchanges30d.pages,
         catalogProductsCount: catalog.products.length,
         catalogVariantsCount: catalog.variants.length,
         returnRate30d: overallReturnRate30d,
         returnTotalQty30d: totalQty30d,
         returnRefundedQty30d: totalRefunded30d,
+        exchangeRate30d: exchanges30d.overallRate,
+        exchangeTotalQty30d: exchanges30d.overallTotalUnits,
+        exchangeRedoQty30d: exchanges30d.overallRedoUnits,
         totalMarketingSpend,
         metaSpend,
         googleSpend,
