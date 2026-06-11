@@ -3,12 +3,12 @@
  *
  * Cassia 2026-06-10: "calcule o custo de troca, media dos ultimos 30 dias"
  *
- * Larroude usa tag `redo` no Shopify pra orders que substituem outra (troca sem reembolso).
- * exchangeRate por mother SKU = redo_units / total_units no período de 30d.
+ * Larroude usa tag `Exchange-Only` no Shopify pra orders que substituem outra (troca sem reembolso).
+ * exchangeRate por mother SKU = exchange_units / total_units no período de 30d.
  * O custo monetário é calculado no cascade: rate × (shipping + fulfillment).
  *
- * IMPORTANTE: orders REDO são EXCLUÍDAS do dataset principal (filtro DTC).
- * Aqui pegamos elas como amostra separada SEM o filtro -tag:redo.
+ * Validação 2026-06-11: amostra 100 orders recentes → 28 com tag `Exchange-Only`
+ * (e 28 com `policy:exchange-only`). A tag `redo` NAO existe na base Larroude.
  */
 
 import type { Market } from './queries';
@@ -91,11 +91,10 @@ export async function getExchangeRatesLast30d(
   const startISO = start.toISOString().slice(0, 10);
   const endISO = endDate;
 
-  // 2 queries: (a) total units todas as orders, (b) redo units
-  // Pra eficiência, faço 2 fetchs paralelos
+  // 2 queries: (a) units regulares (sem Exchange-Only), (b) units com Exchange-Only
   const baseFilter = `created_at:>=${startISO}T00:00:00Z AND created_at:<=${endISO}T23:59:59Z AND -tag:b2b AND -tag:wholesale AND -tag:marketplace AND -tag:influencer`;
-  const totalFilter = `${baseFilter} AND -tag:redo`; // SEM redo (units regulares)
-  const redoFilter = `${baseFilter} AND tag:redo`;   // SO redo
+  const totalFilter = `${baseFilter} AND -tag:Exchange-Only`; // SEM exchange
+  const redoFilter = `${baseFilter} AND tag:Exchange-Only`;   // SO exchange
 
   async function countUnits(filter: string, label: string) {
     const motherMap = new Map<string, number>();
