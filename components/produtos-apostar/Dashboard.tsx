@@ -203,7 +203,7 @@ export default function Dashboard() {
   const currency = data?.currency ?? 'USD';
 
   return (
-    <div className="main-dashboard-root">
+    <div>
       <header className="mb-6 no-print-bg">
         <div className="pt-8 pb-2 flex items-start justify-between gap-4 flex-wrap">
           <h1
