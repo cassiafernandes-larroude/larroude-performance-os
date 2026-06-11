@@ -118,14 +118,14 @@ export default function UeHeader({
       {/* Row 3: subtitle */}
       <div className="pb-4">
         <p className="text-sm" style={{ color: 'var(--ink-soft)' }}>
-          Per-unit contribution margin · Shopify Admin + Meta API + Supermetrics · data from{' '}
+          Per-unit contribution margin · sells D-1 + catalog all SKUs + returns 30d · data from{' '}
           <span className="font-semibold" style={{ color: 'var(--ink)' }}>
             {today}
           </span>
         </p>
       </div>
 
-      {/* Row 4: today card (read-only — UE eh per-unit, sempre "hoje") */}
+      {/* Row 4: card (read-only — UE = D-1 sempre) */}
       <div
         className="px-5 py-3 rounded-2xl flex flex-wrap items-center gap-3 no-print"
         style={{ background: 'white', border: '0.8px solid #e5e3de' }}
@@ -137,7 +137,7 @@ export default function UeHeader({
           Period
         </span>
         <span className={`${PILL_BASE} bg-[#1a1a1a] text-white px-3 sm:px-5 py-1.5 sm:py-2`}>
-          Today
+          Yesterday (D-1)
         </span>
         <div className="h-7 w-px mx-1" style={{ background: '#e5e3de' }} />
         <span className="text-[13px] font-medium px-3" style={{ color: 'var(--ink)' }}>
@@ -145,7 +145,7 @@ export default function UeHeader({
         </span>
         <div className="ml-auto" />
         <span className="text-[12px] italic" style={{ color: '#9ca3af' }}>
-          Live · refreshes every 30 min
+          Return rate · 30d rolling · refresh 30 min
         </span>
       </div>
     </header>

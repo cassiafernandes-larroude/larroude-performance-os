@@ -1,25 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUnitEconomicsFromShopify, type Market } from '@/lib/unit-economics/shopify';
+import { getShopifyCatalog } from '@/lib/unit-economics/shopify-catalog';
+import { getReturnRatesLast30d } from '@/lib/unit-economics/shopify-returns30d';
 import { queryMetaAdsTotal } from '@/lib/main-dashboard/meta-ads';
 import { queryGoogleAdsTotalViaSupermetrics } from '@/lib/main-dashboard/supermetrics';
 import { getMetaSpendAdjustment } from '@/lib/shared/meta-adjustments';
 import { memo, TTL_30M } from '@/lib/ltv-dashboard/memo-cache';
 import type { Market as MainMarket } from '@/lib/main-dashboard/types';
+import type { ProductUnitEconomics } from '@/lib/unit-economics/queries';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 3600;
-// 300s = Vercel Pro best-effort. Backend já tem timeout interno de 50s.
 export const maxDuration = 300;
 
 function isMarket(v: string): v is Market {
   return v === 'US' || v === 'BR';
 }
 
-// Regra Cassia (2026-06-10): UE mostra SEMPRE o dado de HOJE — não janela móvel.
-// Janela = hoje (start = end = today UTC).
+// Regra Cassia (2026-06-10):
+// - Janela de sells = D-1 (ontem)
+// - Return rate = ultimos 30 dias por produto
+// - Catalogo = TODOS produtos (mesmo sem venda)
 function defaultWindow(): { start: string; end: string } {
-  const today = new Date().toISOString().slice(0, 10);
-  return { start: today, end: today };
+  const today = new Date();
+  today.setUTCDate(today.getUTCDate() - 1); // D-1 = ontem
+  const d = today.toISOString().slice(0, 10);
+  return { start: d, end: d };
 }
 
 export async function GET(_req: NextRequest, ctx: { params: { market: string } }) {
@@ -29,18 +35,30 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
   const { start, end } = defaultWindow();
   const startedAt = Date.now();
   try {
-    const cacheKey = `ue:${market}:${start}:${end}:today:v3`;
+    const cacheKey = `ue:${market}:${start}:${end}:d1-cat-ret30d:v4`;
     const result = await memo(cacheKey, TTL_30M, async () => {
-      // FONTE ÚNICA: Shopify Admin GraphQL (orders + lineItems + cost + tax + duties + refunds + payments)
-      // Marketing vem em paralelo de Meta API + Google Supermetrics
-      const [shop, metaTotal, googleTotal] = await Promise.all([
+      // 5 fontes em paralelo:
+      // 1) Shopify Admin GraphQL — orders do D-1 (sells)
+      // 2) Shopify Admin GraphQL — catalogo TODOS (price + COGS)
+      // 3) Shopify Admin GraphQL — refunds 30d (return rate)
+      // 4) Meta API direto
+      // 5) Google Supermetrics
+      const [sells, catalog, returns30d, metaTotal, googleTotal] = await Promise.all([
         getUnitEconomicsFromShopify(market, start, end),
+        getShopifyCatalog(market).catch((err) => {
+          console.error('[ue] catalog failed:', err);
+          return { products: [], variants: [], pages: 0, partial: true };
+        }),
+        getReturnRatesLast30d(market, end).catch((err) => {
+          console.error('[ue] ret30d failed:', err);
+          return { byMother: new Map(), byVariant: new Map(), pages: 0, partial: true };
+        }),
         queryMetaAdsTotal(market as MainMarket, start, end).catch((err) => {
-          console.error('[ue] Meta API failed:', err);
+          console.error('[ue] Meta failed:', err);
           return { spend: 0 } as any;
         }),
         queryGoogleAdsTotalViaSupermetrics(market as MainMarket, start, end).catch((err) => {
-          console.error('[ue] Google Supermetrics failed:', err);
+          console.error('[ue] Google failed:', err);
           return { spend: 0 } as any;
         }),
       ]);
@@ -49,15 +67,116 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
       const metaSpend = (Number(metaTotal.spend) || 0) + metaAdj;
       const googleSpend = Number(googleTotal.spend) || 0;
       const totalMarketingSpend = metaSpend + googleSpend;
-      const marketingPerUnit = shop.totalUnits > 0 ? totalMarketingSpend / shop.totalUnits : 0;
+      const marketingPerUnit = sells.totalUnits > 0 ? totalMarketingSpend / sells.totalUnits : 0;
+      const currency = sells.currency;
+
+      // ========== MERGE: catalogo + sells + returns30d ==========
+      // Para cada mother SKU do CATÁLOGO:
+      //   - Se vendeu D-1: usa preço/desconto/COGS reais do dia + units
+      //   - Se NÃO vendeu D-1: usa preço/COGS do catálogo, units=0
+      //   - Return rate: vem dos 30d (independente de ter venda D-1)
+      const sellsByMother = new Map(sells.products.map((p) => [p.motherSku, p]));
+      const sellsByVariant = new Map(sells.variants.map((v) => [`${v.motherSku}|${v.variantSku}`, v]));
+
+      const mergedProducts: ProductUnitEconomics[] = catalog.products.map((cat) => {
+        const sell = sellsByMother.get(cat.motherSku);
+        const ret = returns30d.byMother.get(cat.motherSku);
+        const returnRate = ret?.returnRate ?? 0;
+        if (sell) {
+          // Vendeu D-1: usa real, mas sobrescreve return rate com 30d
+          return {
+            ...sell,
+            productName: sell.productName || cat.productName,
+            // unitRefund: aproximação = grossRevenue * returnRate30d
+            unitRefund: sell.unitGrossRevenue * returnRate,
+          } as ProductUnitEconomics;
+        }
+        // Sem venda D-1: catalogo
+        return {
+          motherSku: cat.motherSku,
+          variantSku: null,
+          productName: cat.productName,
+          totalUnits: 0,
+          totalOrders: 0,
+          unitGrossRevenue: cat.unitPrice,
+          unitDiscount: 0,
+          unitTax: 0,
+          unitDuties: 0,
+          unitCogs: cat.unitCogs,
+          unitRefund: cat.unitPrice * returnRate,
+          pixShare: 0,
+          currency,
+        };
+      });
+
+      const mergedVariants: ProductUnitEconomics[] = catalog.variants.map((cat) => {
+        const key = `${cat.motherSku}|${cat.variantSku}`;
+        const sell = sellsByVariant.get(key);
+        const ret = returns30d.byVariant.get(key);
+        const returnRate = ret?.returnRate ?? 0;
+        if (sell) {
+          return {
+            ...sell,
+            productName: sell.productName || cat.productName,
+            unitRefund: sell.unitGrossRevenue * returnRate,
+          } as ProductUnitEconomics;
+        }
+        return {
+          motherSku: cat.motherSku,
+          variantSku: cat.variantSku,
+          productName: cat.productName,
+          totalUnits: 0,
+          totalOrders: 0,
+          unitGrossRevenue: cat.unitPrice,
+          unitDiscount: 0,
+          unitTax: 0,
+          unitDuties: 0,
+          unitCogs: cat.unitCogs,
+          unitRefund: cat.unitPrice * returnRate,
+          pixShare: 0,
+          currency,
+        };
+      });
+
+      // Ordena: produtos com venda no D-1 primeiro (por units desc), depois resto alfabético
+      mergedProducts.sort((a, b) => {
+        if (b.totalUnits !== a.totalUnits) return b.totalUnits - a.totalUnits;
+        return a.productName.localeCompare(b.productName);
+      });
+
+      // Total return rate agregado (30d, ponderado)
+      let totalQty30d = 0;
+      let totalRefunded30d = 0;
+      for (const v of returns30d.byMother.values()) {
+        totalQty30d += v.totalQty;
+        totalRefunded30d += v.refundedQty;
+      }
+      const overallReturnRate30d = totalQty30d > 0 ? totalRefunded30d / totalQty30d : 0;
 
       return {
-        ...shop,
+        market: sells.market,
+        startDate: start,
+        endDate: end,
+        currency,
+        totalUnits: sells.totalUnits,
+        totalOrders: sells.totalOrders,
+        totalRevenue: sells.totalRevenue,
+        totalRefunds: sells.totalRefunds,
+        cogsCoverage: sells.cogsCoverage,
+        partial: sells.partial || catalog.partial || returns30d.partial,
+        pagesProcessed: sells.pagesProcessed + catalog.pages + returns30d.pages,
+        catalogProductsCount: catalog.products.length,
+        catalogVariantsCount: catalog.variants.length,
+        returnRate30d: overallReturnRate30d,
+        returnTotalQty30d: totalQty30d,
+        returnRefundedQty30d: totalRefunded30d,
         totalMarketingSpend,
         metaSpend,
         googleSpend,
         marketingCoverage: 1.0,
         marketingPerUnit,
+        products: mergedProducts,
+        variants: mergedVariants,
       };
     });
 

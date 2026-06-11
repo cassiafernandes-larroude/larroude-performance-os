@@ -1,9 +1,11 @@
 'use client';
 
-import type { ProductUnitEconomics } from '@/lib/unit-economics/queries';
+import { useEffect, useState } from 'react';
 import type { CascadeUnit } from '@/lib/unit-economics/cascade';
+import type { Market } from '@/lib/unit-economics/queries';
 
 interface ApiData {
+  market?: Market;
   currency: 'USD' | 'BRL';
   totalUnits: number;
   totalOrders: number;
@@ -12,6 +14,7 @@ interface ApiData {
   totalMarketingSpend: number;
   marketingPerUnit: number;
   marketingCoverage: number;
+  returnRate30d?: number;
 }
 
 function fmt(value: number, currency: 'USD' | 'BRL', opts: { compact?: boolean } = {}): string {
@@ -25,13 +28,19 @@ function fmt(value: number, currency: 'USD' | 'BRL', opts: { compact?: boolean }
     maximumFractionDigits: Math.abs(value) < 10 ? 2 : 0,
   })}`;
 }
-function pct(v: number): string {
-  return `${(v * 100).toFixed(1)}%`;
+function pct(v: number, digits: number = 1): string {
+  return `${(v * 100).toFixed(digits)}%`;
 }
 
-export default function KpiCards({ data, cascade }: { data: ApiData; cascade: CascadeUnit | null }) {
-  const returnRateValue = cascade?.returnRate ?? 0;
-  const returnTone =
+export default function KpiCards({
+  data,
+  cascade,
+}: {
+  data: ApiData;
+  cascade: CascadeUnit | null;
+}) {
+  const returnRateValue = data.returnRate30d ?? cascade?.returnRate ?? 0;
+  const returnTone: Tone =
     returnRateValue > 0.08 ? 'danger' : returnRateValue > 0.05 ? 'warn' : 'neutral';
   const mcRealPositive = cascade ? cascade.netCmReal > 0 : false;
   const mcPremPositive = cascade ? cascade.netCmAssumption > 0 : false;
@@ -58,16 +67,16 @@ export default function KpiCards({ data, cascade }: { data: ApiData; cascade: Ca
           tone={mcPremPositive ? 'success' : 'danger'}
         />
         <KpiCard
-          label="RETURN RATE"
-          value={cascade ? pct(returnRateValue) : '—'}
-          sub="Refunds / receita bruta"
+          label="RETURN RATE (30D)"
+          value={pct(returnRateValue, 2)}
+          sub="Refunds qty / total qty · 30d rolling"
           tone={returnTone}
         />
-        <KpiCard
-          label="UNIDADES"
-          value={data.totalUnits.toLocaleString(data.currency === 'USD' ? 'en-US' : 'pt-BR')}
-          sub={`${data.totalOrders.toLocaleString(data.currency === 'USD' ? 'en-US' : 'pt-BR')} pedidos`}
-          tone="info"
+        <UnitsGoalCard
+          actual={data.totalUnits}
+          orders={data.totalOrders}
+          market={data.market || 'US'}
+          locale={data.currency === 'USD' ? 'en-US' : 'pt-BR'}
         />
         <KpiCard
           label="MARKETING TOTAL"
@@ -127,13 +136,102 @@ function KpiCard({
         {value}
       </div>
       {sub && (
-        <div
-          className="text-[11px] leading-tight mt-2"
-          style={{ color: '#9ca3af' }}
-        >
+        <div className="text-[11px] leading-tight mt-2" style={{ color: '#9ca3af' }}>
           {sub}
         </div>
       )}
+    </div>
+  );
+}
+
+// Card UNIDADES com input editável de meta + atingimento %
+function UnitsGoalCard({
+  actual,
+  orders,
+  market,
+  locale,
+}: {
+  actual: number;
+  orders: number;
+  market: Market;
+  locale: string;
+}) {
+  const STORAGE_KEY = `lpos-ue-units-goal-${market}`;
+  const [goalStr, setGoalStr] = useState<string>('');
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const v = window.localStorage.getItem(STORAGE_KEY);
+      if (v) setGoalStr(v);
+    } catch {}
+  }, [STORAGE_KEY]);
+
+  function save(v: string) {
+    setGoalStr(v);
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(STORAGE_KEY, v);
+      } catch {}
+    }
+  }
+
+  const goal = parseInt(goalStr.replace(/\D/g, ''), 10);
+  const hasGoal = Number.isFinite(goal) && goal > 0;
+  const attainment = hasGoal ? actual / goal : 0;
+  const tone: Tone =
+    !hasGoal ? 'info' : attainment >= 1 ? 'success' : attainment >= 0.7 ? 'warn' : 'danger';
+  const t = TONE[tone];
+
+  return (
+    <div
+      className="rounded-2xl flex flex-col justify-between"
+      style={{
+        background: t.bg,
+        border: `1px solid ${t.border}`,
+        padding: '20px 18px',
+        minHeight: 130,
+        boxShadow: '0 1px 2px rgba(16,24,40,.04)',
+      }}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div
+          className="text-[10.5px] font-bold uppercase tracking-[0.08em] leading-tight"
+          style={{ color: t.label }}
+        >
+          UNIDADES
+        </div>
+        {hasGoal && (
+          <div
+            className="text-[10px] font-bold px-1.5 py-0.5 rounded-md"
+            style={{ background: t.label, color: '#fff' }}
+          >
+            {(attainment * 100).toFixed(0)}%
+          </div>
+        )}
+      </div>
+
+      <div
+        className="font-bold leading-none mt-2"
+        style={{ color: '#111827', fontSize: 'clamp(24px, 2.6vw, 36px)' }}
+      >
+        {actual.toLocaleString(locale)}
+      </div>
+
+      <div className="text-[11px] leading-tight mt-2 flex items-center gap-1.5" style={{ color: '#9ca3af' }}>
+        <span>Meta:</span>
+        <input
+          type="text"
+          inputMode="numeric"
+          placeholder="—"
+          value={goalStr}
+          onChange={(e) => save(e.target.value)}
+          className="flex-1 min-w-0 text-[11px] font-semibold border rounded px-1.5 py-0.5 outline-none focus:border-pink-400"
+          style={{ borderColor: '#e5e3de', color: '#111827', background: '#fafafa', maxWidth: 90 }}
+          title="Meta de unidades de venda no dia"
+        />
+        <span className="opacity-70">· {orders.toLocaleString(locale)} ped</span>
+      </div>
     </div>
   );
 }

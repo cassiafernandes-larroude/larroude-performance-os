@@ -25,6 +25,11 @@ interface ApiResponse {
   marketingPerUnit: number;
   partial?: boolean;
   pagesProcessed?: number;
+  catalogProductsCount?: number;
+  catalogVariantsCount?: number;
+  returnRate30d?: number;
+  returnTotalQty30d?: number;
+  returnRefundedQty30d?: number;
   products: ProductUnitEconomics[];
   variants: ProductUnitEconomics[];
   meta?: { generatedAt: string; durationMs: number };
