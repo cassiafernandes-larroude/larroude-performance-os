@@ -61,6 +61,7 @@ export default function CascadeView({ product, cascade, variantCascades, currenc
         </div>
       </div>
 
+      <div className="overflow-x-auto thin-scroll -mx-2 px-2">
       <table className="w-full text-[13px]">
         <tbody>
           {rows.map((r, idx) => {
@@ -85,6 +86,7 @@ export default function CascadeView({ product, cascade, variantCascades, currenc
           })}
         </tbody>
       </table>
+      </div>
 
       {/* Alternativa marketing premissa */}
       <div

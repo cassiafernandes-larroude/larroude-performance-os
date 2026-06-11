@@ -80,6 +80,69 @@ body {
   }
 }
 
+/* ==================== MOBILE RESPONSIVIDADE GLOBAL ====================
+ * Cassia 2026-06-11: 'deixe todos os dashboards responsivos para mobile'
+ *
+ * Regras gerais aplicadas em qualquer dashboard nativo.
+ */
+@media (max-width: 768px) {
+  /* Padding do shell principal */
+  .main-dashboard-root,
+  .cac-root,
+  .ltv-root {
+    padding: 12px !important;
+  }
+
+  /* Wrappers de tabela ganham scroll horizontal forçado */
+  .table-scroll,
+  .hm-scroll,
+  .thin-scroll {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Tabelas que não estão em wrapper: jogar dentro de overflow */
+  table {
+    max-width: 100%;
+  }
+
+  /* Charts canvas (Chart.js) respeitam container */
+  canvas {
+    max-width: 100% !important;
+    height: auto !important;
+  }
+
+  /* Headers: reduzir font sizes muito grandes */
+  h1.font-display {
+    font-size: 22px !important;
+    line-height: 1.15;
+  }
+
+  /* Pills genéricas: leve aperto */
+  .pill {
+    font-size: 11px;
+  }
+
+  /* Cards de KPI: garantir que valores grandes não estourem */
+  .kpi-card .kpi-value,
+  .kpi-value {
+    font-size: clamp(18px, 5vw, 28px) !important;
+    word-break: break-word;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Em telas muito pequenas, padding ainda mais compacto */
+  .main-dashboard-root,
+  .cac-root,
+  .ltv-root {
+    padding: 8px !important;
+  }
+  h1.font-display {
+    font-size: 20px !important;
+  }
+}
+
 /* ==================== PILLS ==================== */
 .pill {
   border-radius: 999px;
