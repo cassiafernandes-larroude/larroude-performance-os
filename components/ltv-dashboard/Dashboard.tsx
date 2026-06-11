@@ -370,7 +370,7 @@ export default function Dashboard({ freshness }: { freshness: string }) {
           </div>
           <div className="chart-area" style={{ height: 300 }}>
             {loading ? (
-              <div className="empty">Carregando...</div>
+              <div className="empty">Loading...</div>
             ) : data ? (
               <LtvCacOverTimeChart data={data.monthly} market={market} />
             ) : (

@@ -114,7 +114,7 @@ export default function DashboardPrincipalPage() {
 
       {loading && !data && (
         <div className="card mt-4 p-8 text-center text-sm" style={{ color: '#6b7280' }}>
-          Carregando dados do BigQuery...
+          Loading BigQuery data...
         </div>
       )}
 
