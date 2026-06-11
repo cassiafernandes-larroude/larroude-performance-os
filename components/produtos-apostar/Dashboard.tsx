@@ -244,6 +244,54 @@ export default function Dashboard() {
         </p>
       </header>
 
+      {/* Disclaimer da fórmula do score */}
+      <details
+        className="rounded-2xl mb-6"
+        style={{ background: '#fffbeb', border: '0.8px solid #fed7aa' }}
+      >
+        <summary
+          className="cursor-pointer p-4 text-[12px] font-semibold flex items-center gap-2 select-none"
+          style={{ color: '#92400e' }}
+        >
+          <span>ℹ️ Como o Score é calculado</span>
+          <span className="text-[10px] font-normal opacity-70">(clique para expandir)</span>
+        </summary>
+        <div className="px-4 pb-4 text-[12px] space-y-2" style={{ color: '#78350f' }}>
+          <div
+            className="font-mono text-[11px] p-2 rounded"
+            style={{ background: '#fff', border: '1px solid #fed7aa' }}
+          >
+            score = units_28d × margemBrutaPct × (1 − returnRate30d) × (1 − exchangeRate30d × 0.3)
+          </div>
+          <ul className="space-y-1 pl-4 list-disc">
+            <li>
+              <strong>units_28d</strong> — unidades vendidas DTC nos últimos 28 dias (volume
+              comprovado).
+            </li>
+            <li>
+              <strong>margemBrutaPct</strong> — (preço médio pago 28d − COGS catálogo) / preço
+              médio. Eficiência unitária ANTES de marketing/frete/fulfillment.
+            </li>
+            <li>
+              <strong>(1 − returnRate30d)</strong> — penaliza devoluções (refunds). Métrica =
+              refunds_qty / total_qty nos últimos 30 dias.
+            </li>
+            <li>
+              <strong>(1 − exchangeRate30d × 0.3)</strong> — penaliza trocas (tag Exchange-Only)
+              com peso 0.3 (troca custa logística mas não receita).
+            </li>
+          </ul>
+          <div className="text-[11px] italic opacity-90 pt-1">
+            ⚠ <strong>Disclaimer:</strong> o score é uma heurística, não uma garantia de retorno.
+            Volume passado não garante volume futuro — o cenário pode mudar com sazonalidade,
+            inventário, mix de campanhas e preço. A calculadora à direita projeta o cenário
+            financeiro DADAS as premissas inseridas (meta, ROAS, descontos); o time deve julgar
+            viabilidade operacional (estoque disponível, capacidade de fulfillment, prazo
+            realista). Não inclui custos fixos, salários, ferramentas ou impostos diretos.
+          </div>
+        </div>
+      </details>
+
       {error && (
         <div
           className="p-4 rounded-2xl"
