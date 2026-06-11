@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import type { CascadeUnit } from '@/lib/unit-economics/cascade';
+import type { CascadeUnit, Assumptions } from '@/lib/unit-economics/cascade';
 import type { Market } from '@/lib/unit-economics/queries';
 
 interface ApiData {
@@ -35,15 +35,24 @@ function pct(v: number, digits: number = 1): string {
 export default function KpiCards({
   data,
   cascade,
+  assumptions,
 }: {
   data: ApiData;
   cascade: CascadeUnit | null;
+  assumptions: Assumptions;
 }) {
   const returnRateValue = data.returnRate30d ?? cascade?.returnRate ?? 0;
   const returnTone: Tone =
     returnRateValue > 0.08 ? 'danger' : returnRateValue > 0.05 ? 'warn' : 'neutral';
   const mcRealPositive = cascade ? cascade.netCmReal > 0 : false;
   const mcPremPositive = cascade ? cascade.netCmAssumption > 0 : false;
+
+  // Marketing total reativo: muda quando marketingPct (premissa) muda.
+  // Premissa = marketingPct × totalRevenue (gross D-1)
+  // Real = data.totalMarketingSpend (Meta + Google atribuido)
+  const marketingPremissa = assumptions.marketingPct * data.totalRevenue;
+  const marketingPremissaPerUnit =
+    data.totalUnits > 0 ? marketingPremissa / data.totalUnits : 0;
 
   return (
     <section className="mt-6">
@@ -80,8 +89,8 @@ export default function KpiCards({
         />
         <KpiCard
           label="MARKETING TOTAL"
-          value={fmt(data.totalMarketingSpend, data.currency, { compact: true })}
-          sub={`${fmt(data.marketingPerUnit, data.currency)} / unidade`}
+          value={fmt(marketingPremissa, data.currency, { compact: true })}
+          sub={`${pct(assumptions.marketingPct)} da receita · ${fmt(marketingPremissaPerUnit, data.currency)} / un · Real: ${fmt(data.totalMarketingSpend, data.currency, { compact: true })}`}
           tone="alert"
         />
       </div>
