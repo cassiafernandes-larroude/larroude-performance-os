@@ -98,8 +98,8 @@ export async function getMetricBundle(
   customRange?: { from: string; to: string }
 ): Promise<MetricBundle> {
   const cacheKey = customRange
-    ? `metrics-v12-today-google:${market}:custom:${customRange.from}:${customRange.to}`
-    : `metrics-v12-today-google:${market}:${period}`;
+    ? `metrics-v13-meta-sm-fallback:${market}:custom:${customRange.from}:${customRange.to}`
+    : `metrics-v13-meta-sm-fallback:${market}:${period}`;
   return cached(cacheKey, 1800, async () => {
     const range = customRange ?? dateRangeCompleted(period);
     const prevRange = customRange
@@ -170,16 +170,35 @@ export async function getMetricBundle(
     const pGoogleSpend = num(p.google_spend);
     let cMetaSpend = Math.max(0, num(c.spend) - cGoogleSpend);
     let pMetaSpend = Math.max(0, num(p.spend) - pGoogleSpend);
+    let metaApiOk = false;
     if (hasMetaCredentials()) {
       try {
         const [metaCurr, metaPrev] = await Promise.all([
           getMetaSpendApi(market, range.from, range.to),
           getMetaSpendApi(market, prevRange.from, prevRange.to),
         ]);
-        if (metaCurr > 0) cMetaSpend = metaCurr;
+        if (metaCurr > 0) {
+          cMetaSpend = metaCurr;
+          metaApiOk = true;
+        }
         if (metaPrev > 0) pMetaSpend = metaPrev;
       } catch (err) {
-        console.warn("Meta API fallback to BQ:", err);
+        console.warn("Meta API fallback to Supermetrics:", err);
+      }
+    }
+    // Cassia 2026-06-12: fallback Supermetrics quando Meta API falha
+    // (token expirado etc). Mantem painel funcional sem dependencia de renovacao manual.
+    if (!metaApiOk) {
+      try {
+        const { queryMetaAdsTotalViaSupermetrics } = await import("@/lib/main-dashboard/supermetrics");
+        const [smCurr, smPrev] = await Promise.all([
+          queryMetaAdsTotalViaSupermetrics(market, range.from, range.to),
+          queryMetaAdsTotalViaSupermetrics(market, prevRange.from, prevRange.to),
+        ]);
+        if (smCurr.spend > 0) cMetaSpend = smCurr.spend;
+        if (smPrev.spend > 0) pMetaSpend = smPrev.spend;
+      } catch (err) {
+        console.warn("Meta Supermetrics fallback failed:", err);
       }
     }
     // Tools cost (Klaviyo, Attentive, Criteo, Agent.shop) â soma no AMOUNT SPENT
