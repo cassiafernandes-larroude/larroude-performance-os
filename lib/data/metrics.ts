@@ -6,6 +6,8 @@ import { aggregatedKpisSQL } from "@/lib/bigquery/queries/metrics";
 import { getMetaSpendApi, hasMetaCredentials } from "@/lib/meta-api";
 import { cached } from "@/lib/cache";
 import { getFixedToolsCostInRange, getAgentShopCost } from "@/lib/channel-costs";
+import { todayInMarket } from "@/lib/utils/market-tz";
+import { getTodaySales } from "@/lib/unit-economics/shopify-today";
 
 type AggRow = {
   gross_sales: number | string;
@@ -96,8 +98,8 @@ export async function getMetricBundle(
   customRange?: { from: string; to: string }
 ): Promise<MetricBundle> {
   const cacheKey = customRange
-    ? `metrics-v10:${market}:custom:${customRange.from}:${customRange.to}`
-    : `metrics-v10:${market}:${period}`;
+    ? `metrics-v11-today:${market}:custom:${customRange.from}:${customRange.to}`
+    : `metrics-v11-today:${market}:${period}`;
   return cached(cacheKey, 1800, async () => {
     const range = customRange ?? dateRangeCompleted(period);
     const prevRange = customRange
@@ -110,8 +112,30 @@ export async function getMetricBundle(
     ]);
 
     const source: MetricSource = curr ? "BQ" : "Mock";
-    const c = curr ?? (market === "US" ? MOCK_US : MOCK_BR);
+    const c: AggRow = { ...(curr ?? (market === "US" ? MOCK_US : MOCK_BR)) };
     const p = prev ?? (market === "US" ? MOCK_US : MOCK_BR);
+
+    // Cassia 2026-06-12: se o range eh "hoje" (D0) no fuso do market, BQ ainda
+    // nao tem os dados (pipeline diario). Override sales/orders/aov via Shopify
+    // Admin API direto (intra-dia, near real-time).
+    const todayMkt = todayInMarket(market);
+    const isToday = range.from === todayMkt && range.to === todayMkt;
+    if (isToday) {
+      try {
+        const t = await getTodaySales(market);
+        const todayRev = t.totalRevenue || 0;
+        const todayOrders = t.totalOrders || 0;
+        // Aproximacao: D0 = sem refunds ainda → total_sales ≈ order_revenue ≈ gross_sales.
+        c.gross_sales = todayRev;
+        c.order_revenue = todayRev;
+        c.total_sales = todayRev;
+        c.orders = todayOrders;
+        c.aov = todayOrders > 0 ? todayRev / todayOrders : 0;
+        // new_customers nao calculado D0 — manter o que BQ deu (provavelmente 0).
+      } catch (err) {
+        console.warn(`[overview today] Shopify ${market} live fetch failed:`, err);
+      }
+    }
     const currency = market === "US" ? "USD" : "BRL";
 
     const fresh_until = new Date(Date.now() + 5 * 60 * 1000).toISOString();

@@ -97,8 +97,24 @@ export async function getTodaySales(
   const { domain, token } = getConfig(market);
   if (!token) throw new Error(`SHOPIFY_${market}_ADMIN_API_TOKEN not set`);
 
-  const today = new Date().toISOString().slice(0, 10);
-  const queryFilter = `created_at:>=${today}T00:00:00Z AND created_at:<=${today}T23:59:59Z AND -tag:b2b AND -tag:wholesale AND -tag:marketplace AND -tag:redo AND -tag:influencer`;
+  // Cassia 2026-06-12: "hoje" resolvido no fuso do market (NY/Brasilia).
+  // Convertemos o calendar day para janela UTC equivalente para o filtro do Shopify.
+  const tz = market === 'BR' ? 'America/Sao_Paulo' : 'America/New_York';
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const today = fmt.format(new Date()); // YYYY-MM-DD no fuso do market
+  // Offset do fuso (BRT = -03, EST = -05, EDT = -04). Pegamos via formatToParts.
+  const tzOffsetFmt = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    timeZoneName: 'shortOffset',
+  });
+  const offsetPart = tzOffsetFmt.formatToParts(new Date()).find((p) => p.type === 'timeZoneName')?.value ?? 'GMT-04';
+  const offset = offsetPart.replace('GMT', '') || '-04'; // ex: "-04", "-05", "-03"
+  const queryFilter = `created_at:>=${today}T00:00:00${offset} AND created_at:<=${today}T23:59:59${offset} AND -tag:b2b AND -tag:wholesale AND -tag:marketplace AND -tag:redo AND -tag:influencer`;
 
   const t0 = Date.now();
   const byMother = new Map<string, TodaySalesByMother>();
