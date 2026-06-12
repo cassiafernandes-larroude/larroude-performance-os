@@ -1,12 +1,11 @@
-import { DashboardEmbed } from "@/components/dashboards/DashboardEmbed";
+import KlaviyoDashboard from '@/components/klaviyo/Dashboard';
+
+export const dynamic = 'force-dynamic';
+
+export const metadata = {
+  title: 'Klaviyo CRM · Larroudé Performance OS',
+};
 
 export default function KlaviyoPage() {
-  return (
-    <DashboardEmbed
-      src="https://larroude-klaviyo-dashboard.vercel.app/"
-      title="Jornada Klaviyo"
-      subtitle="Flows, campaigns, segmentation and attributed revenue"
-      externalUrl="https://larroude-klaviyo-dashboard.vercel.app/"
-    />
-  );
+  return <KlaviyoDashboard />;
 }
