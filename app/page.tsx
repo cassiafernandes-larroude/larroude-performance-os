@@ -7,20 +7,27 @@ import { getMetricBundle } from "@/lib/data/metrics";
 import { runDiagnostics } from "@/lib/intelligence/diagnostics";
 import type { Period } from "@/types/metric";
 import { DashboardActions } from "@/components/shared/DashboardActions";
+import { todayInMarket, yesterdayInMarket } from "@/lib/utils/market-tz";
 
-// Overview = D-1 (yesterday) with ISR caching for fast loads.
-// Refresh button does router.refresh() to force re-fetch when user wants fresh data.
+// Cassia 2026-06-12: Overview suporta ?day=today (intra-dia D0) e default
+// ?day=yesterday (D-1). Refresh button continua forçando re-fetch.
 export const revalidate = 60;
 
-export default async function DailyBriefingPage() {
-  // D-1 = yesterday (last completed day). Server timezone -> ISO date.
-  const yesterday = new Date(Date.now() - 24 * 3600 * 1000).toISOString().slice(0, 10);
+export default async function DailyBriefingPage({
+  searchParams,
+}: {
+  searchParams?: { day?: string };
+}) {
+  const isToday = searchParams?.day === "today";
   const period = "today" as Period; // marker so cache key differs from 28d
-  const customRange = { from: yesterday, to: yesterday };
+
+  // Datas resolvidas no fuso do market correspondente (NY p/ US, Brasília p/ BR).
+  const usDate = isToday ? todayInMarket("US") : yesterdayInMarket("US");
+  const brDate = isToday ? todayInMarket("BR") : yesterdayInMarket("BR");
 
   const [us, br] = await Promise.all([
-    getMetricBundle("US", period, customRange),
-    getMetricBundle("BR", period, customRange),
+    getMetricBundle("US", period, { from: usDate, to: usDate }),
+    getMetricBundle("BR", period, { from: brDate, to: brDate }),
   ]);
   const diagnostics = await runDiagnostics({ us, br });
 
