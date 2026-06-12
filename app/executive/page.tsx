@@ -1,15 +1,18 @@
-import { getExecutiveBundle } from "@/lib/data/executive";
+import { getExecutiveConsolidated } from "@/lib/data/executive";
 import { formatCurrency, formatMultiplier, formatNumber, formatPercent } from "@/lib/utils/format";
-import { TrendingDown, TrendingUp, DollarSign, Clock, Target, Activity } from "lucide-react";
+import { TrendingDown, TrendingUp, DollarSign, Target, Activity } from "lucide-react";
 import { DashboardActions } from "@/components/shared/DashboardActions";
+import DailyBarChart from "@/components/main-dashboard/DailyBarChart";
 
 export const revalidate = 300;
 
 export default async function ExecutivePage() {
-  const [us, br] = await Promise.all([
-    getExecutiveBundle("US"),
-    getExecutiveBundle("BR"),
-  ]);
+  const c = await getExecutiveConsolidated();
+
+  const profitTone = c.profit >= 0 ? "positive" : "negative";
+  const roasTone = c.roas >= 3 ? "positive" : c.roas >= 1.5 ? "warning" : "negative";
+  const colorMap = { positive: "var(--positive)", warning: "var(--warning)", negative: "var(--negative)" };
+  const bgMap = { positive: "var(--positive-soft)", warning: "var(--warning-soft)", negative: "var(--negative-soft)" };
 
   return (
     <>
@@ -18,168 +21,192 @@ export default async function ExecutivePage() {
         style={{ background: "var(--paper)", borderBottom: "1px solid var(--border)" }}
       >
         <div className="flex items-center gap-2 text-[12px]">
-          <span style={{ color: "var(--ink)", fontWeight: 500 }}>Executive View - Financial Health</span>
+          <span style={{ color: "var(--ink)", fontWeight: 500 }}>Executive View · Consolidated (US + BR in USD)</span>
         </div>
         <div className="flex items-center gap-2 text-[11px]" style={{ color: "var(--ink-muted)" }}>
           <div className="pulse-dot" />
-          <span>BigQuery Larroude OS - 28d</span>
+          <span>BigQuery Larroude OS · 28d</span>
+          <span>·</span>
+          <span>FX 1 USD = {(1 / c.fxBrlUsd).toFixed(2)} BRL</span>
         </div>
       </header>
 
-      <div className="px-4 lg:px-8 py-5 lg:py-8 max-w-[1500px] mx-auto">
+      <div className="main-dashboard-root px-4 lg:px-8 py-5 lg:py-8 max-w-[1500px] mx-auto">
         <div className="mb-6 flex items-start justify-between gap-3 flex-wrap">
           <div>
             <h1 className="font-display text-[26px] lg:text-[36px]" style={{ color: "var(--ink)" }}>Executive View</h1>
             <p className="text-[12px] lg:text-[14px] mt-1" style={{ color: "var(--ink-soft)" }}>
-              Financial health - margin, burn rate, payback period, channel efficiency
+              Consolidated financial health (US + BR converted to USD) — investment, revenue, ROAS, profit, channel share
             </p>
             <p className="text-[11px] mt-1" style={{ color: "var(--ink-muted)" }}>
-              Period: {us.period.from} a {us.period.to} - {us.source === "BQ" ? "BigQuery Larroude OS" : "Mock data"}
+              Period: {c.period.from} → {c.period.to} · {c.source === "BQ" ? "BigQuery Larroude OS" : "Mock data"}
             </p>
           </div>
           <DashboardActions />
         </div>
 
-        <ExecutiveMarketSection bundle={us} flag="🇺🇸" label="ESTADOS UNIDOS" currency="USD" />
-
-        <div className="mt-10">
-          <ExecutiveMarketSection bundle={br} flag="🇧🇷" label="BRASIL" currency="BRL" />
+        {/* ===== 4 Hero KPIs Consolidados ===== */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+          <HealthCard
+            icon={<DollarSign className="w-5 h-5" />}
+            tag="TOTAL INVESTMENT"
+            value={formatCurrency(c.total_ad_spend, "USD")}
+            sub={`Meta ${formatCurrency(c.total_meta_spend, "USD", false)} · Google ${formatCurrency(c.total_google_spend, "USD", false)}`}
+            color="var(--ink)" bg="var(--paper)"
+            hint="US + BR ads consolidated"
+          />
+          <HealthCard
+            icon={<TrendingUp className="w-5 h-5" />}
+            tag="TOTAL REVENUE"
+            value={formatCurrency(c.total_revenue, "USD")}
+            sub={`Gross ${formatCurrency(c.total_gross_revenue, "USD", false)}`}
+            color={colorMap.positive} bg={bgMap.positive}
+            hint="Net Sales (Order Rev − Returns)"
+          />
+          <HealthCard
+            icon={<Target className="w-5 h-5" />}
+            tag="ROAS"
+            value={`${c.roas.toFixed(2)}x`}
+            sub="Revenue / Investment"
+            color={colorMap[roasTone]} bg={bgMap[roasTone]}
+            hint={roasTone === "positive" ? "Healthy ≥3x" : roasTone === "warning" ? "Warning 1.5-3x" : "Critical <1.5x"}
+          />
+          <HealthCard
+            icon={c.profit >= 0 ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
+            tag="REVENUE − INVESTMENT"
+            value={formatCurrency(c.profit, "USD")}
+            sub={`${c.profit_margin_pct.toFixed(1)}% margin`}
+            color={colorMap[profitTone]} bg={bgMap[profitTone]}
+            hint="What's left after paying ads"
+          />
         </div>
-      </div>
-    </>
-  );
-}
 
-function ExecutiveMarketSection({ bundle, flag, label, currency }: {
-  bundle: Awaited<ReturnType<typeof getExecutiveBundle>>;
-  flag: string;
-  label: string;
-  currency: "USD" | "BRL";
-}) {
-  // Health indicators
-  const marginHealth = bundle.contribution_margin_pct >= 50 ? "positive" : bundle.contribution_margin_pct >= 30 ? "warning" : "negative";
-  const burnHealth = bundle.burn_rate_pct <= 40 ? "positive" : bundle.burn_rate_pct <= 60 ? "warning" : "negative";
-  const paybackHealth = bundle.payback_period_months <= 6 ? "positive" : bundle.payback_period_months <= 12 ? "warning" : "negative";
-  const effHealth = bundle.marketing_efficiency >= 3 ? "positive" : bundle.marketing_efficiency >= 1.5 ? "warning" : "negative";
-
-  const colorMap = { positive: "var(--positive)", warning: "var(--warning)", negative: "var(--negative)" };
-  const bgMap = { positive: "var(--positive-soft)", warning: "var(--warning-soft)", negative: "var(--negative-soft)" };
-
-  return (
-    <>
-      <div className="section-marker mb-4">
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--ink-muted)" }}>{flag} {label}</span>
-          <span className="badge" style={{ background: "var(--pink-soft)", color: "var(--pink-deep)" }}>{currency}</span>
-        </div>
-      </div>
-
-      {/* 4 Financial Health KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-        <HealthCard
-          icon={<DollarSign className="w-5 h-5" />}
-          tag="MARGIN (PROXY)"
-          value={`${bundle.contribution_margin_pct.toFixed(1)}%`}
-          sub={`${formatCurrency(bundle.contribution_margin, currency)}`}
-          health={marginHealth}
-          colorMap={colorMap} bgMap={bgMap}
-          hint="Net Rev - Ad Spend"
-        />
-        <HealthCard
-          icon={<Activity className="w-5 h-5" />}
-          tag="BURN RATE"
-          value={`${bundle.burn_rate_pct.toFixed(1)}%`}
-          sub={`Ad Spend / Net Rev`}
-          health={burnHealth}
-          colorMap={colorMap} bgMap={bgMap}
-          hint={burnHealth === "positive" ? "Healthy <40%" : burnHealth === "warning" ? "Warning 40-60%" : "Critical >60%"}
-        />
-        <HealthCard
-          icon={<Clock className="w-5 h-5" />}
-          tag="PAYBACK"
-          value={`${bundle.payback_period_months.toFixed(1)}m`}
-          sub={`CAC ${formatCurrency(bundle.cac, currency, false)} / monthly LTV`}
-          health={paybackHealth}
-          colorMap={colorMap} bgMap={bgMap}
-          hint={paybackHealth === "positive" ? "<6m" : paybackHealth === "warning" ? "6-12m" : ">12m"}
-        />
-        <HealthCard
-          icon={<Target className="w-5 h-5" />}
-          tag="MKT EFFICIENCY"
-          value={`${bundle.marketing_efficiency.toFixed(2)}x`}
-          sub={`Net Rev / Ad Spend`}
-          health={effHealth}
-          colorMap={colorMap} bgMap={bgMap}
-          hint={effHealth === "positive" ? "Healthy >=3x" : effHealth === "warning" ? "Warning 1.5-3x" : "Critical <1.5x"}
-        />
-      </div>
-
-      {/* Eficiência por canal */}
-      <div className="card mb-6">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold text-[15px]" style={{ color: "var(--ink)" }}>Revenue by channel (28d)</h3>
-          <span className="text-[11px]" style={{ color: "var(--ink-muted)" }}>
-            Top {bundle.channels.length} channels
+        {/* ===== Daily charts (mesmo formato Main Dashboard) ===== */}
+        <div className="section-marker mb-3">
+          <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--ink-muted)" }}>
+            DAILY EVOLUTION (28D) · CONSOLIDATED USD
           </span>
         </div>
-        {bundle.channels.length > 0 ? (
-          <div className="space-y-2">
-            {bundle.channels.map((c) => (
-              <div key={c.channel} className="flex items-center gap-3">
-                <div className="w-32 lg:w-40 text-[12px] truncate" style={{ color: "var(--ink-soft)" }}>
-                  {c.channel}
-                </div>
-                <div className="flex-1 h-7 rounded relative" style={{ background: "var(--paper)" }}>
-                  <div
-                    className="h-full rounded flex items-center justify-end px-2"
-                    style={{
-                      width: `${Math.min(100, c.share_pct)}%`,
-                      background: c.channel.includes("Meta") ? "var(--meta-bg)"
-                        : c.channel.includes("Google") ? "var(--google-bg)"
-                        : c.channel.includes("Klaviyo") ? "var(--klaviyo-bg)"
-                        : "var(--pink-soft)",
-                    }}
-                  >
-                    <span className="text-[10px] font-num font-semibold whitespace-nowrap" style={{ color: "var(--ink)" }}>
-                      {c.share_pct.toFixed(1)}%
-                    </span>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-6">
+          <div className="card p-4">
+            <div className="text-[12px] font-semibold mb-2" style={{ color: "var(--ink)" }}>Total Revenue / day</div>
+            <DailyBarChart
+              title=""
+              data={c.daily.total_sales}
+              color="#10b981"
+              unit="currency"
+              market="US"
+              showLabels={false}
+              height={220}
+            />
+          </div>
+          <div className="card p-4">
+            <div className="text-[12px] font-semibold mb-2" style={{ color: "var(--ink)" }}>Ad Investment / day</div>
+            <DailyBarChart
+              title=""
+              data={c.daily.spend}
+              color="#ec4899"
+              unit="currency"
+              market="US"
+              showLabels={false}
+              height={220}
+            />
+          </div>
+          <div className="card p-4">
+            <div className="text-[12px] font-semibold mb-2" style={{ color: "var(--ink)" }}>ROAS / day</div>
+            <DailyBarChart
+              title=""
+              data={c.daily.roas_total}
+              color="#5d4ec5"
+              unit="multiple"
+              market="US"
+              showLabels={false}
+              height={220}
+            />
+          </div>
+          <div className="card p-4">
+            <div className="text-[12px] font-semibold mb-2" style={{ color: "var(--ink)" }}>Revenue − Investment / day</div>
+            <DailyBarChart
+              title=""
+              data={c.daily.margin_total_sales}
+              color="#d97757"
+              unit="currency"
+              market="US"
+              showLabels={false}
+              height={220}
+            />
+          </div>
+        </div>
+
+        {/* ===== Channel share consolidado ===== */}
+        <div className="card mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-[15px]" style={{ color: "var(--ink)" }}>Revenue share by channel (28d · consolidated)</h3>
+            <span className="text-[11px]" style={{ color: "var(--ink-muted)" }}>
+              {c.channels.length} channels · BR converted at {(1 / c.fxBrlUsd).toFixed(2)} BRL/USD
+            </span>
+          </div>
+          {c.channels.length > 0 ? (
+            <div className="space-y-2">
+              {c.channels.map((ch) => (
+                <div key={ch.channel} className="flex items-center gap-3">
+                  <div className="w-32 lg:w-40 text-[12px] truncate" style={{ color: "var(--ink-soft)" }}>
+                    {ch.channel}
+                  </div>
+                  <div className="flex-1 h-7 rounded relative" style={{ background: "var(--paper)" }}>
+                    <div
+                      className="h-full rounded flex items-center justify-end px-2"
+                      style={{
+                        width: `${Math.min(100, ch.share_pct)}%`,
+                        background: ch.channel.includes("Meta") ? "var(--meta-bg)"
+                          : ch.channel.includes("Google") ? "var(--google-bg)"
+                          : ch.channel.includes("Klaviyo") ? "var(--klaviyo-bg)"
+                          : "var(--pink-soft)",
+                      }}
+                    >
+                      <span className="text-[10px] font-num font-semibold whitespace-nowrap" style={{ color: "var(--ink)" }}>
+                        {ch.share_pct.toFixed(1)}%
+                      </span>
+                    </div>
+                  </div>
+                  <div className="w-28 lg:w-32 text-right text-[12px] font-num" style={{ color: "var(--ink)" }}>
+                    {formatCurrency(ch.revenue, "USD")}
+                  </div>
+                  <div className="w-16 text-right text-[11px] font-num" style={{ color: "var(--ink-muted)" }}>
+                    {formatNumber(ch.orders)}
                   </div>
                 </div>
-                <div className="w-24 lg:w-28 text-right text-[12px] font-num" style={{ color: "var(--ink)" }}>
-                  {formatCurrency(c.revenue, currency)}
-                </div>
-                <div className="w-16 text-right text-[11px] font-num" style={{ color: "var(--ink-muted)" }}>
-                  {formatNumber(c.orders)}
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-[12px] text-center py-4" style={{ color: "var(--ink-muted)" }}>
-            No channel data available.
-          </p>
-        )}
-      </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[12px] text-center py-4" style={{ color: "var(--ink-muted)" }}>
+              No channel data available.
+            </p>
+          )}
+        </div>
 
-      {/* Resumo financeiro */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <SummaryStat label="Net Revenue" value={formatCurrency(bundle.net_revenue, currency)} />
-        <SummaryStat label="Gross Revenue" value={formatCurrency(bundle.gross_revenue, currency)} />
-        <SummaryStat label="Ad Spend" value={formatCurrency(bundle.ad_spend, currency)} />
-        <SummaryStat label="Contribution Margin" value={formatCurrency(bundle.contribution_margin, currency)} />
+        {/* ===== Breakdown por market (referência) ===== */}
+        <div className="section-marker mb-3">
+          <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--ink-muted)" }}>
+            BREAKDOWN BY MARKET (USD)
+          </span>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-6">
+          <MarketCard flag="🇺🇸" label="United States" data={c.by_market.US} native="USD" totalRev={c.total_revenue} totalSpend={c.total_ad_spend} />
+          <MarketCard flag="🇧🇷" label="Brazil" data={c.by_market.BR} native="BRL" totalRev={c.total_revenue} totalSpend={c.total_ad_spend} brData={c.by_market.BR} />
+        </div>
       </div>
     </>
   );
 }
 
-function HealthCard({ icon, tag, value, sub, health, colorMap, bgMap, hint }: {
+function HealthCard({ icon, tag, value, sub, color, bg, hint }: {
   icon: React.ReactNode;
   tag: string;
   value: string;
   sub: string;
-  health: "positive" | "warning" | "negative";
-  colorMap: Record<string, string>;
-  bgMap: Record<string, string>;
+  color: string;
+  bg: string;
   hint: string;
 }) {
   return (
@@ -187,13 +214,13 @@ function HealthCard({ icon, tag, value, sub, health, colorMap, bgMap, hint }: {
       <div className="flex items-start gap-2 mb-3">
         <div
           className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-          style={{ background: bgMap[health], color: colorMap[health] }}
+          style={{ background: bg, color }}
         >
           {icon}
         </div>
         <div className="flex-1 min-w-0">
           <div className="label-meta">{tag}</div>
-          <div className="font-num text-[22px] lg:text-[24px] font-bold mt-0.5" style={{ color: colorMap[health] }}>
+          <div className="font-num text-[20px] lg:text-[22px] font-bold mt-0.5" style={{ color }}>
             {value}
           </div>
         </div>
@@ -204,11 +231,58 @@ function HealthCard({ icon, tag, value, sub, health, colorMap, bgMap, hint }: {
   );
 }
 
-function SummaryStat({ label, value }: { label: string; value: string }) {
+function MarketCard({ flag, label, data, native, totalRev, totalSpend, brData }: {
+  flag: string;
+  label: string;
+  data: { revenue: number; spend: number; meta: number; google: number };
+  native: "USD" | "BRL";
+  totalRev: number;
+  totalSpend: number;
+  brData?: { revenue_brl: number; spend_brl: number };
+}) {
+  const revShare = totalRev > 0 ? (data.revenue / totalRev) * 100 : 0;
+  const spendShare = totalSpend > 0 ? (data.spend / totalSpend) * 100 : 0;
+  const roas = data.spend > 0 ? data.revenue / data.spend : 0;
+  const profit = data.revenue - data.spend;
   return (
     <div className="card">
-      <div className="label-meta mb-1">{label}</div>
-      <div className="font-num text-[16px] lg:text-[18px] font-bold" style={{ color: "var(--ink)" }}>{value}</div>
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-[18px]">{flag}</span>
+        <span className="font-semibold text-[14px]" style={{ color: "var(--ink)" }}>{label}</span>
+        <span className="badge ml-auto" style={{ background: "var(--pink-soft)", color: "var(--pink-deep)" }}>USD</span>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <div className="label-meta">Revenue</div>
+          <div className="font-num text-[16px] font-bold" style={{ color: "var(--positive)" }}>{formatCurrency(data.revenue, "USD")}</div>
+          <div className="text-[10px]" style={{ color: "var(--ink-muted)" }}>{revShare.toFixed(1)}% of total</div>
+          {native === "BRL" && brData && (
+            <div className="text-[10px] mt-0.5" style={{ color: "var(--ink-muted)" }}>
+              native: {formatCurrency(brData.revenue_brl, "BRL")}
+            </div>
+          )}
+        </div>
+        <div>
+          <div className="label-meta">Investment</div>
+          <div className="font-num text-[16px] font-bold" style={{ color: "var(--ink)" }}>{formatCurrency(data.spend, "USD")}</div>
+          <div className="text-[10px]" style={{ color: "var(--ink-muted)" }}>{spendShare.toFixed(1)}% of total</div>
+          {native === "BRL" && brData && (
+            <div className="text-[10px] mt-0.5" style={{ color: "var(--ink-muted)" }}>
+              native: {formatCurrency(brData.spend_brl, "BRL")}
+            </div>
+          )}
+        </div>
+        <div>
+          <div className="label-meta">ROAS</div>
+          <div className="font-num text-[16px] font-bold" style={{ color: "var(--ink)" }}>{roas.toFixed(2)}x</div>
+        </div>
+        <div>
+          <div className="label-meta">Revenue − Investment</div>
+          <div className="font-num text-[16px] font-bold" style={{ color: profit >= 0 ? "var(--positive)" : "var(--negative)" }}>
+            {formatCurrency(profit, "USD")}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
