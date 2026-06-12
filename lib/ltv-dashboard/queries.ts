@@ -1413,8 +1413,8 @@ export async function getCustomerJourney(market: Market): Promise<CustomerJourne
 // Freshness
 // ---------------------------------------------------------------------------
 
-export async function getDataFreshness(): Promise<string> {
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() - 1);
-  return d.toISOString().slice(0, 10);
+export async function getDataFreshness(market: 'US' | 'BR' = 'US'): Promise<string> {
+  // Cassia 2026-06-12: D-1 no fuso do market (NY p/ US, Brasilia p/ BR).
+  const { yesterdayInMarket } = await import('@/lib/utils/market-tz');
+  return yesterdayInMarket(market);
 }

@@ -22,6 +22,7 @@ import { getSalesLast28d } from '@/lib/unit-economics/shopify-sales28d';
 import { getReturnRatesLast30d } from '@/lib/unit-economics/shopify-returns30d';
 import { getExchangeRatesLast30d } from '@/lib/unit-economics/shopify-exchanges30d';
 import { memo, TTL_6H } from '@/lib/ltv-dashboard/memo-cache';
+import { yesterdayInMarket } from '@/lib/utils/market-tz';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 3600;
@@ -36,13 +37,12 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
   if (!isMarket(market)) return NextResponse.json({ error: 'Invalid market' }, { status: 400 });
 
   const currency: 'USD' | 'BRL' = market === 'US' ? 'USD' : 'BRL';
-  const today = new Date();
-  today.setUTCDate(today.getUTCDate() - 1);
-  const endDate = today.toISOString().slice(0, 10);
+  // Cassia 2026-06-12: endDate = D-1 no fuso do market (NY para US, Brasília para BR).
+  const endDate = yesterdayInMarket(market);
 
   const startedAt = Date.now();
   try {
-    const cacheKey = `apostar:${market}:${endDate}:noExchangeInScore:v3`;
+    const cacheKey = `apostar:${market}:${endDate}:tz:v4`;
     const result = await memo(cacheKey, TTL_6H, async () => {
       const [catalog, sales28, returns30d, exchanges30d] = await Promise.all([
         getShopifyCatalog(market),

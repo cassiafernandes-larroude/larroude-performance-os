@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getTodaySales } from '@/lib/unit-economics/shopify-today';
 import { memo, TTL_30M } from '@/lib/ltv-dashboard/memo-cache';
 import type { Market } from '@/lib/unit-economics/shopify';
+import { todayInMarket } from '@/lib/utils/market-tz';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 300;
@@ -24,10 +25,11 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
   const market = ctx.params.market.toUpperCase();
   if (!isMarket(market)) return NextResponse.json({ error: 'Invalid market' }, { status: 400 });
 
-  const today = new Date().toISOString().slice(0, 10);
+  // Cassia 2026-06-12: "hoje" no fuso do market.
+  const today = todayInMarket(market);
   const startedAt = Date.now();
   try {
-    const cacheKey = `ue-today:${market}:${today}:motherWithProductId:v3`;
+    const cacheKey = `ue-today:${market}:${today}:tz:v4`;
     const result = await memo(cacheKey, TTL_5M, async () => {
       const t = await getTodaySales(market);
       // Converte maps em arrays serializáveis

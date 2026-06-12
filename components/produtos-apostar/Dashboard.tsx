@@ -260,7 +260,7 @@ export default function Dashboard() {
             className="font-mono text-[11px] p-2 rounded"
             style={{ background: '#fff', border: '1px solid #fed7aa' }}
           >
-            score = units_28d (excl. Exchange-Only) × grossMarginPct × (1 − returnRate30d) × (1 − exchangeRate30d × 0.3)
+            score = units_28d (excl. Exchange-Only) × grossMarginPct × (1 − returnRate30d)
           </div>
           <ul className="space-y-1 pl-4 list-disc">
             <li>
@@ -276,10 +276,6 @@ export default function Dashboard() {
             <li>
               <strong>(1 − returnRate30d)</strong> — penalizes refunds. Metric =
               refunds_qty / total_qty in the last 30 days.
-            </li>
-            <li>
-              <strong>(1 − exchangeRate30d × 0.3)</strong> — penalizes exchanges (Exchange-Only)
-              with 0.3 weight (exchange costs logistics but not revenue).
             </li>
           </ul>
           <div className="text-[11px] italic opacity-90 pt-1">
@@ -379,11 +375,10 @@ export default function Dashboard() {
                       </div>
                     </div>
                   </div>
-                  <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 text-[12px]">
+                  <div className="mt-3 grid grid-cols-3 gap-2 sm:gap-3 text-[12px]">
                     <Mini label="Sold 28d" value={`${selected.units28d.toLocaleString()} units`} />
                     <Mini label="Gross margin" value={pct(selected.grossMarginPct, 1)} />
                     <Mini label="Returns 30d" value={pct(selected.returnRate30d, 1)} />
-                    <Mini label="Exchanges 30d" value={pct(selected.exchangeRate30d, 1)} />
                   </div>
                 </section>
 

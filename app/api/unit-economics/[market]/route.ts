@@ -9,6 +9,7 @@ import { getMetaSpendAdjustment } from '@/lib/shared/meta-adjustments';
 import { memo, TTL_30M } from '@/lib/ltv-dashboard/memo-cache';
 import type { Market as MainMarket } from '@/lib/main-dashboard/types';
 import type { ProductUnitEconomics } from '@/lib/unit-economics/queries';
+import { yesterdayInMarket } from '@/lib/utils/market-tz';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 3600;
@@ -22,10 +23,9 @@ function isMarket(v: string): v is Market {
 // - Janela de sells = D-1 (ontem)
 // - Return rate = ultimos 30 dias por produto
 // - Catalogo = TODOS produtos (mesmo sem venda)
-function defaultWindow(): { start: string; end: string } {
-  const today = new Date();
-  today.setUTCDate(today.getUTCDate() - 1); // D-1 = ontem
-  const d = today.toISOString().slice(0, 10);
+// Cassia 2026-06-12: D-1 resolvido no fuso do market (NY p/ US, Brasilia p/ BR).
+function defaultWindow(market: Market): { start: string; end: string } {
+  const d = yesterdayInMarket(market);
   return { start: d, end: d };
 }
 
@@ -33,7 +33,7 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
   const market = ctx.params.market.toUpperCase();
   if (!isMarket(market)) return NextResponse.json({ error: 'Invalid market' }, { status: 400 });
 
-  const { start, end } = defaultWindow();
+  const { start, end } = defaultWindow(market);
   const startedAt = Date.now();
   try {
     const cacheKey = `ue:${market}:${start}:${end}:motherWithProductId-listPrice-cat-ret30d-exch30d-pix30d-coupon-rate30d:v11`;

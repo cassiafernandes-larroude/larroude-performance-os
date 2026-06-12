@@ -13,9 +13,19 @@ export function granularityFor(periodKey: PeriodKey): Granularity {
   return 'day';
 }
 
-export function todayISO(): string {
-  const d = new Date();
-  return d.toISOString().slice(0, 10);
+/**
+ * Cassia 2026-06-12: "hoje" no fuso do market.
+ * Default 'US' (NY) p/ retrocompat. Quando o consumer passa market, usa o fuso correto.
+ */
+export function todayISO(market: 'US' | 'BR' = 'US'): string {
+  const tz = market === 'BR' ? 'America/Sao_Paulo' : 'America/New_York';
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  return fmt.format(new Date());
 }
 
 /** Converte uma string YYYY-MM-DD para Date em UTC sem timezone surprises */
@@ -38,8 +48,9 @@ export function shiftDays(d: Date, days: number): Date {
  * Calcula o período rolling baseado no end date (default: ontem)
  * e o período anterior comparável.
  */
-export function calcPeriod(periodKey: PeriodKey, endDate?: string): PeriodRange {
-  const end = endDate ? parseISO(endDate) : shiftDays(parseISO(todayISO()), -1);
+export function calcPeriod(periodKey: PeriodKey, endDate?: string, market: 'US' | 'BR' = 'US'): PeriodRange {
+  // Cassia 2026-06-12: default endDate = D-1 no fuso do market.
+  const end = endDate ? parseISO(endDate) : shiftDays(parseISO(todayISO(market)), -1);
   let days = 28;
   switch (periodKey) {
     case '1d': days = 1; break;

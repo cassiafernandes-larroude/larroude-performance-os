@@ -369,10 +369,9 @@ export async function getProductCac(
 
 /**
  * Most recent date with finalized data — yesterday in the store's timezone.
- * We don't ping APIs here; just return D-1 in UTC which is safe for both markets.
+ * Cassia 2026-06-12: D-1 resolvido no fuso do market (NY p/ US, Brasilia p/ BR).
  */
-export async function getDataFreshness(): Promise<string> {
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() - 1);
-  return d.toISOString().slice(0, 10);
+export async function getDataFreshness(market: 'US' | 'BR' = 'US'): Promise<string> {
+  const { yesterdayInMarket } = await import('@/lib/utils/market-tz');
+  return yesterdayInMarket(market);
 }

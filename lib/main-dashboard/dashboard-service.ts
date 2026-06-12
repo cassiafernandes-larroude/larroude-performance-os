@@ -100,7 +100,7 @@ export async function getDashboardPayload(
   customStart?: string,
 ): Promise<DashboardPayload> {
   // Build period (com possivel override de start customizado)
-  const basePeriod = calcPeriod(periodKey, endDate);
+  const basePeriod = calcPeriod(periodKey, endDate, market);
   // Aceita start == end (single day) — usa <= em vez de <
   const hasCustom = !!customStart && customStart <= basePeriod.end;
   const startMs = hasCustom ? Date.parse(customStart + 'T00:00:00Z') : 0;
