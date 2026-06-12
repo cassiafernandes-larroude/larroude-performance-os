@@ -225,8 +225,8 @@ export async function getExecutiveConsolidated(
 ): Promise<ExecutiveConsolidated> {
   const range = rangeForPeriod(period, customRange);
   const cacheKey = customRange
-    ? `executive-consolidated-v2:custom:${customRange.from}:${customRange.to}`
-    : `executive-consolidated-v2:${period}`;
+    ? `executive-consolidated-v3:custom:${customRange.from}:${customRange.to}`
+    : `executive-consolidated-v3:${period}`;
   return cached(cacheKey, 1800, async () => {
     const fxRate = await getRecentBrlUsdRate(); // BRL → USD
 

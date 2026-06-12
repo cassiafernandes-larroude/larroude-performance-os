@@ -6,7 +6,9 @@ import DailyBarChart from "@/components/main-dashboard/DailyBarChart";
 import ExecutiveFilterBar from "@/components/executive/ExecutiveFilterBar";
 import { yesterdayInMarket } from "@/lib/utils/market-tz";
 
-export const revalidate = 300;
+// Cassia 2026-06-12: dynamic p/ filtro de periodo reagir imediatamente (sem ISR stale).
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 const VALID_PERIODS: ExecutivePeriod[] = ["7d", "14d", "28d", "3M", "6M", "12M"];
 
@@ -68,7 +70,9 @@ export default async function ExecutivePage({
               Consolidated financial health — US + BR converted to USD (FX 1 USD = {(1 / c.fxBrlUsd).toFixed(2)} BRL)
             </p>
             <p className="text-[11px] mt-1" style={{ color: "var(--ink-muted)" }}>
-              Period: {c.period.from} → {c.period.to} · {c.source === "BQ" ? "BigQuery Larroude OS" : "Mock data"}
+              Active range: <strong style={{ color: "var(--ink-soft)" }}>{c.period.from} → {c.period.to}</strong>
+              {" · "}{customRange ? `custom (${searchParams?.from}-${searchParams?.to})` : `preset ${period.toUpperCase()}`}
+              {" · "}{c.source === "BQ" ? "BigQuery Larroude OS" : "Mock data"}
             </p>
           </div>
           <DashboardActions />
