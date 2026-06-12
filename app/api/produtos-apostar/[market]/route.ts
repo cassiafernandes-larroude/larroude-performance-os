@@ -6,9 +6,11 @@
  * Cassia 2026-06-11: "sugestões devem ser baseadas em performance de venda
  *                     nos últimos 28d"
  *
- * Score = units_28d_regulares × margemBrutaPct × (1 - returnRate30d) × (1 - exchangeRate30d × 0.3)
- * Cassia 2026-06-11: units_28d exclui Exchange-Only — só conta demanda orgânica/paid real
- * (orders REDO sao operacionais de CX, nao respondem a campanhas).
+ * Score = units_28d_regulares × margemBrutaPct × (1 - returnRate30d)
+ * Cassia 2026-06-12: removida a regra de considerar Exchanges no score
+ * (apenas units_28d continua excluindo Exchange-Only no volume base —
+ *  orders REDO sao operacionais de CX, nao respondem a campanhas).
+ * exchangeRate30d ainda eh exibido como contexto, mas nao penaliza o score.
  *
  * Junta: catálogo (price, COGS, compareAt) + sales 28d + returns 30d + exchanges 30d.
  */
@@ -40,7 +42,7 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
 
   const startedAt = Date.now();
   try {
-    const cacheKey = `apostar:${market}:${endDate}:noExchangeOnly:v2`;
+    const cacheKey = `apostar:${market}:${endDate}:noExchangeInScore:v3`;
     const result = await memo(cacheKey, TTL_6H, async () => {
       const [catalog, sales28, returns30d, exchanges30d] = await Promise.all([
         getShopifyCatalog(market),
@@ -95,8 +97,9 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
         const returnRate = ret?.returnRate ?? 0;
         const exchangeRate = exch?.exchangeRate ?? 0;
         const pixShare28d = sale.units > 0 ? sale.pixUnits / sale.units : 0;
-        const riskAdjust = (1 - returnRate) * (1 - exchangeRate * 0.3);
-        const score = sale.units * Math.max(0, grossMarginPct) * riskAdjust;
+        // Cassia 2026-06-12: Exchanges nao entram mais no calculo do score.
+        // exchangeRate30d permanece como contexto exibido (nao penaliza).
+        const score = sale.units * Math.max(0, grossMarginPct) * (1 - returnRate);
 
         candidates.push({
           motherSku: cat.motherSku,
