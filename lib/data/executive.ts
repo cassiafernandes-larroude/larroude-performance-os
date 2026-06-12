@@ -203,15 +203,32 @@ function safeDiv(num: number, den: number): number {
   return den > 0 ? num / den : 0;
 }
 
-export async function getExecutiveConsolidated(): Promise<ExecutiveConsolidated> {
-  return cached(`executive-consolidated-v1`, 1800, async () => {
-    const fxRate = await getRecentBrlUsdRate(); // BRL → USD
+/**
+ * Cassia 2026-06-12: filtro de período igual Main Dashboard.
+ * Aceita preset (7d/14d/28d/3M/6M/12M) OU custom range {from, to}.
+ */
+export type ExecutivePeriod = '7d' | '14d' | '28d' | '3M' | '6M' | '12M';
 
-    // Periodo 28d (igual Overview/Main)
-    const today = new Date();
-    const to = new Date(today.getTime() - 24 * 3600 * 1000);
-    const from = new Date(to.getTime() - 27 * 24 * 3600 * 1000);
-    const range = { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
+function rangeForPeriod(period: ExecutivePeriod, customRange?: { from: string; to: string }): { from: string; to: string } {
+  if (customRange) return customRange;
+  const today = new Date();
+  const to = new Date(today.getTime() - 24 * 3600 * 1000);
+  const days = period === '7d' ? 7 : period === '14d' ? 14 : period === '28d' ? 28
+             : period === '3M' ? 90 : period === '6M' ? 180 : 365;
+  const from = new Date(to.getTime() - (days - 1) * 24 * 3600 * 1000);
+  return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
+}
+
+export async function getExecutiveConsolidated(
+  period: ExecutivePeriod = '28d',
+  customRange?: { from: string; to: string },
+): Promise<ExecutiveConsolidated> {
+  const range = rangeForPeriod(period, customRange);
+  const cacheKey = customRange
+    ? `executive-consolidated-v2:custom:${customRange.from}:${customRange.to}`
+    : `executive-consolidated-v2:${period}`;
+  return cached(cacheKey, 1800, async () => {
+    const fxRate = await getRecentBrlUsdRate(); // BRL → USD
 
     if (!hasBigQueryCredentials()) {
       const mockUsd = { US: 2820000, BR: 7700000 * fxRate };
@@ -235,9 +252,12 @@ export async function getExecutiveConsolidated(): Promise<ExecutiveConsolidated>
 
     try {
       // Busca payloads completos em paralelo. Heavy mas reusa cache do Main Dashboard.
+      // Cassia 2026-06-12: seguir as mesmas regras dos outros dashboards
+      // -> reusa getDashboardPayload (filtros B2B, PIX, ajuste Meta US +400k Set/25, etc).
+      // Quando custom range, passamos customStart pra getDashboardPayload usar mesma janela.
       const [us, br, usChannels, brChannels] = await Promise.all([
-        getDashboardPayload("US", "28d"),
-        getDashboardPayload("BR", "28d"),
+        getDashboardPayload("US", period, range.to, customRange?.from),
+        getDashboardPayload("BR", period, range.to, customRange?.from),
         queryChannelMix("US", range.from, range.to).catch(() => []),
         queryChannelMix("BR", range.from, range.to).catch(() => []),
       ]);

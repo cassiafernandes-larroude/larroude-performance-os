@@ -1,13 +1,28 @@
-import { getExecutiveConsolidated } from "@/lib/data/executive";
+import { getExecutiveConsolidated, type ExecutivePeriod } from "@/lib/data/executive";
 import { formatCurrency, formatMultiplier, formatNumber, formatPercent } from "@/lib/utils/format";
-import { TrendingDown, TrendingUp, DollarSign, Target, Activity } from "lucide-react";
+import { TrendingDown, TrendingUp, DollarSign, Target } from "lucide-react";
 import { DashboardActions } from "@/components/shared/DashboardActions";
 import DailyBarChart from "@/components/main-dashboard/DailyBarChart";
+import ExecutiveFilterBar from "@/components/executive/ExecutiveFilterBar";
+import { yesterdayInMarket } from "@/lib/utils/market-tz";
 
 export const revalidate = 300;
 
-export default async function ExecutivePage() {
-  const c = await getExecutiveConsolidated();
+const VALID_PERIODS: ExecutivePeriod[] = ["7d", "14d", "28d", "3M", "6M", "12M"];
+
+export default async function ExecutivePage({
+  searchParams,
+}: {
+  searchParams?: { period?: string; from?: string; to?: string };
+}) {
+  const periodParam = searchParams?.period as ExecutivePeriod | undefined;
+  const period: ExecutivePeriod = periodParam && VALID_PERIODS.includes(periodParam) ? periodParam : "28d";
+  const customRange = searchParams?.from && searchParams?.to
+    ? { from: searchParams.from, to: searchParams.to }
+    : undefined;
+  const c = await getExecutiveConsolidated(period, customRange);
+  // maxDate p/ date picker = ontem em NY (US é o market âncora)
+  const maxDate = yesterdayInMarket("US");
 
   const profitTone = c.profit >= 0 ? "positive" : "negative";
   const roasTone = c.roas >= 3 ? "positive" : c.roas >= 1.5 ? "warning" : "negative";
@@ -21,7 +36,7 @@ export default async function ExecutivePage() {
         style={{ background: "var(--paper)", borderBottom: "1px solid var(--border)" }}
       >
         <div className="flex items-center gap-2 text-[12px]">
-          <span style={{ color: "var(--ink)", fontWeight: 500 }}>Executive View · Consolidated (US + BR in USD)</span>
+          <span style={{ color: "var(--ink)", fontWeight: 500 }}>Consolidated View · US + BR in USD</span>
         </div>
         <div className="flex items-center gap-2 text-[11px]" style={{ color: "var(--ink-muted)" }}>
           <div className="pulse-dot" />
@@ -32,11 +47,25 @@ export default async function ExecutivePage() {
       </header>
 
       <div className="main-dashboard-root px-4 lg:px-8 py-5 lg:py-8 max-w-[1500px] mx-auto">
-        <div className="mb-6 flex items-start justify-between gap-3 flex-wrap">
+        <div className="mb-4 flex items-start justify-between gap-3 flex-wrap">
           <div>
-            <h1 className="font-display text-[26px] lg:text-[36px]" style={{ color: "var(--ink)" }}>Executive View</h1>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="font-display text-[26px] lg:text-[36px]" style={{ color: "var(--ink)" }}>Consolidated View</h1>
+              <span
+                className="badge"
+                style={{
+                  background: "var(--pink-soft)",
+                  color: "var(--pink-deep)",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  letterSpacing: "0.05em",
+                }}
+              >
+                ALL VALUES IN USD
+              </span>
+            </div>
             <p className="text-[12px] lg:text-[14px] mt-1" style={{ color: "var(--ink-soft)" }}>
-              Consolidated financial health (US + BR converted to USD) — investment, revenue, ROAS, profit, channel share
+              Consolidated financial health — US + BR converted to USD (FX 1 USD = {(1 / c.fxBrlUsd).toFixed(2)} BRL)
             </p>
             <p className="text-[11px] mt-1" style={{ color: "var(--ink-muted)" }}>
               Period: {c.period.from} → {c.period.to} · {c.source === "BQ" ? "BigQuery Larroude OS" : "Mock data"}
@@ -44,6 +73,9 @@ export default async function ExecutivePage() {
           </div>
           <DashboardActions />
         </div>
+
+        {/* Cassia 2026-06-12: filtro de periodo igual Main Dashboard */}
+        <ExecutiveFilterBar maxDate={maxDate} />
 
         {/* ===== 4 Hero KPIs Consolidados ===== */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
@@ -65,9 +97,9 @@ export default async function ExecutivePage() {
           />
           <HealthCard
             icon={<Target className="w-5 h-5" />}
-            tag="ROAS"
+            tag="ROAS (TOTAL SALES)"
             value={`${c.roas.toFixed(2)}x`}
-            sub="Revenue / Investment"
+            sub="Total Sales / Investment"
             color={colorMap[roasTone]} bg={bgMap[roasTone]}
             hint={roasTone === "positive" ? "Healthy ≥3x" : roasTone === "warning" ? "Warning 1.5-3x" : "Critical <1.5x"}
           />
@@ -256,21 +288,11 @@ function MarketCard({ flag, label, data, native, totalRev, totalSpend, brData }:
           <div className="label-meta">Revenue</div>
           <div className="font-num text-[16px] font-bold" style={{ color: "var(--positive)" }}>{formatCurrency(data.revenue, "USD")}</div>
           <div className="text-[10px]" style={{ color: "var(--ink-muted)" }}>{revShare.toFixed(1)}% of total</div>
-          {native === "BRL" && brData && (
-            <div className="text-[10px] mt-0.5" style={{ color: "var(--ink-muted)" }}>
-              native: {formatCurrency(brData.revenue_brl, "BRL")}
-            </div>
-          )}
         </div>
         <div>
           <div className="label-meta">Investment</div>
           <div className="font-num text-[16px] font-bold" style={{ color: "var(--ink)" }}>{formatCurrency(data.spend, "USD")}</div>
           <div className="text-[10px]" style={{ color: "var(--ink-muted)" }}>{spendShare.toFixed(1)}% of total</div>
-          {native === "BRL" && brData && (
-            <div className="text-[10px] mt-0.5" style={{ color: "var(--ink-muted)" }}>
-              native: {formatCurrency(brData.spend_brl, "BRL")}
-            </div>
-          )}
         </div>
         <div>
           <div className="label-meta">ROAS</div>

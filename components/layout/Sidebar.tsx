@@ -41,7 +41,7 @@ const navSections: NavSection[] = [
     items: [
       { href: "/", label: "Overview", icon: Sun },
       { href: "/north-star", label: "North Star", icon: Target },
-      { href: "/executive", label: "Executive View", icon: LayoutDashboard },
+      { href: "/executive", label: "Consolidated View", icon: LayoutDashboard },
     ],
   },
   {
