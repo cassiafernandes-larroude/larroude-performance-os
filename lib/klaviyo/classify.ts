@@ -1,99 +1,95 @@
-/**
- * Classificação Campaign Type e Flow Type/Category.
- * Regex EN + PT (BR). Normaliza NFD para ignorar acentos.
- *
- * IMPORTANTE: ordem de avaliação de FlowCategory:
- * LIFECYCLE_OTHER é avaliado PRIMEIRO porque Opensend e Credit Redemption
- * têm overlap com outras categorias (Cassia 2026-06-11).
- */
+﻿import type { CampaignType, FlowType, FlowCategory } from '@/types/klaviyo/models';
 
-import type { CampaignType, FlowType, FlowCategory } from './types';
-
-function normalize(s: string): string {
-  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-}
-
-// ============================================================================
-// Campaign Type
-// ============================================================================
+// Classificação automática por nome — baseada nos benchmarks documentados.
 export function classifyCampaign(name: string): CampaignType {
-  const n = normalize(name);
-  if (/markdown|outlet|sale\b|promo|saldao|desconto|liquida/i.test(n)) return 'MARKDOWN';
-  if (/flash|24h|relampago|flash sale/i.test(n)) return 'FLASH';
-  if (/pre[\s_-]?order|preorder|pre[\s_-]?venda/i.test(n)) return 'PREORDER';
-  if (/\bvip\b|loyalty|fidelidade|insider/i.test(n)) return 'VIP';
-  if (/newsletter|news/i.test(n)) return 'NEWSLETTER';
-  if (/full[\s_-]?price|launch|lancamento|novidade/i.test(n)) return 'FULLPRICE';
+  const n = (name || '').toUpperCase();
+  if (/(^|[\s_-])VIP(\d|$|[\s_-])|VIPCUSTOMERS/.test(n)) return 'VIP';
+  if (/FLASH|LAST\s*CHANCE|LAST\s*CALL|\b24H\b|TODAY\s*ONLY/.test(n)) return 'FLASH';
+  if (/MD_|SALE|\bOFF\b|LIQUIDA|MARKDOWN|DISCOUNT|UP\s*TO\s*\d/.test(n)) return 'MARKDOWN';
+  if (/PO_|NEW\s*ARRIV|LAUNCH|DROP|PRE[-\s]*ORDER|PREORDER/.test(n)) return 'PREORDER';
+  if (/FP_|EDITORIAL|HARDWARE|RAINBOW|STORY/.test(n)) return 'FULLPRICE';
   return 'OTHER';
 }
 
-// ============================================================================
-// Flow Type
-// ============================================================================
 export function classifyFlow(name: string): FlowType {
   const n = normalize(name);
-  if (/welcome|boas[\s_-]?vindas|pre[\s_-]?purchase trust|fluxo confianca/i.test(n)) return 'WELCOME';
-  if (/abandoned checkout|abandoned cart|carrinho abandonado|bco|abandono checkout/i.test(n)) return 'ABANDONED_CHECKOUT';
-  if (/browse abandon|site abandon|navegacao abandonada|abandono navegacao/i.test(n)) return 'BROWSE_ABANDON';
-  if (/post[\s_-]?purchase|order follow|2nd purchase|segunda compra|acompanhamento|sticker peel/i.test(n)) return 'POST_PURCHASE';
-  if (/winback|win[\s_-]?back|at risk|em risco/i.test(n)) return 'WINBACK';
-  if (/birthday|aniversario/i.test(n)) return 'BIRTHDAY';
-  if (/price drop|baixou de preco|reducao de preco/i.test(n)) return 'PRICE_DROP';
-  if (/back in stock|bis|de volta ao estoque/i.test(n)) return 'BACK_IN_STOCK';
-  if (/sunset|prevencao de churn|inativo/i.test(n)) return 'SUNSET';
-  if (/cross[\s_-]?sell|next purchase nudge|next best/i.test(n)) return 'CROSS_SELL';
-  if (/opensend/i.test(n)) return 'OPENSEND';
-  if (/credit redemption|resgate credito/i.test(n)) return 'CREDIT_REDEMPTION';
-  if (/okendo|review/i.test(n)) return 'REVIEW';
+  // EN + PT-BR
+  if (/abandoned\s*checkout|abandoned\s*cart|carrinho\s*abandonad|checkout\s*abandonad|added\s*to\s*cart/.test(n)) return 'ABANDONED_CHECKOUT';
+  if (/browse\s*abandon|navegacao\s*abandonad|abandono\s*de\s*navega|abandono\s*de\s*site|site\s*abandon/.test(n)) return 'BROWSE_ABANDON';
+  if (/welcome|opensend|boas[-\s]*vindas|bem[-\s]*vindo/.test(n)) return 'WELCOME';
+  if (/price\s*drop|preco\s*caiu|back\s*in\s*stock|de\s*volta\s*ao\s*estoque|reposic|\bbis\b/.test(n)) return 'PRICE_DROP';
+  if (/post[-\s]*purchase|pos[-\s]*compra|2nd\s*purchase|segunda\s*compra|cross[-\s]*sell|next\s*purchase|review|okendo|order\s*follow|sticker\s*peel|peel|acompanhamento\s*do?\s*pedido/.test(n)) return 'POST_PURCHASE';
+  if (/winback|sunset|reconnect|reativ|reengaj|prevencao\s*de\s*churn|churn/.test(n)) return 'WINBACK';
+  if (/birthday|countdown|aniversari/.test(n)) return 'BIRTHDAY';
   return 'OTHER';
 }
 
-// ============================================================================
-// Flow Category (sub-tabs no dashboard)
-// LIFECYCLE_OTHER avaliado PRIMEIRO (overlap com outras).
-// ============================================================================
+// Normaliza pra busca: lowercase + remove acentos
+function normalize(s: string): string {
+  return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
+export function isCsFlow(name: string): boolean {
+  return /\bcs\b|customer\s*service|order\s*follow\s*up\s*-\s*cs/i.test(name || '');
+}
+
+// Classifica flows nas 6 categorias top-level (sub-abas).
+// Ordem de avaliação importa — categorias mais específicas primeiro.
 export function classifyFlowCategory(name: string): FlowCategory {
   const n = normalize(name);
 
-  // 1. LIFECYCLE_OTHER — PRIMEIRO (overlap com outras)
-  if (/opensend|credit redemption|resgate credito|okendo|review|birthday|aniversario|rfm/i.test(n)) {
-    return 'LIFECYCLE_OTHER';
-  }
+  // LIFECYCLE & OUTROS (PRIMEIRO — Opensend / Credit Redemption / Reviews)
+  // EN: opensend, credit redemption, okendo review, birthday, RFM
+  // PT: aniversari, indicacao, review/avaliacao, credito, opensend
+  if (/opensend|credit\s*redemption|credito\s*resgat|resgate\s*de\s*credito|okendo|review\s*request|avaliac|review|birthday|countdown|aniversari|rfm/.test(n)) return 'LIFECYCLE_OTHER';
 
-  // 2. TRIGGERS — eventos pontuais
-  if (/abandoned (checkout|cart)|carrinho abandonado|abandono checkout|bco|browse abandon|site abandon|navegacao abandonada|abandono navegacao|back in stock|bis|de volta ao estoque|price drop|baixou de preco|reducao de preco/i.test(n)) {
-    return 'TRIGGERS';
-  }
+  // TRIGGERS: cart, browse, site abandon, BIS, price drop
+  // PT: carrinho abandonado, checkout abandonado, navegacao abandonada, abandono de site, de volta ao estoque, preco caiu, reposicao
+  if (/abandoned\s*checkout|abandoned\s*cart|carrinho\s*abandonad|checkout\s*abandonad|added\s*to\s*cart|browse\s*abandon|navegacao\s*abandonad|abandono\s*de\s*navega|abandono\s*de\s*site|site\s*abandon|\bbco\b|back\s*in\s*stock|de\s*volta\s*ao\s*estoque|reposic|price\s*drop|preco\s*caiu|\bbis\b|black\s*crow/.test(n)) return 'TRIGGERS';
 
-  // 3. POST_PURCHASE — pós-venda
-  if (/post[\s_-]?purchase|order follow|2nd purchase|segunda compra|acompanhamento|sticker peel/i.test(n)) {
-    return 'POST_PURCHASE';
-  }
+  // POS-COMPRA: order follow up · 2nd Purchase · Separate Shipment · acompanhamento
+  if (/order\s*follow\s*up|2nd\s*purchase|second\s*purchase|segunda\s*compra|separate\s*shipment|envio\s*separad|placed\s*order\s*>\s*update|sticker\s*peel|acompanhamento\s*do?\s*pedido|pos[-\s]*compra/.test(n)) return 'POST_PURCHASE';
 
-  // 4. FAMILY_CROSSSELL — afinidade + crosssell
-  if (/cross[\s_-]?sell|next purchase nudge|next best|category social proof|prova social|predictive/i.test(n)) {
-    return 'FAMILY_CROSSSELL';
-  }
+  // FAMILIA & CROSS-SELL: category social proof · next best · cross-sell
+  // PT: prova social, categoria, proximo melhor, recomendacao
+  if (/family\s*cross|cross[-\s]*sell|venda\s*cruzad|next\s*purchase\s*nudge|proxima\s*compra|next\s*best\s*product|proximo\s*melhor|category\s*social\s*proof|prova\s*social|complementary|predictive|preditiv|recomendac/.test(n)) return 'FAMILY_CROSSSELL';
 
-  // 5. HYGIENE_WINBACK — limpar base + reativar
-  if (/sunset|winback|win[\s_-]?back|at risk|em risco|prevencao de churn|unengaged|inativo/i.test(n)) {
-    return 'HYGIENE_WINBACK';
-  }
+  // HIGIENIZACAO & WINBACK: sunset, winback, at risk, unengaged, reativacao, churn
+  if (/sunset|winback|win[-\s]*back|unengaged|at\s*risk|em\s*risco|reactivat|reativ|reengaj|lapsed|prevencao\s*de\s*churn|prevencao\s*do?\s*churn|churn/.test(n)) return 'HYGIENE_WINBACK';
 
-  // 6. WELCOME_TRUST — entrada
-  if (/welcome|boas[\s_-]?vindas|pre[\s_-]?purchase trust|fluxo confianca|ambassador|embaixador|subscribe/i.test(n)) {
-    return 'WELCOME_TRUST';
-  }
+  // WELCOME & TRUST: welcome series, pre-purchase trust, ambassador
+  // PT: boas-vindas, fluxo confianca, fluxo de confianca, embaixador
+  if (/welcome|boas[-\s]*vindas|bem[-\s]*vindo|pre[-\s]*purchase\s*trust|pre[-\s]*compra\s*confianc|fluxo\s*confianc|fluxo\s*de\s*confianc|confianca\s*pre\s*compra|subscribe\s*to\s*larroud|filled\s*out\s*lead|leads\s*pre\s*order|b2b\s*contact|ambassador|embaixador/.test(n)) return 'WELCOME_TRUST';
 
-  // Default: lifecycle other
   return 'LIFECYCLE_OTHER';
 }
 
-export const FLOW_CATEGORY_LABELS: Record<FlowCategory, string> = {
-  WELCOME_TRUST: 'Welcome & Trust',
-  HYGIENE_WINBACK: 'Hygiene & Winback',
-  FAMILY_CROSSSELL: 'Family & Cross-Sell',
-  POST_PURCHASE: 'Post-Purchase',
-  TRIGGERS: 'Triggers',
-  LIFECYCLE_OTHER: 'Lifecycle & Other',
+// Benchmarks Larroudé — p25 baseline / p75 target (documentado em /docs)
+export const CAMPAIGN_BENCHMARKS: Record<CampaignType, { orBaseline: number; orTarget: number; ctrBaseline: number; ctrTarget: number; rprBaseline: number; rprTarget: number }> = {
+  MARKDOWN:  { orBaseline: 60, orTarget: 65, ctrBaseline: 0.50, ctrTarget: 1.30, rprBaseline: 0.10, rprTarget: 0.18 },
+  FLASH:     { orBaseline: 58, orTarget: 63, ctrBaseline: 0.28, ctrTarget: 0.55, rprBaseline: 0.06, rprTarget: 0.08 },
+  PREORDER:  { orBaseline: 61, orTarget: 67, ctrBaseline: 0.32, ctrTarget: 0.82, rprBaseline: 0.05, rprTarget: 0.11 },
+  FULLPRICE: { orBaseline: 63, orTarget: 70, ctrBaseline: 0.32, ctrTarget: 0.80, rprBaseline: 0.03, rprTarget: 0.08 },
+  VIP:       { orBaseline: 52, orTarget: 59, ctrBaseline: 1.20, ctrTarget: 2.00, rprBaseline: 0.32, rprTarget: 0.50 },
+  OTHER:     { orBaseline: 55, orTarget: 62, ctrBaseline: 0.30, ctrTarget: 0.80, rprBaseline: 0.05, rprTarget: 0.10 }
 };
+
+export const FLOW_BENCHMARKS: Record<FlowType, { orBaseline: number; orTarget: number; ctrBaseline: number; ctrTarget: number; rprBaseline: number; rprTarget: number }> = {
+  ABANDONED_CHECKOUT: { orBaseline: 57, orTarget: 63, ctrBaseline: 2.4, ctrTarget: 5.0, rprBaseline: 3.80, rprTarget: 8.00 },
+  BROWSE_ABANDON:     { orBaseline: 44, orTarget: 47, ctrBaseline: 1.1, ctrTarget: 1.8, rprBaseline: 0.22, rprTarget: 0.34 },
+  WELCOME:            { orBaseline: 45, orTarget: 55, ctrBaseline: 0.6, ctrTarget: 1.0, rprBaseline: 0.13, rprTarget: 0.25 },
+  PRICE_DROP:         { orBaseline: 33, orTarget: 48, ctrBaseline: 2.0, ctrTarget: 5.0, rprBaseline: 0.43, rprTarget: 1.00 },
+  POST_PURCHASE:      { orBaseline: 52, orTarget: 56, ctrBaseline: 0.8, ctrTarget: 1.5, rprBaseline: 0.10, rprTarget: 0.30 },
+  WINBACK:            { orBaseline: 40, orTarget: 50, ctrBaseline: 0.5, ctrTarget: 1.2, rprBaseline: 0.15, rprTarget: 0.40 },
+  BIRTHDAY:           { orBaseline: 50, orTarget: 60, ctrBaseline: 1.0, ctrTarget: 2.0, rprBaseline: 0.25, rprTarget: 0.60 },
+  OTHER:              { orBaseline: 45, orTarget: 55, ctrBaseline: 0.8, ctrTarget: 1.5, rprBaseline: 0.10, rprTarget: 0.25 }
+};
+
+export function signalFor(orPct: number, ctrPct: number, rpr: number, bm: { orBaseline: number; orTarget: number; ctrBaseline: number; ctrTarget: number; rprBaseline: number; rprTarget: number }): 'SCALE' | 'FIX' | 'STOP' | 'MIXED' {
+  const above = (orPct >= bm.orTarget ? 1 : 0) + (ctrPct >= bm.ctrTarget ? 1 : 0) + (rpr >= bm.rprTarget ? 1 : 0);
+  const below = (orPct < bm.orBaseline ? 1 : 0) + (ctrPct < bm.ctrBaseline ? 1 : 0) + (rpr < bm.rprBaseline ? 1 : 0);
+  if (above >= 2) return 'SCALE';
+  if (below >= 2) return 'STOP';
+  if (below === 1) return 'FIX';
+  return 'MIXED';
+}

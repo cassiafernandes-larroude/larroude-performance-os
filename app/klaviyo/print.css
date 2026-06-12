@@ -1,0 +1,15 @@
+/* Print A4 portrait — 1 coluna full-width, 5 gráficos por página */
+@media print {
+  body { background: white !important; }
+  .app { padding: 0 !important; max-width: 100% !important; }
+  .market-row, .tab-nav, .filter-card, .foot { display: none !important; }
+  .grid.lg\:grid-cols-2,
+  .grid.lg\:grid-cols-3 { grid-template-columns: 1fr !important; }
+  .daily-chart-card {
+    height: 47mm !important;
+    page-break-inside: avoid;
+    border: 1px solid #e5e3de !important;
+    box-shadow: none !important;
+  }
+  .daily-chart-card canvas { max-height: 36mm !important; }
+}

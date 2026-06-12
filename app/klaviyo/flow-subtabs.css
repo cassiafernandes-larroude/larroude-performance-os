@@ -1,0 +1,58 @@
+/* Sub-tabs estilo Welcome & Trust / Higienização etc */
+.flow-subtabs {
+  display: flex;
+  gap: 4px;
+  margin: 16px 0 24px;
+  border-bottom: 1.5px solid var(--line);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+.flow-subtab {
+  position: relative;
+  padding: 12px 18px;
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.flow-subtab:hover { color: var(--ink-2); }
+.flow-subtab.active {
+  color: var(--pink);
+  background: var(--pink-soft);
+  border-radius: 8px 8px 0 0;
+}
+.flow-subtab.active::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: -1.5px;
+  height: 2px;
+  background: var(--pink);
+}
+.flow-subtab .badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 100px;
+  background: var(--bg-soft);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ink-2);
+  letter-spacing: 0;
+}
+.flow-subtab.active .badge {
+  background: var(--pink);
+  color: white;
+}
+@media (max-width: 720px) {
+  .flow-subtab { padding: 10px 12px; font-size: 10.5px; }
+  .flow-subtab .badge { padding: 2px 6px; font-size: 9px; }
+}

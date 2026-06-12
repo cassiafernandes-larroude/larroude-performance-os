@@ -1,249 +1,246 @@
-'use client';
-
-import { useEffect, useState } from 'react';
-import type { Market, Period } from '@/lib/klaviyo/types';
-import { buildKlaviyoUrl, fmtMoney, fmtPct, fmtNumber } from './fetcher';
+﻿'use client';
+import React, { useEffect, useState } from 'react';
+import { api } from './fetcher';
+import { Kpi, SectionHead, HBar, fmtMoney, fmtInt, fmtPct, fmtMoneyCents } from './ui';
 import DailyBarChart from './DailyBarChart';
+import type { Market, Period, CustomRange } from '@/types/klaviyo/models';
 
-interface Props {
-  market: Market;
-  period: Period;
-  customRange?: { from: string; to: string };
-}
+const PINK = '#E91E78';
+const NAVY = '#1e3a8a';
+const TEAL = '#0d9488';
+const BLUE = '#3b82f6';
+const GOLD = '#B8861F';
+const PURPLE = '#5B3FA0';
+const GRAY = '#CBD5E1';
+const ORANGE = '#E8722A';
 
-export default function TabOverview({ market, period, customRange }: Props) {
+export default function TabOverview({ market, period, custom }: { market: Market; period: Period; custom?: CustomRange }) {
   const [data, setData] = useState<any>(null);
-  const [shopifyAttr, setShopifyAttr] = useState<any>(null);
+  const [timing, setTiming] = useState<any>(null);
   const [insights, setInsights] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [shopifyAttr, setShopifyAttr] = useState<any>(null);
+  const [listHealth, setListHealth] = useState<any>(null);
+  const [err, setErr] = useState<string>('');
 
   useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    const overview = fetch(buildKlaviyoUrl('overview', market, period, customRange))
-      .then((r) => r.ok ? r.json() : Promise.reject(new Error(`overview HTTP ${r.status}`)));
-    const attr = fetch(buildKlaviyoUrl('shopify-attribution', market, period, customRange))
-      .then((r) => r.ok ? r.json() : null)
-      .catch(() => null);
-    const ins = fetch(buildKlaviyoUrl('insights', market, period, customRange))
-      .then((r) => r.ok ? r.json() : null)
-      .catch(() => null);
-    Promise.all([overview, attr, ins]).then(([o, a, i]) => {
-      if (cancelled) return;
-      setData(o);
-      setShopifyAttr(a);
-      setInsights(i);
-      setLoading(false);
-    }).catch((err) => {
-      if (!cancelled) { setError(err.message); setLoading(false); }
-    });
-    return () => { cancelled = true; };
-  }, [market, period, customRange?.from, customRange?.to]);
+    setData(null); setTiming(null); setInsights(null); setShopifyAttr(null); setListHealth(null); setErr('');
+    // Carregam em paralelo — overview principal aparece rapido, outros chegam depois
+    api('overview', market, period, custom).then(setData).catch(e => setErr(String(e.message || e)));
+    api('timing', market, period, custom).then(setTiming).catch(() => {});
+    api('insights', market, period, custom).then(setInsights).catch(() => {});
+    api('shopify-attribution', market, period, custom).then(setShopifyAttr).catch(() => {});
+    api('list-health', market, period, custom).then(setListHealth).catch(() => {});
+  }, [market, period, custom?.start, custom?.end]);
 
-  if (loading) return <div className="card p-8 text-center text-sm" style={{ color: '#6b7280' }}>Loading Klaviyo {market}…</div>;
-  if (error) return <div className="card p-4" style={{ borderColor: '#b3382f', background: '#fff5f5', color: '#b3382f' }}><strong>Error:</strong> {error}</div>;
-  if (!data) return null;
+  if (err) return <div className="empty">{err.slice(0, 200)}</div>;
+  if (!data) return <div className="loading">Loading overview ({market} / {period})...</div>;
 
-  const k = data.kpis;
-  const lh = data.listHealth;
-  const daily = data.daily || {};
-  const dow = data.dayOfWeek || [];
-  const flags = insights?.flags || [];
+  const c = data.campaigns, f = data.flows;
+  const cmp = (data.compareSeries || []) as any[];
+
+  const revPts = cmp.map(p => ({ date: p.date, value: (p.campRevenue || 0) + (p.flowRevenue || 0), inPeriod: true }));
+  const sendPts = cmp.map(p => ({ date: p.date, value: (p.campRecipients || 0) + (p.flowRecipients || 0), inPeriod: true }));
+  const convPts = cmp.map(p => ({ date: p.date, value: (p.campConversions || 0) + (p.flowConversions || 0), inPeriod: true }));
+
+  const campOrPts = cmp.map(p => ({ date: p.date, value: p.campOpenRate || 0, inPeriod: true }));
+  const campCtrPts = cmp.map(p => ({ date: p.date, value: p.campClickRate || 0, inPeriod: true }));
+  const campRprPts = cmp.map(p => ({ date: p.date, value: p.campRpr || 0, inPeriod: true }));
+  const flowOrPts = cmp.map(p => ({ date: p.date, value: p.flowOpenRate || 0, inPeriod: true }));
+  const flowCtrPts = cmp.map(p => ({ date: p.date, value: p.flowClickRate || 0, inPeriod: true }));
+  const flowRprPts = cmp.map(p => ({ date: p.date, value: p.flowRpr || 0, inPeriod: true }));
+
+  const shopifyPts = cmp.map(p => ({ date: p.date, value: p.shopifyTotal || 0, inPeriod: true }));
+  // Shopify last-click vem de endpoint separado (mais rapido aparecer overview principal primeiro)
+  const lastClickByDate = new Map<string, number>();
+  const sa = (shopifyAttr?.points || []) as any[];
+  for (const p of sa) lastClickByDate.set(p.date, p.value);
+  const lastClickRevPts = cmp.map(p => ({ date: p.date, value: lastClickByDate.get(p.date) || 0, inPeriod: true }));
+  const participationPts = cmp.map(p => {
+    const lc = lastClickByDate.get(p.date) || 0;
+    return { date: p.date, value: p.shopifyTotal ? (lc / p.shopifyTotal) * 100 : 0, inPeriod: true };
+  });
+
+  const stacked = 'space-y-4 mt-4';
+
+  // Day-of-Week (from /api/timing)
+  const byDay = (timing?.byDay || []) as any[];
+  const bestDay = byDay.length ? [...byDay].sort((a, b) => b.avgRpr - a.avgRpr)[0] : null;
+  const maxDayRev = Math.max(...byDay.map(d => d.avgRevenue || 0), 1);
+  const maxDayOR = Math.max(...byDay.map(d => d.avgOpenRate || 0), 1);
+  const maxDayCTR = Math.max(...byDay.map(d => d.avgCtr || 0), 1);
 
   return (
-    <div className="space-y-5">
-      {/* KPIs gerais */}
-      <div className="kpi-grid grid grid-cols-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-8 gap-2">
-        <Kpi label="TOTAL REVENUE" value={fmtMoney(k.totalRevenue, market, true)} hint="campaigns + flows" />
-        <Kpi label="CAMPAIGNS REV" value={fmtMoney(k.campaignsRevenue, market, true)} hint={`${k.campaignsCount} sent`} />
-        <Kpi label="FLOWS REV" value={fmtMoney(k.flowsRevenue, market, true)} hint={`${k.flowsCount} live`} />
-        <Kpi label="OPEN RATE" value={fmtPct(k.openRate, 1)} hint={`${fmtNumber(k.totalOpens, market)} opens`} />
-        <Kpi label="CLICK RATE" value={fmtPct(k.clickRate, 2)} hint={`${fmtNumber(k.totalClicks, market)} clicks`} />
-        <Kpi label="UNSUB RATE" value={fmtPct(k.unsubRate, 3)} hint={`${fmtNumber(k.totalUnsubs, market)} unsubs`} />
-        <Kpi label="REV / RECIP." value={fmtMoney(k.revenuePerRecipient, market)} hint={`${fmtNumber(k.totalRecipients, market)} recipients`} />
-        <Kpi label="ORDERS" value={fmtNumber(k.totalOrders, market)} hint="attributed" />
+    <>
+      <SectionHead pill="Overview" pillVariant="blue" title={<><b>Consolidated performance</b> &middot; campaigns + flows &middot; {period} &middot; market {market} &middot; {data.granularity || 'daily'}</>} right={`Generated ${new Date(data.generatedAt).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})}`} />
+      <div className="kpi-grid kpi-grid-8">
+        <Kpi color="pink" label="Email Revenue" value={fmtMoney(data.totalEmailRevenue, market)} sub={<>Camps + Flows</>} />
+        <Kpi color="teal" label="Campaigns" value={c.count} sub={<><b>{fmtMoney(c.revenue, market)}</b> revenue</>} />
+        <Kpi color="purple" label="Flows" value={f.count} sub={<><b>{fmtMoney(f.revenue, market)}</b> revenue</>} />
+        <Kpi color="gold" label="Recipients (Camp)" value={fmtInt(c.recipients)} />
+        <Kpi label="Open Rate" value={fmtPct(c.openRate)} sub="campaign avg" />
+        <Kpi label="Click Rate" value={fmtPct(c.clickRate, 2)} sub="campaign avg" />
+        <Kpi label="RPR" value={fmtMoneyCents(c.rpr, market)} sub="per recipient" />
+        <Kpi label="Conversions" value={fmtInt(c.conversions)} sub="campaigns" />
       </div>
 
-      {/* 11 Daily Charts */}
-      <div className="section-marker">
-        <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--ink-muted)' }}>
-          DAILY EVOLUTION ({data.period.start} → {data.period.end})
-        </span>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        <DailyBarChart title="Total Revenue / day" data={daily.revenue || []} color="#10b981" unit="currency" market={market} height={180} />
-        <DailyBarChart title="Recipients / day" data={daily.recipients || []} color="#5d4ec5" unit="number" market={market} height={180} />
-        <DailyBarChart title="Opens / day" data={daily.opens || []} color="#0ea5e9" unit="number" market={market} height={180} />
-        <DailyBarChart title="Clicks / day" data={daily.clicks || []} color="#d97757" unit="number" market={market} height={180} />
-        <DailyBarChart title="Unsubscribes / day" data={daily.unsubscribes || []} color="#dc2626" unit="number" market={market} height={180} />
-        <DailyBarChart title="Bounces / day" data={daily.bounced || []} color="#a16207" unit="number" market={market} height={180} />
-        <DailyBarChart title="Campaigns Revenue / day" data={data.dailyCampaigns?.revenue || []} color="#ec4899" unit="currency" market={market} height={180} />
-        <DailyBarChart title="Flows Revenue / day" data={data.dailyFlows?.revenue || []} color="#2c7a5b" unit="currency" market={market} height={180} />
-        <DailyBarChart title="Campaigns Sends / day" data={data.dailyCampaigns?.recipients || []} color="#f59e0b" unit="number" market={market} height={180} />
-        <DailyBarChart title="Flows Sends / day" data={data.dailyFlows?.recipients || []} color="#06b6d4" unit="number" market={market} height={180} />
-        <DailyBarChart title="Campaigns Unsubs / day" data={data.dailyCampaigns?.unsubscribes || []} color="#be123c" unit="number" market={market} height={180} />
+      <SectionHead pill="Daily KPIs" pillVariant="pink" title={<><b>Email performance by day</b> &middot; bars with labeled values</>} />
+      <div className={stacked}>
+        <DailyBarChart title="Daily Email Revenue" data={revPts} color={PINK} unit="currency" market={market} />
+        <DailyBarChart title="Daily Send Volume" data={sendPts} color={NAVY} unit="number" market={market} />
+        <DailyBarChart title="Daily Conversions" data={convPts} color={PURPLE} unit="number" market={market} />
       </div>
 
-      {/* List Health */}
-      <section className="card p-5">
-        <div className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: '#6b7280' }}>
-          List Health (period)
+      <SectionHead pill="Engagement — Campaigns" pillVariant="pink" title={<><b>Campaign Open Rate, Click Rate, RPR</b> &middot; daily</>} />
+      <div className={stacked}>
+        <DailyBarChart title="Campaign Open Rate %" data={campOrPts} color={TEAL} unit="percent" market={market} />
+        <DailyBarChart title="Campaign Click Rate %" data={campCtrPts} color={BLUE} unit="percent" market={market} />
+        <DailyBarChart title="Campaign RPR ($)" data={campRprPts} color={GOLD} unit="currency" market={market} />
+      </div>
+
+      <SectionHead pill="Engagement — Flows" pillVariant="purple" title={<><b>Flow Open Rate, Click Rate, RPR</b> &middot; daily</>} />
+      <div className={stacked}>
+        <DailyBarChart title="Flow Open Rate %" data={flowOrPts} color={TEAL} unit="percent" market={market} />
+        <DailyBarChart title="Flow Click Rate %" data={flowCtrPts} color={BLUE} unit="percent" market={market} />
+        <DailyBarChart title="Flow RPR ($)" data={flowRprPts} color={GOLD} unit="currency" market={market} />
+      </div>
+
+      <SectionHead pill="Revenue — Email vs Shopify" pillVariant="blue" title={<><b>Shopify Last-Click attribution</b> &middot; orders where Shopify's last-touch source = Klaviyo</>} right={shopifyAttr ? '' : 'Loading attribution...'} />
+      {(() => {
+        const shopifyTotal = cmp.reduce((s, p) => s + (p.shopifyTotal || 0), 0);
+        const lastClickTotal = shopifyAttr?.total || 0;
+        const klaviyoReported = (c.revenue || 0) + (f.revenue || 0);
+        const participation = shopifyTotal ? (lastClickTotal / shopifyTotal) * 100 : 0;
+        return (
+          <div className="kpi-grid kpi-grid-4" style={{ marginBottom: 14 }}>
+            <Kpi color="blue" label="Shopify Total" value={fmtMoney(shopifyTotal, market)} sub="placed orders" />
+            <Kpi color="pink" label="Shopify Last-Click = Klaviyo" value={shopifyAttr ? fmtMoney(lastClickTotal, market) : '...'} sub="last-touch attribution" />
+            <Kpi color="purple" label="Klaviyo (reported)" value={fmtMoney(klaviyoReported, market)} sub="Camps + Flows from Klaviyo" />
+            <Kpi color="teal" label="Email Participation" value={shopifyAttr ? fmtPct(participation) : '...'} sub="Last-Click / Shopify Total" />
+          </div>
+        );
+      })()}
+      <div className={stacked}>
+        <DailyBarChart title="Daily Shopify Revenue (placed orders)" data={shopifyPts} color={GRAY} unit="currency" market={market} />
+        <DailyBarChart title="Shopify Revenue — Last-Click = Klaviyo" data={lastClickRevPts} color={PINK} unit="currency" market={market} />
+        <DailyBarChart title="Klaviyo Campaigns (reported by Klaviyo)" data={cmp.map(p => ({ date: p.date, value: p.campRevenue || 0, inPeriod: true }))} color="#ec4899" unit="currency" market={market} />
+        <DailyBarChart title="Klaviyo Flows (reported via flow-series-reports)" data={cmp.map(p => ({ date: p.date, value: p.flowRevenue || 0, inPeriod: true }))} color="#8b5cf6" unit="currency" market={market} />
+        <DailyBarChart title="Email Participation % (Last-Click Klaviyo / Shopify Total)" data={participationPts} color={PINK} unit="percent" market={market} />
+      </div>
+
+      {/* TIMING — Day of Week (moved from removed Timing tab) */}
+      <SectionHead pill="Timing" pillVariant="orange" title={<><b>Performance by day of week</b> &middot; derived from send dates</>} />
+      {!timing && <div className="loading">Loading timing...</div>}
+      {timing && byDay.length > 0 && <>
+        <div className="kpi-grid kpi-grid-4">
+          <Kpi color="orange" label="Best day (RPR)" value={bestDay?.dayName || '-'} sub={bestDay ? <>RPR <b>{fmtMoneyCents(bestDay.avgRpr, market)}</b></> : ''} />
+          <Kpi label="Total campaigns" value={byDay.reduce((s, d) => s + d.campaigns, 0)} />
+          <Kpi label="Avg Revenue / day" value={fmtMoney(byDay.reduce((s, d) => s + d.avgRevenue, 0) / 7)} />
+          <Kpi label="Avg OR / day" value={fmtPct(byDay.reduce((s, d) => s + d.avgOpenRate, 0) / 7)} />
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <Mini label="Subscriptions" value={fmtNumber(lh.subs, market)} tone="good" />
-          <Mini label="Unsubscribes" value={fmtNumber(lh.unsubs, market)} tone="warn" />
-          <Mini label="Bounces" value={fmtNumber(lh.bounces, market)} tone="warn" />
-          <Mini label="Spam complaints" value={fmtNumber(lh.spam, market)} tone="bad" />
+        <div className="list-card" style={{ marginTop: 14 }}>
+          <table className="list-table">
+            <thead><tr>
+              <th>Day</th>
+              <th className="num">Campaigns</th>
+              <th className="num">Avg Revenue</th>
+              <th className="bar">Revenue</th>
+              <th className="num">Avg OR%</th>
+              <th className="bar">OR</th>
+              <th className="num">Avg CTR%</th>
+              <th className="bar">CTR</th>
+              <th className="num">Avg RPR</th>
+            </tr></thead>
+            <tbody>
+              {byDay.map(d => (
+                <tr key={d.dayIndex}>
+                  <td className="product"><div className="name">{d.dayName}</div></td>
+                  <td className="num">{d.campaigns}</td>
+                  <td className="num">{fmtMoney(d.avgRevenue, market)}</td>
+                  <td className="bar"><HBar value={d.avgRevenue} max={maxDayRev} color="orange" label={fmtMoney(d.avgRevenue, market)} /></td>
+                  <td className="num">{fmtPct(d.avgOpenRate)}</td>
+                  <td className="bar"><HBar value={d.avgOpenRate} max={maxDayOR} color="teal" label={fmtPct(d.avgOpenRate)} /></td>
+                  <td className="num">{fmtPct(d.avgCtr, 2)}</td>
+                  <td className="bar"><HBar value={d.avgCtr} max={maxDayCTR} color="pink" label={fmtPct(d.avgCtr, 2)} /></td>
+                  <td className="num"><b>{fmtMoneyCents(d.avgRpr, market)}</b></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-      </section>
+      </>}
 
-      {/* Day-of-Week */}
-      {dow.length > 0 && (
-        <section className="card p-5">
-          <div className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: '#6b7280' }}>
-            Day-of-Week Performance
-          </div>
-          <div className="grid grid-cols-7 gap-2">
-            {dow.map((d: any) => {
-              const max = Math.max(...dow.map((x: any) => x.revenue), 1);
-              return (
-                <div key={d.dow} className="text-center">
-                  <div className="text-[10px] font-semibold uppercase mb-1" style={{ color: '#6b7280' }}>{d.label}</div>
-                  <div className="h-24 flex items-end justify-center" style={{ background: '#faf8f3', borderRadius: 6 }}>
-                    <div style={{ width: '60%', height: `${(d.revenue / max) * 100}%`, background: '#ec4899', borderRadius: '4px 4px 0 0' }} />
-                  </div>
-                  <div className="text-[10px] mt-1 font-num">{fmtMoney(d.revenue, market, true)}</div>
-                  <div className="text-[9px]" style={{ color: '#9ca3af' }}>{fmtNumber(d.sends, market)} sends</div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      {/* Insights (Green/Red/Next) */}
-      {flags.length > 0 && (
-        <section>
-          <div className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: 'var(--ink-muted)' }}>
-            Insights ({flags.length})
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            {flags.map((f: any, i: number) => {
-              const colors = {
-                green: { bg: '#ecf6f0', border: '#2c7a5b', text: '#1d5b41', icon: '✓' },
-                red:   { bg: '#fff5f5', border: '#b3382f', text: '#7a221c', icon: '!' },
-                next:  { bg: '#fff7e0', border: '#c0822a', text: '#8a5b18', icon: '→' },
-              }[f.kind as 'green' | 'red' | 'next'];
-              return (
-                <div key={i} className="p-4 rounded-xl" style={{ background: colors.bg, border: `1px solid ${colors.border}` }}>
-                  <div className="text-[11px] font-bold uppercase tracking-wider mb-1 flex items-center gap-2" style={{ color: colors.text }}>
-                    <span style={{
-                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                      width: 16, height: 16, borderRadius: 999, background: colors.border, color: '#fff', fontSize: 10, fontWeight: 700,
-                    }}>{colors.icon}</span>
-                    {f.title}
-                  </div>
-                  <div className="text-[12px] leading-relaxed" style={{ color: colors.text }}>{f.body}</div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      {/* Shopify Last-Click attribution */}
-      {shopifyAttr && (
-        <section className="card p-5">
-          <div className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: '#6b7280' }}>
-            Shopify Last-Click Attribution (Klaviyo)
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <Mini label="Klaviyo orders" value={fmtNumber(shopifyAttr.ordersCount, market)} tone="good" />
-            <Mini label="Klaviyo revenue" value={fmtMoney(shopifyAttr.revenue, market, true)} tone="good" />
-            <Mini label="Share of total" value={fmtPct(shopifyAttr.matchedShare, 1)} tone="warn" />
-            <Mini label="Total period revenue" value={fmtMoney(shopifyAttr.totalRevenueInPeriod, market, true)} tone="warn" />
-          </div>
-          {shopifyAttr.byCampaign?.length > 0 && (
-            <div className="mt-4">
-              <div className="text-[10px] font-bold uppercase mb-2" style={{ color: '#9ca3af' }}>Top campaigns by Shopify attribution</div>
-              <div className="space-y-1">
-                {shopifyAttr.byCampaign.slice(0, 10).map((c: any) => (
-                  <div key={c.campaign} className="flex items-center gap-2 text-[11px]">
-                    <span className="flex-1 truncate" style={{ color: '#374151' }} title={c.campaign}>{c.campaign}</span>
-                    <span className="text-right w-16">{fmtNumber(c.orders, market)} ord.</span>
-                    <span className="text-right w-20 font-semibold font-num">{fmtMoney(c.revenue, market, true)}</span>
-                  </div>
-                ))}
-              </div>
+      {/* LIST HEALTH (moved from removed List Health tab) */}
+      <SectionHead pill="List Health" pillVariant="green" title={<><b>List growth</b> &middot; Subscribed vs Unsubscribed &middot; {listHealth?.interval || 'loading'} granularity</>} right={listHealth?.metricsUsed?.subscribed || ''} />
+      {!listHealth && <div className="loading">Loading list health...</div>}
+      {listHealth && (() => {
+        const lhPoints = (listHealth.points || []) as any[];
+        const subs = lhPoints.map(p => ({ date: p.date, value: p.subscriptions, inPeriod: true }));
+        const unsubs = lhPoints.map(p => ({ date: p.date, value: p.unsubscribes, inPeriod: true }));
+        const spam = lhPoints.map(p => ({ date: p.date, value: p.spam || 0, inPeriod: true }));
+        const bounces = lhPoints.map(p => ({ date: p.date, value: p.bounces || 0, inPeriod: true }));
+        return (
+          <>
+            <div className="kpi-grid kpi-grid-4">
+              <Kpi color="green" label="Subscriptions" value={fmtInt(listHealth.total.subscriptions)} sub="period total" />
+              <Kpi color="red" label="Unsubscribes" value={fmtInt(listHealth.total.unsubscribes)} sub="period total" />
+              <Kpi color={listHealth.net >= 0 ? 'teal' : 'red'} label="Net Growth" value={(listHealth.net >= 0 ? '+' : '') + fmtInt(listHealth.net)} sub="subs - unsubs" />
+              <Kpi label={listHealth.interval === 'day' ? 'Days' : listHealth.interval === 'week' ? 'Weeks' : 'Months'} value={lhPoints.length} sub={`${listHealth.interval || 'auto'} granularity`} />
             </div>
-          )}
-        </section>
-      )}
+            <div className={stacked}>
+              <DailyBarChart title="Subscriptions" data={subs} color="#267838" unit="number" market={market} />
+              <DailyBarChart title="Unsubscribes" data={unsubs} color="#ef4444" unit="number" market={market} />
+              <DailyBarChart title="Bounces" data={bounces} color="#f59e0b" unit="number" market={market} />
+              <DailyBarChart title="Spam Complaints" data={spam} color="#B82F2F" unit="number" market={market} />
+            </div>
+          </>
+        );
+      })()}
 
-      {/* Top Campaigns + Top Flows */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <section className="card p-5">
-          <div className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: '#6b7280' }}>
-            Top 10 Campaigns by Revenue
+      {/* INSIGHTS (moved from removed Insights tab) */}
+      <SectionHead pill="Insights" pillVariant="gold" title={<><b>Automated analysis</b> &middot; Green flags / Red flags / Next Steps</>} />
+      {!insights && <div className="loading">Loading insights...</div>}
+      {insights && <>
+        <div className="insight-grid">
+          <div className="insight-card green">
+            <h3>Green Flags</h3>
+            <ul>
+              {insights.greenFlags.length === 0 && <li className="empty">No positive signals in this period.</li>}
+              {insights.greenFlags.map((s: string, i: number) => <li key={i}>{s}</li>)}
+            </ul>
           </div>
-          <RowList items={data.topCampaigns} market={market} />
-        </section>
-        <section className="card p-5">
-          <div className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: '#6b7280' }}>
-            Top 10 Flows by Revenue
+          <div className="insight-card red">
+            <h3>Red Flags</h3>
+            <ul>
+              {insights.redFlags.length === 0 && <li className="empty">No critical alerts.</li>}
+              {insights.redFlags.map((s: string, i: number) => <li key={i}>{s}</li>)}
+            </ul>
           </div>
-          <RowList items={data.topFlows} market={market} />
-        </section>
-      </div>
-
-      <div className="text-[11px] italic px-2" style={{ color: '#9ca3af' }}>
-        {data.period.start} → {data.period.end} · cached 6h · fetched {data.durationMs}ms
-      </div>
-    </div>
-  );
-}
-
-function Kpi({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div className="card p-2.5 flex flex-col">
-      <div className="text-[8.5px] font-bold tracking-wider text-steel uppercase leading-tight">{label}</div>
-      <div className="text-xl font-bold text-ink leading-tight mt-0.5">{value}</div>
-      {hint && <div className="text-[9px] text-steel mt-0.5 leading-tight">{hint}</div>}
-    </div>
-  );
-}
-
-function Mini({ label, value, tone }: { label: string; value: string; tone: 'good' | 'warn' | 'bad' }) {
-  const colors = {
-    good: { bg: '#ecf6f0', border: '#2c7a5b', text: '#1d5b41' },
-    warn: { bg: '#fff7e0', border: '#c0822a', text: '#8a5b18' },
-    bad:  { bg: '#fff5f5', border: '#b3382f', text: '#7a221c' },
-  }[tone];
-  return (
-    <div className="rounded-xl p-3" style={{ background: colors.bg, border: `1px solid ${colors.border}` }}>
-      <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: colors.text }}>{label}</div>
-      <div className="font-bold mt-1" style={{ color: colors.text, fontSize: 'clamp(18px, 1.8vw, 22px)' }}>{value}</div>
-    </div>
-  );
-}
-
-function RowList({ items, market }: { items: any[]; market: Market }) {
-  if (!items?.length) return <div className="text-[12px]" style={{ color: '#9ca3af' }}>No data.</div>;
-  const max = Math.max(...items.map((i) => i.revenue), 1);
-  return (
-    <div className="space-y-1.5">
-      {items.map((row, i) => (
-        <div key={row.id} className="flex items-center gap-2">
-          <span className="text-[10px] font-bold w-5" style={{ color: '#9ca3af' }}>#{i + 1}</span>
-          <div className="flex-1 text-[12px] truncate" style={{ color: '#374151' }} title={row.name}>{row.name}</div>
-          <div className="h-3 rounded" style={{ width: 40, background: '#fef2f8' }}>
-            <div className="h-full rounded" style={{ width: `${(row.revenue / max) * 100}%`, background: '#ec4899' }} />
+          <div className="insight-card blue">
+            <h3>Next Steps</h3>
+            <ul>
+              {insights.nextSteps.length === 0 && <li className="empty">All set.</li>}
+              {insights.nextSteps.map((s: string, i: number) => <li key={i}>{s}</li>)}
+            </ul>
           </div>
-          <div className="text-[11px] font-num font-semibold w-20 text-right">{fmtMoney(row.revenue, market, true)}</div>
         </div>
-      ))}
-    </div>
+        <SectionHead pill="Deliverability" pillVariant="teal" title={<><b>Health summary</b> &middot; sends</>} />
+        <div className="kpi-grid kpi-grid-4">
+          <Kpi color={insights.deliverability.bouncesIssues > 0 ? 'red' : 'green'} label="Bounce > 0.5%" value={insights.deliverability.bouncesIssues} sub={`of ${insights.deliverability.totalCamps} campaigns`} />
+          <Kpi color={insights.deliverability.unsubsIssues > 0 ? 'red' : 'green'} label="Unsub > 0.5%" value={insights.deliverability.unsubsIssues} sub={`of ${insights.deliverability.totalCamps} campaigns`} />
+          <Kpi label="Camps in period" value={insights.deliverability.totalCamps} />
+          <Kpi label="Live flows" value={insights.deliverability.totalFlows} />
+        </div>
+      </>}
+
+      <SectionHead pill="Camps vs Flows" pillVariant="teal" title={<><b>Period averages</b></>} />
+      <div className="kpi-grid kpi-grid-6">
+        <Kpi label="OR Camp" value={fmtPct(c.openRate)} />
+        <Kpi label="OR Flow" value={fmtPct(f.openRate)} />
+        <Kpi label="CTR Camp" value={fmtPct(c.clickRate, 2)} />
+        <Kpi label="CTR Flow" value={fmtPct(f.clickRate, 2)} />
+        <Kpi label="RPR Camp" value={fmtMoneyCents(c.rpr, market)} />
+        <Kpi label="RPR Flow" value={fmtMoneyCents(f.rpr, market)} />
+      </div>
+    </>
   );
 }

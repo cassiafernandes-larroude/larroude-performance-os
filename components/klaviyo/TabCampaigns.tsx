@@ -1,140 +1,221 @@
-'use client';
-
-import { useEffect, useState } from 'react';
-import type { Market, Period } from '@/lib/klaviyo/types';
-import { buildKlaviyoUrl, fmtMoney, fmtPct, fmtNumber } from './fetcher';
+﻿'use client';
+import React, { useEffect, useMemo, useState } from 'react';
+import { api } from './fetcher';
+import { Kpi, SectionHead, HBar, StatusBadge, Pagination, Modal, fmtMoney, fmtMoneyCents, fmtInt, fmtPct, fmtDate } from './ui';
 import DailyBarChart from './DailyBarChart';
+import { KpiDelta, fmtCompact } from './KpiDelta';
+import { CAMPAIGN_BENCHMARKS, signalFor } from '@/lib/klaviyo/classify';
+import type { Market, Period, CustomRange, CampaignRow, BenchmarkRow } from '@/types/klaviyo/models';
 
-interface Props {
-  market: Market;
-  period: Period;
-  customRange?: { from: string; to: string };
+const PER = 30;
+const TOP = 10;
+
+function TopRankCard({ title, rows, accessor, formatter, color, accentColor }: {
+  title: string;
+  rows: CampaignRow[];
+  accessor: (r: CampaignRow) => number;
+  formatter: (v: number) => string;
+  color: string;
+  accentColor: string;
+}) {
+  const sorted = [...rows].sort((a, b) => accessor(b) - accessor(a)).slice(0, TOP);
+  const max = Math.max(...sorted.map(accessor), 1);
+  return (
+    <div className="list-card" style={{ marginBottom: 20 }}>
+      <div style={{ padding: '14px 18px', borderBottom: '1.5px solid var(--line)', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ display: 'inline-block', width: 10, height: 10, background: accentColor, borderRadius: 2 }} />
+        <span style={{ fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--ink-2)' }}>{title}</span>
+      </div>
+      <table className="list-table">
+        <thead><tr><th>#</th><th>Campaign</th><th>Type</th><th className="bar">Value</th><th className="num">Metric</th></tr></thead>
+        <tbody>
+          {sorted.map((r, i) => (
+            <tr key={r.id}>
+              <td><b>{i + 1}</b></td>
+              <td className="product"><div className="name">{r.name}</div><div className="sku">{fmtDate(r.sendDate)}</div></td>
+              <td><StatusBadge kind="teal" label={r.type} /></td>
+              <td className="bar"><HBar value={accessor(r)} max={max} color={color} label={formatter(accessor(r))} /></td>
+              <td className="num"><b>{formatter(accessor(r))}</b></td>
+            </tr>
+          ))}
+          {sorted.length === 0 && <tr><td colSpan={5} className="empty" style={{ textAlign: 'center', padding: 24 }}>No data</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
-export default function TabCampaigns({ market, period, customRange }: Props) {
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [sortKey, setSortKey] = useState<'revenue' | 'openRate' | 'clickRate' | 'unsubRate' | 'sentAt'>('revenue');
+function BenchmarkRowCard({ r, color }: { r: BenchmarkRow; color: string }) {
+  const sigKind = r.signal === 'SCALE' ? 'green' : r.signal === 'STOP' ? 'red' : r.signal === 'FIX' ? 'gold' : 'gray';
+  const dOR = r.orPct - r.orBaseline;
+  const dCTR = r.ctrPct - r.ctrBaseline;
+  const dRPR = r.rpr - r.rprBaseline;
+  return (
+    <div className="bm-card" key={r.type}>
+      <h4>{r.type} <span style={{ color: 'var(--ink-3)', fontWeight: 500, fontSize: 12, marginLeft: 6 }}>&middot; {r.count} sends</span> <span style={{ float: 'right' }}><StatusBadge kind={sigKind as any} label={r.signal} /></span></h4>
+      <div className="bm-row">
+        <div className="bm-label">OR%</div>
+        <div><div className="bar-track" style={{ height: 6 }}><div className={`bar-fill b-${color}`} style={{ width: Math.min(100, (r.orPct/r.orTarget)*100) + '%' }} /></div></div>
+        <div className="bm-val">{fmtPct(r.orPct)}</div>
+        <div className="bm-bench">b: {fmtPct(r.orBaseline)} &middot; t: {fmtPct(r.orTarget)} &middot; <span style={{ color: dOR >= 0 ? 'var(--green)' : 'var(--red)' }}>{dOR >= 0 ? '+' : ''}{dOR.toFixed(1)}</span></div>
+      </div>
+      <div className="bm-row">
+        <div className="bm-label">CTR%</div>
+        <div><div className="bar-track" style={{ height: 6 }}><div className={`bar-fill b-${color}`} style={{ width: Math.min(100, (r.ctrPct/r.ctrTarget)*100) + '%' }} /></div></div>
+        <div className="bm-val">{fmtPct(r.ctrPct, 2)}</div>
+        <div className="bm-bench">b: {fmtPct(r.ctrBaseline, 2)} &middot; t: {fmtPct(r.ctrTarget, 2)} &middot; <span style={{ color: dCTR >= 0 ? 'var(--green)' : 'var(--red)' }}>{dCTR >= 0 ? '+' : ''}{dCTR.toFixed(2)}</span></div>
+      </div>
+      <div className="bm-row">
+        <div className="bm-label">RPR</div>
+        <div><div className="bar-track" style={{ height: 6 }}><div className={`bar-fill b-${color}`} style={{ width: Math.min(100, (r.rpr/r.rprTarget)*100) + '%' }} /></div></div>
+        <div className="bm-val">{fmtMoneyCents(r.rpr)}</div>
+        <div className="bm-bench">b: {fmtMoneyCents(r.rprBaseline)} &middot; t: {fmtMoneyCents(r.rprTarget)} &middot; <span style={{ color: dRPR >= 0 ? 'var(--green)' : 'var(--red)' }}>{dRPR >= 0 ? '+' : ''}${dRPR.toFixed(2)}</span></div>
+      </div>
+    </div>
+  );
+}
+
+export default function TabCampaigns({ market, period, custom }: { market: Market; period: Period; custom?: CustomRange }) {
+  const [data, setData] = useState<{ rows: CampaignRow[]; series?: any[]; granularity?: string; totals?: any; delta?: any } | null>(null);
+  const [bm, setBm] = useState<{ campaigns: BenchmarkRow[]; flows: BenchmarkRow[] } | null>(null);
+  const [err, setErr] = useState('');
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
+  const [drill, setDrill] = useState<CampaignRow | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    fetch(buildKlaviyoUrl('campaigns', market, period, customRange))
-      .then((r) => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
-      .then((json) => { if (!cancelled) { setData(json); setLoading(false); } })
-      .catch((err) => { if (!cancelled) { setError(err.message); setLoading(false); } });
-    return () => { cancelled = true; };
-  }, [market, period, customRange?.from, customRange?.to]);
+    setData(null); setBm(null); setErr(''); setPage(1);
+    api('campaigns', market, period, custom).then(setData).catch(e => setErr(String(e.message || e)));
+    api('benchmarks', market, period, custom).then(setBm).catch(() => {});
+  }, [market, period, custom?.start, custom?.end]);
 
-  if (loading) return <div className="card p-8 text-center text-sm" style={{ color: '#6b7280' }}>Loading campaigns…</div>;
-  if (error) return <div className="card p-4" style={{ borderColor: '#b3382f', background: '#fff5f5', color: '#b3382f' }}>{error}</div>;
-  if (!data) return null;
+  const rows = useMemo(() => {
+    if (!data) return [];
+    const q = search.toLowerCase();
+    return data.rows.filter(r => !q || r.name.toLowerCase().includes(q) || r.type.toLowerCase().includes(q));
+  }, [data, search]);
 
-  const rows = [...(data.rows || [])].sort((a, b) => {
-    if (sortKey === 'sentAt') return String(b.sentAt).localeCompare(String(a.sentAt));
-    return (b as any)[sortKey] - (a as any)[sortKey];
-  });
-  const t = data.totals;
+  useEffect(() => { setPage(1); }, [search]);
+
+  if (err) return <div className="empty">{err.slice(0, 200)}</div>;
+  if (!data) return <div className="loading">Loading campaigns ({market} / {period})...</div>;
+
+  const maxRev = Math.max(...rows.map(r => r.revenue), 1);
+  const pageRows = rows.slice((page-1)*PER, page*PER);
+
+  const series = (data.series || []) as any[];
+  const revPts = series.map(p => ({ date: p.date, value: p.revenue, inPeriod: true }));
+  const sendPts = series.map(p => ({ date: p.date, value: p.recipients, inPeriod: true }));
+  const orPts = series.map(p => ({ date: p.date, value: p.openRate, inPeriod: true }));
+  const ctrPts = series.map(p => ({ date: p.date, value: p.clickRate, inPeriod: true }));
+  const rprPts = series.map(p => ({ date: p.date, value: p.rpr, inPeriod: true }));
+  const gridCls = 'space-y-4 mt-4';
+
+  const t = data.totals || {};
+  const d = data.delta || {};
+  const convRate = t.recipients ? (t.conversions / t.recipients) * 100 : 0;
+  const ACC = '#E91E78';
+
+  // Volume mÃ­nimo para rankings de rates (>=500 sends) â€” evita campanhas pequenas no top
+  const eligible = data.rows.filter(r => r.recipients >= 500);
 
   return (
-    <div className="space-y-5">
-      <div className="kpi-grid grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2">
-        <Kpi label="REVENUE" value={fmtMoney(t.revenue, market, true)} />
-        <Kpi label="RECIPIENTS" value={fmtNumber(t.recipients, market)} />
-        <Kpi label="OPEN RATE" value={fmtPct(t.openRate, 1)} />
-        <Kpi label="CLICK RATE" value={fmtPct(t.clickRate, 2)} />
-        <Kpi label="UNSUB RATE" value={fmtPct(t.unsubRate, 3)} />
-        <Kpi label="REV / RECIP." value={fmtMoney(t.revenuePerRecipient, market)} />
-        <Kpi label="CAMPAIGNS" value={fmtNumber(rows.length, market)} />
+    <>
+      <SectionHead pill="Campaigns KPIs" pillVariant="pink" title={<><b>Period summary</b> &middot; deltas vs prior period and YoY</>} right={`${data.rows.length} campaigns`} />
+      <div className="kpi-grid kpi-grid-8" style={{ marginBottom: 20 }}>
+        <KpiDelta label="Campaign Revenue" value={(market === 'BR' ? 'R$' : '$') + fmtCompact(t.revenue || 0)} prior={d.revenue?.prior} yoy={d.revenue?.yoy} sub={`${data.rows.length} campaigns · RPR ${market === 'BR' ? 'R$' : '$'}${(t.rpr || 0).toFixed(4)}`} accent={ACC} />
+        <KpiDelta label="Conversions" value={fmtCompact(t.conversions || 0)} prior={d.conversions?.prior} yoy={d.conversions?.yoy} sub={`Conv. rate ${convRate.toFixed(3)}%`} accent={ACC} />
+        <KpiDelta label="Total Clicks" value={fmtCompact(t.clicks || 0)} prior={d.clicks?.prior} yoy={d.clicks?.yoy} sub="unique clicks" accent={ACC} />
+        <KpiDelta label="Open Rate" value={fmtPct(t.openRate || 0)} prior={d.openRate?.prior} yoy={d.openRate?.yoy} sub="all sends Â· deliv-based" accent={ACC} />
+        <KpiDelta label="Click Rate (CTR)" value={fmtPct(t.clickRate || 0, 2)} prior={d.clickRate?.prior} yoy={d.clickRate?.yoy} sub="all sends Â· deliv-based" accent={ACC} />
+        <KpiDelta label="Send Volume" value={fmtCompact(t.recipients || 0)} prior={d.recipients?.prior} yoy={d.recipients?.yoy} sub="total recipients" accent={ACC} />
+        <KpiDelta label="Avg RPR" value={(market === 'BR' ? 'R$' : '$') + (t.rpr || 0).toFixed(4)} prior={d.rpr?.prior} yoy={d.rpr?.yoy} sub="rev per recipient" accent={ACC} />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <DailyBarChart title="Revenue" data={data.daily?.revenue || []} color="#ec4899" unit="currency" market={market} height={180} />
-        <DailyBarChart title="Recipients" data={data.daily?.recipients || []} color="#5d4ec5" unit="number" market={market} height={180} />
-        <DailyBarChart title="Opens" data={data.daily?.opens || []} color="#0ea5e9" unit="number" market={market} height={180} />
-        <DailyBarChart title="Unsubs" data={data.daily?.unsubscribes || []} color="#dc2626" unit="number" market={market} height={180} />
+      {series.length > 0 && <>
+        <SectionHead pill="Daily Trend" pillVariant="pink" title={<><b>Revenue, sends and engagement</b> &middot; {data.granularity === 'week' ? 'weekly' : 'daily'}</>} />
+        <div className={gridCls}>
+          <DailyBarChart title="Daily Campaign Revenue" data={revPts} color="#ec4899" unit="currency" market={market} />
+          <DailyBarChart title="Daily Send Volume" data={sendPts} color="#1e3a8a" unit="number" market={market} />
+          <DailyBarChart title="Open Rate %" data={orPts} color="#0d9488" unit="percent" market={market} />
+          <DailyBarChart title="Click Rate %" data={ctrPts} color="#3b82f6" unit="percent" market={market} />
+          <DailyBarChart title="RPR ($)" data={rprPts} color="#B8861F" unit="currency" market={market} />
+        </div>
+      </>}
+
+      {/* Top Campaigns rankings */}
+      <SectionHead pill="Top Campaigns" pillVariant="gold" title={<><b>Top campaigns by metric</b> &middot; min 500 sends for rate rankings</>} />
+      <TopRankCard title="Top 10 Campaigns by Revenue" rows={data.rows} accessor={r => r.revenue} formatter={fmtMoney} color="pink" accentColor="#E91E78" />
+      <TopRankCard title="Top 10 Campaigns by Click Rate" rows={eligible} accessor={r => r.clickRate} formatter={v => fmtPct(v, 2)} color="blue" accentColor="#3b82f6" />
+      <TopRankCard title="Top 10 Campaigns by Open Rate" rows={eligible} accessor={r => r.openRate} formatter={v => fmtPct(v)} color="teal" accentColor="#0d9488" />
+      <TopRankCard title="Top 10 Campaigns by Bounce Rate" rows={eligible} accessor={r => r.bounceRate} formatter={v => fmtPct(v, 2)} color="red" accentColor="#B82F2F" />
+      <TopRankCard title="Top 10 Campaigns by Unsubscribe Rate" rows={eligible} accessor={r => r.unsubRate} formatter={v => fmtPct(v, 2)} color="orange" accentColor="#E8722A" />
+
+      {/* Benchmark Scorecard by Campaign Type */}
+      <SectionHead pill="Benchmark Scorecard" pillVariant="gold" title={<><b>By Campaign Type</b> &middot; actual vs LarroudÃ© baseline (p25) and target (p75)</>} right={bm ? `${bm.campaigns.length} camp types` : ''} />
+      {!bm && <div className="loading">Loading benchmarks...</div>}
+      {bm && <div className="bm-grid">{bm.campaigns.map(r => <BenchmarkRowCard key={r.type} r={r} color="pink" />)}</div>}
+
+      <SectionHead pill="Campaigns" pillVariant="pink" title={<><b>{data.rows.length} campaigns</b> sent in period &middot; full table</>} right={`${rows.length} after filters`} />
+      <div className="filter-card">
+        <div className="filter-group">
+          <span className="filter-label">Search</span>
+          <input className="search-input" placeholder="name, type (MARKDOWN, VIP, FLASH...)" value={search} onChange={e => setSearch(e.target.value)} />
+        </div>
       </div>
 
-      {/* 5 rankings — Revenue / CTR / OR / Bounce / Unsub */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
-        <Ranking title="Top Revenue" rows={[...rows].filter((r) => r.revenue > 0).slice(0, 10)} key1="revenue" market={market} fmt={(v) => fmtMoney(v, market, true)} />
-        <Ranking title="Top CTR" rows={[...rows].filter((r) => r.delivered > 100).sort((a, b) => b.clickRate - a.clickRate).slice(0, 10)} key1="clickRate" market={market} fmt={(v) => fmtPct(v, 2)} />
-        <Ranking title="Top Open Rate" rows={[...rows].filter((r) => r.delivered > 100).sort((a, b) => b.openRate - a.openRate).slice(0, 10)} key1="openRate" market={market} fmt={(v) => fmtPct(v, 1)} />
-        <Ranking title="Worst Bounce Rate" rows={[...rows].filter((r) => r.recipients > 100 && r.bounceRate > 0).sort((a, b) => b.bounceRate - a.bounceRate).slice(0, 10)} key1="bounceRate" market={market} fmt={(v) => fmtPct(v, 3)} tone="bad" />
-        <Ranking title="Worst Unsub Rate" rows={[...rows].filter((r) => r.delivered > 100 && r.unsubRate > 0).sort((a, b) => b.unsubRate - a.unsubRate).slice(0, 10)} key1="unsubRate" market={market} fmt={(v) => fmtPct(v, 3)} tone="bad" />
-      </div>
-
-      <section className="card overflow-x-auto">
-        <table className="w-full text-[12px]">
-          <thead>
-            <tr className="text-left text-[10px] uppercase font-bold text-steel tracking-wide border-b" style={{ borderColor: 'var(--border)' }}>
-              <th className="px-3 py-2.5">#</th>
-              <th className="px-3 py-2.5">Campaign</th>
-              <th className="px-3 py-2.5">Type</th>
-              <th className="px-3 py-2.5 cursor-pointer" onClick={() => setSortKey('sentAt')}>Sent</th>
-              <th className="px-3 py-2.5 text-right">Recipients</th>
-              <th className="px-3 py-2.5 text-right cursor-pointer" onClick={() => setSortKey('openRate')}>OR</th>
-              <th className="px-3 py-2.5 text-right cursor-pointer" onClick={() => setSortKey('clickRate')}>CTR</th>
-              <th className="px-3 py-2.5 text-right cursor-pointer" onClick={() => setSortKey('unsubRate')}>Unsub</th>
-              <th className="px-3 py-2.5 text-right cursor-pointer" onClick={() => setSortKey('revenue')}>Revenue</th>
-              <th className="px-3 py-2.5 text-right">RPR</th>
-            </tr>
-          </thead>
+      <div className="list-card">
+        <table className="list-table">
+          <thead><tr>
+            <th>Campaign</th>
+            <th>Date</th>
+            <th className="num">Recipients</th>
+            <th className="num">OR%</th>
+            <th className="num">CTR%</th>
+            <th className="num">RPR</th>
+            <th className="num">Revenue</th>
+            <th className="bar">Bar</th>
+            <th>Signal</th>
+          </tr></thead>
           <tbody>
-            {rows.slice(0, 100).map((r, i) => (
-              <tr key={r.id} className="border-t" style={{ borderColor: 'var(--border-soft)' }}>
-                <td className="px-3 py-2 text-[10px]" style={{ color: '#9ca3af' }}>{i + 1}</td>
-                <td className="px-3 py-2 max-w-[280px] truncate" title={r.name}>{r.name}</td>
-                <td className="px-3 py-2 text-[10px] font-semibold" style={{ color: '#6b7280' }}>{r.type}</td>
-                <td className="px-3 py-2 text-[11px]" style={{ color: '#6b7280' }}>{r.sentAt?.slice(0, 10) || '—'}</td>
-                <td className="px-3 py-2 text-right font-num">{fmtNumber(r.recipients, market)}</td>
-                <td className="px-3 py-2 text-right font-num">{fmtPct(r.openRate, 1)}</td>
-                <td className="px-3 py-2 text-right font-num">{fmtPct(r.clickRate, 2)}</td>
-                <td className="px-3 py-2 text-right font-num">{fmtPct(r.unsubRate, 3)}</td>
-                <td className="px-3 py-2 text-right font-num font-semibold">{fmtMoney(r.revenue, market, true)}</td>
-                <td className="px-3 py-2 text-right font-num">{fmtMoney(r.revenuePerRecipient, market)}</td>
-              </tr>
-            ))}
+            {pageRows.map(r => {
+              const bmk = CAMPAIGN_BENCHMARKS[r.type];
+              const sig = signalFor(r.openRate, r.clickRate, r.rpr, bmk);
+              const kind = sig === 'SCALE' ? 'green' : sig === 'STOP' ? 'red' : sig === 'FIX' ? 'gold' : 'gray';
+              return (
+                <tr key={r.id} onClick={() => setDrill(r)}>
+                  <td className="product">
+                    <div className="name">{r.name}</div>
+                    <div className="sku">{r.type} &middot; {r.id}</div>
+                  </td>
+                  <td>{fmtDate(r.sendDate)}</td>
+                  <td className="num">{fmtInt(r.recipients)}</td>
+                  <td className="num">{fmtPct(r.openRate)}</td>
+                  <td className="num">{fmtPct(r.clickRate, 2)}</td>
+                  <td className="num">{fmtMoneyCents(r.rpr, market)}</td>
+                  <td className="num"><b>{fmtMoney(r.revenue, market)}</b></td>
+                  <td className="bar"><HBar value={r.revenue} max={maxRev} color="pink" label={fmtMoney(r.revenue, market)} /></td>
+                  <td><StatusBadge kind={kind as any} label={sig} /></td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
-      </section>
-    </div>
-  );
-}
-
-function Kpi({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="kvkpi">
-      <div className="kvkpi-label">{label}</div>
-      <div className="kvkpi-value">{value}</div>
-    </div>
-  );
-}
-
-function Ranking({ title, rows, key1, market, fmt, tone }: {
-  title: string;
-  rows: any[];
-  key1: string;
-  market: Market;
-  fmt: (v: number) => string;
-  tone?: 'bad';
-}) {
-  if (!rows || rows.length === 0) return null;
-  return (
-    <div className="card p-4">
-      <div className="text-[11px] font-bold uppercase tracking-wider mb-3" style={{ color: tone === 'bad' ? 'var(--kv-negative)' : 'var(--kv-ink-muted)' }}>
-        {title}
+        <Pagination page={page} perPage={PER} total={rows.length} onChange={setPage} />
       </div>
-      <div className="space-y-1.5">
-        {rows.map((r, i) => (
-          <div key={r.id} className="flex items-center gap-2 text-[11px]">
-            <span className="font-bold w-5" style={{ color: 'var(--kv-ink-muted)' }}>#{i + 1}</span>
-            <div className="flex-1 truncate" style={{ color: 'var(--kv-ink-soft)' }} title={r.name}>{r.name}</div>
-            <span className="font-num font-semibold" style={{ color: tone === 'bad' ? 'var(--kv-negative)' : 'var(--kv-ink)' }}>{fmt(r[key1])}</span>
-          </div>
-        ))}
-      </div>
-    </div>
+
+      {drill && <Modal title={drill.name} onClose={() => setDrill(null)}>
+        <div className="kpi-grid kpi-grid-4">
+          <Kpi label="Revenue" value={fmtMoney(drill.revenue, market)} color="pink" />
+          <Kpi label="Recipients" value={fmtInt(drill.recipients)} />
+          <Kpi label="Open Rate" value={fmtPct(drill.openRate)} />
+          <Kpi label="Click Rate" value={fmtPct(drill.clickRate, 2)} />
+          <Kpi label="RPR" value={fmtMoneyCents(drill.rpr, market)} />
+          <Kpi label="Conversions" value={fmtInt(drill.conversions)} />
+          <Kpi label="Bounce%" value={fmtPct(drill.bounceRate, 2)} color={drill.bounceRate > 0.5 ? 'red' : undefined} />
+          <Kpi label="Unsub%" value={fmtPct(drill.unsubRate, 2)} color={drill.unsubRate > 0.5 ? 'red' : undefined} />
+        </div>
+      </Modal>}
+    </>
   );
 }

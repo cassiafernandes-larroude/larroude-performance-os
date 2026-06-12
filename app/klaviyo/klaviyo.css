@@ -1,233 +1,339 @@
-/**
- * Larroude CRM Klaviyo — design system isolado (cream theme #F4ECDF).
- * Replicado do original https://larroude-crm-dashboard.vercel.app
- *
- * Escopo: tudo dentro de <div class="klaviyo-root"> usa este tema.
- * Não afeta o resto do Performance OS.
- */
+/* ===========================================================
+   Larroudé CRM Klaviyo — clone 1:1 do larroude-crm-dashboard
+   TODO o CSS abaixo é escopado em .klaviyo-root para não vazar
+   pro Performance OS shell (sidebar, layout principal etc).
+   =========================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
 .klaviyo-root {
-  --kv-bg: #F4ECDF;
-  --kv-paper: #FFFDF8;
-  --kv-paper-deep: #EEE5D2;
-  --kv-ink: #1A1A1A;
-  --kv-ink-soft: #4A4A4A;
-  --kv-ink-muted: #8A8A8A;
-  --kv-border: #E5DCC9;
-  --kv-border-soft: #EFE7D3;
-  --kv-accent: #ec4899;
-  --kv-accent-soft: #FCE7F0;
-  --kv-positive: #2c7a5b;
-  --kv-positive-soft: #E8F4ED;
-  --kv-warning: #c0822a;
-  --kv-warning-soft: #FFF3D9;
-  --kv-negative: #b3382f;
-  --kv-negative-soft: #FBEBEA;
+  --bg: #F4ECDF;
+  --bg-soft: #F9F2E6;
+  --paper: #FFFFFF;
+  --ink: #1A1A1A;
+  --ink-2: #4A4A4A;
+  --ink-3: #8B8B8B;
+  --ink-4: #B5B5B5;
+  --line: #E0D6C2;
+  --line-card: #2D5447;
+  --pink: #E91E78;   --pink-soft: #FBD9E8;
+  --orange: #E8722A; --orange-soft: #FAD9C4;
+  --purple: #5B3FA0; --purple-soft: #E0D5F5;
+  --teal: #1F6F6B;   --teal-soft: #C8E0DE;
+  --blue: #2563B8;   --blue-soft: #CDDFF5;
+  --gold: #B8861F;   --gold-soft: #F3E4BE;
+  --green: #267838;  --green-soft: #CFE4D2;
+  --red: #B82F2F;    --red-soft: #F0D0D0;
 
-  background: var(--kv-bg);
-  color: var(--kv-ink);
+  background: var(--bg);
+  color: var(--ink);
+  font-weight: 500;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  letter-spacing: -0.005em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   min-height: 100vh;
-  font-family: 'Inter', system-ui, sans-serif;
+}
+.klaviyo-root *, .klaviyo-root *::before, .klaviyo-root *::after { box-sizing: border-box; }
+.klaviyo-root button { font-family: inherit; cursor: pointer; border: none; background: none; }
+.klaviyo-root input { font-family: inherit; }
+.klaviyo-root table { border-collapse: collapse; }
+.klaviyo-root a { color: inherit; text-decoration: none; }
+
+/* ---- dashboard.css (escopado) ---- */
+
+.klaviyo-root .app {
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: 36px 44px 80px;
 }
 
-.klaviyo-root h1,
-.klaviyo-root h2,
-.klaviyo-root h3,
-.klaviyo-root h4 {
-  color: var(--kv-ink);
-  font-family: 'Inter', system-ui, sans-serif;
-  letter-spacing: -0.01em;
+.klaviyo-root header { margin-bottom: 28px; }
+.klaviyo-root header h1 {
+  font-size: 46px; font-weight: 800;
+  letter-spacing: -0.03em; line-height: 1.05; color: var(--ink);
+}
+.klaviyo-root header h1 .sep { color: var(--ink-4); font-weight: 400; margin: 0 12px; }
+.klaviyo-root .subtitle { margin-top: 10px; font-size: 13px; color: var(--ink-3); font-weight: 500; }
+.klaviyo-root .subtitle b { color: var(--ink-2); font-weight: 700; }
+
+.klaviyo-root .market-row { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+.klaviyo-root .market-pill {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 9px 20px; border-radius: 100px;
+  background: var(--paper); border: 1.5px solid var(--line);
+  font-size: 14px; font-weight: 700; color: var(--ink-2);
+  transition: all .12s;
+}
+.klaviyo-root .market-pill .flag {
+  display: inline-block; width: 22px; height: 16px;
+  border-radius: 3px; background: var(--ink-4);
+  font-size: 10px; font-weight: 800; text-align: center;
+  line-height: 16px; color: white;
+}
+.klaviyo-root .market-pill.active { background: var(--pink); border-color: var(--pink); color: var(--paper); }
+.klaviyo-root .market-pill.active .flag { background: rgba(255,255,255,.3); color: white; }
+.klaviyo-root .market-pill:hover:not(.active) { border-color: var(--ink-2); }
+
+.klaviyo-root .tab-nav {
+  display: flex; gap: 4px; margin-top: 22px;
+  border-bottom: 1.5px solid var(--line); overflow-x: auto;
+}
+.klaviyo-root .tab-btn {
+  padding: 12px 16px; font-size: 12px; font-weight: 800;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--ink-3); border-bottom: 2px solid transparent;
+  white-space: nowrap; transition: all .12s;
+}
+.klaviyo-root .tab-btn:hover { color: var(--ink-2); }
+.klaviyo-root .tab-btn.active { color: var(--ink); border-bottom-color: var(--ink); }
+
+.klaviyo-root .filter-card {
+  background: var(--paper); border: 1.5px solid var(--line);
+  border-radius: 16px; padding: 18px 22px; margin: 24px 0;
+  display: flex; gap: 24px; align-items: center; flex-wrap: wrap;
+}
+.klaviyo-root .filter-group { display: flex; align-items: center; gap: 10px; }
+.klaviyo-root .filter-label {
+  font-size: 11px; font-weight: 800;
+  letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3);
+}
+.klaviyo-root .btn-row { display: flex; gap: 4px; }
+.klaviyo-root .btn-pill {
+  padding: 7px 14px; border-radius: 100px; background: transparent;
+  border: 1.5px solid var(--line); font-size: 13px; font-weight: 700;
+  color: var(--ink-2); transition: all .12s;
+}
+.klaviyo-root .btn-pill:hover { border-color: var(--ink-3); }
+.klaviyo-root .btn-pill.active { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.klaviyo-root .search-input {
+  padding: 8px 14px; border-radius: 100px;
+  background: var(--bg-soft); border: 1.5px solid var(--line);
+  font-size: 13px; color: var(--ink); min-width: 240px; outline: none;
+}
+.klaviyo-root .search-input:focus { border-color: var(--ink-2); }
+
+.klaviyo-root .section-head {
+  display: flex; align-items: baseline; gap: 14px;
+  margin: 36px 0 16px; flex-wrap: wrap;
+}
+.klaviyo-root .section-pill {
+  padding: 5px 11px; border-radius: 6px;
+  font-size: 11px; font-weight: 800;
+  letter-spacing: 0.1em; text-transform: uppercase;
+}
+.klaviyo-root .sp-gold { background: var(--gold-soft); color: var(--gold); }
+.klaviyo-root .sp-teal { background: var(--teal-soft); color: var(--teal); }
+.klaviyo-root .sp-blue { background: var(--blue-soft); color: var(--blue); }
+.klaviyo-root .sp-pink { background: var(--pink-soft); color: var(--pink); }
+.klaviyo-root .sp-orange { background: var(--orange-soft); color: var(--orange); }
+.klaviyo-root .sp-purple { background: var(--purple-soft); color: var(--purple); }
+.klaviyo-root .sp-green { background: var(--green-soft); color: var(--green); }
+.klaviyo-root .sp-red { background: var(--red-soft); color: var(--red); }
+.klaviyo-root .section-head .title { font-size: 14px; font-weight: 600; color: var(--ink-2); letter-spacing: 0.01em; }
+.klaviyo-root .section-head .title b { color: var(--ink); font-weight: 800; }
+.klaviyo-root .section-head .right-info {
+  margin-left: auto; font-size: 11px; font-weight: 700;
+  color: var(--ink-3); letter-spacing: 0.04em; text-transform: uppercase;
 }
 
-/* Cards no cream theme */
-.klaviyo-root .card {
-  background: var(--kv-paper);
-  border: 1px solid var(--kv-border);
-  border-radius: 14px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+.klaviyo-root .kpi-grid { display: grid; gap: 10px; grid-template-columns: repeat(4, 1fr); }
+.klaviyo-root .kpi-grid-8 { grid-template-columns: repeat(8, 1fr); }
+.klaviyo-root .kpi-grid-6 { grid-template-columns: repeat(6, 1fr); }
+.klaviyo-root .kpi-grid-3 { grid-template-columns: repeat(3, 1fr); }
+.klaviyo-root .kpi-grid-2 { grid-template-columns: repeat(2, 1fr); }
+.klaviyo-root .kpi {
+  background: var(--paper); border: 1.5px solid var(--line);
+  border-radius: 16px; padding: 16px 18px;
+  transition: transform .15s, border-color .15s;
+}
+.klaviyo-root .kpi.clickable:hover { transform: translateY(-2px); border-color: var(--line-card); }
+.klaviyo-root .kpi .label {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--ink-2); margin-bottom: 8px;
+}
+.klaviyo-root .kpi .value { font-size: 26px; font-weight: 800; letter-spacing: -0.03em; color: var(--ink); line-height: 1.0; }
+.klaviyo-root .kpi .sub { margin-top: 6px; font-size: 11.5px; color: var(--ink-3); font-weight: 500; }
+.klaviyo-root .kpi .sub b { color: var(--ink-2); font-weight: 700; }
+
+.klaviyo-root .list-card {
+  background: var(--paper); border: 1.5px solid var(--line);
+  border-radius: 18px; overflow: hidden; margin-bottom: 24px;
+}
+.klaviyo-root .list-table { width: 100%; border-collapse: collapse; }
+.klaviyo-root .list-table thead { background: var(--bg-soft); position: sticky; top: 0; z-index: 2; }
+.klaviyo-root .list-table th {
+  padding: 12px 16px; text-align: left;
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--ink-3);
+  border-bottom: 1.5px solid var(--line);
+}
+.klaviyo-root .list-table th.num, .klaviyo-root .list-table td.num { text-align: right; }
+.klaviyo-root .list-table th.bar, .klaviyo-root .list-table td.bar { width: 220px; }
+.klaviyo-root .list-table td { padding: 12px 16px; font-size: 13px; color: var(--ink); border-bottom: 1px solid var(--line); }
+.klaviyo-root .list-table tr:hover { background: var(--bg-soft); cursor: pointer; }
+.klaviyo-root .list-table tr:hover .product .name { text-decoration: underline; }
+.klaviyo-root .list-table td.product .name { font-size: 13px; font-weight: 700; color: var(--ink); letter-spacing: -0.01em; }
+.klaviyo-root .list-table td.product .sku { margin-top: 2px; font-size: 11px; color: var(--ink-3); font-weight: 500; }
+.klaviyo-root .list-table td.num b { font-weight: 800; }
+
+.klaviyo-root .bar-wrap { display: flex; align-items: center; gap: 10px; }
+.klaviyo-root .bar-track { flex: 1; height: 6px; background: var(--bg-soft); border-radius: 100px; overflow: hidden; }
+.klaviyo-root .bar-fill { height: 100%; border-radius: 100px; }
+.klaviyo-root .b-teal { background: var(--teal); }
+.klaviyo-root .b-pink { background: var(--pink); }
+.klaviyo-root .b-red { background: var(--red); }
+.klaviyo-root .b-orange { background: var(--orange); }
+.klaviyo-root .b-gold { background: var(--gold); }
+.klaviyo-root .b-green { background: var(--green); }
+.klaviyo-root .b-purple { background: var(--purple); }
+.klaviyo-root .b-blue { background: var(--blue); }
+.klaviyo-root .bar-num { min-width: 56px; text-align: right; font-size: 11.5px; font-weight: 700; color: var(--ink-2); }
+
+.klaviyo-root .status-badge {
+  display: inline-block; padding: 4px 10px; border-radius: 100px;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+}
+.klaviyo-root .st-red { background: var(--red-soft); color: var(--red); }
+.klaviyo-root .st-gold { background: var(--gold-soft); color: var(--gold); }
+.klaviyo-root .st-green { background: var(--green-soft); color: var(--green); }
+.klaviyo-root .st-blue { background: var(--blue-soft); color: var(--blue); }
+.klaviyo-root .st-gray { background: var(--bg-soft); color: var(--ink-3); }
+.klaviyo-root .st-pink { background: var(--pink-soft); color: var(--pink); }
+.klaviyo-root .st-teal { background: var(--teal-soft); color: var(--teal); }
+
+.klaviyo-root .vbar-chart {
+  display: flex; align-items: stretch; gap: 3px; height: 160px; padding: 18px 0 4px;
+  background: var(--paper); border: 1.5px solid var(--line); border-radius: 16px;
+  position: relative; margin-bottom: 8px;
+}
+.klaviyo-root .vbar-chart .col { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: stretch; height: 100%; position: relative; min-width: 6px; }
+.klaviyo-root .vbar-chart .col .bar { min-height: 4px; border-radius: 3px 3px 0 0; background: var(--teal); transition: filter .15s; }
+.klaviyo-root .vbar-chart .col.below .bar { background: var(--red); }
+.klaviyo-root .vbar-chart .col:hover .bar { filter: brightness(1.15); }
+.klaviyo-root .vbar-chart .col .top-num { font-size: 10px; font-weight: 700; color: var(--ink-2); text-align: center; margin-bottom: 4px; }
+.klaviyo-root .vbar-chart .avg-line { position: absolute; left: 12px; right: 12px; border-top: 1.5px dashed var(--ink-4); pointer-events: none; }
+.klaviyo-root .vbar-x-axis {
+  display: flex; justify-content: space-between; padding: 0 2px;
+  font-size: 10px; color: var(--ink-3); font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 16px;
 }
 
-/* KPI card pattern do original — border-top colorida */
-.klaviyo-root .kvkpi {
-  background: var(--kv-paper);
-  border: 1px solid var(--kv-border);
-  border-top: 3px solid var(--kv-accent);
-  border-radius: 12px;
-  padding: 14px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-height: 88px;
+.klaviyo-root .modal-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 1000;
+  display: flex; align-items: center; justify-content: center; padding: 20px;
 }
-.klaviyo-root .kvkpi-label {
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--kv-ink-muted);
+.klaviyo-root .modal {
+  background: var(--paper); border-radius: 18px; padding: 28px;
+  max-width: 1100px; width: 100%; max-height: 88vh; overflow-y: auto;
+  border: 1.5px solid var(--line-card);
 }
-.klaviyo-root .kvkpi-value {
-  font-size: clamp(20px, 1.8vw, 26px);
-  font-weight: 700;
-  color: var(--kv-ink);
-  font-variant-numeric: tabular-nums;
-  line-height: 1.2;
+.klaviyo-root .modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1.5px solid var(--line);
 }
-.klaviyo-root .kvkpi-hint {
-  font-size: 10px;
-  color: var(--kv-ink-muted);
-  line-height: 1.3;
-}
-.klaviyo-root .kvkpi.tone-good { border-top-color: var(--kv-positive); }
-.klaviyo-root .kvkpi.tone-warn { border-top-color: var(--kv-warning); }
-.klaviyo-root .kvkpi.tone-bad  { border-top-color: var(--kv-negative); }
-.klaviyo-root .kvkpi.tone-info { border-top-color: var(--kv-accent); }
+.klaviyo-root .modal-title { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }
+.klaviyo-root .modal-close { font-size: 22px; width: 36px; height: 36px; border-radius: 100px; background: var(--bg-soft); color: var(--ink-2); }
+.klaviyo-root .modal-close:hover { background: var(--line); }
 
-/* Market pills (pink) */
-.klaviyo-root .kv-market-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border-radius: 999px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s;
-  user-select: none;
-  border: 1px solid var(--kv-border);
-  background: var(--kv-paper);
-  color: var(--kv-ink);
+.klaviyo-root .pagination {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 20px; border-top: 1.5px solid var(--line);
+  background: var(--bg-soft); font-size: 12px;
 }
-.klaviyo-root .kv-market-pill.active {
-  background: var(--kv-accent);
-  border-color: var(--kv-accent);
-  color: #fff;
-}
-.klaviyo-root .kv-market-pill:hover:not(.active) {
-  background: var(--kv-paper-deep);
+.klaviyo-root .pagination button { padding: 8px 14px; border-radius: 100px; font-size: 12px; font-weight: 700; color: var(--ink-2); }
+.klaviyo-root .pagination button:hover { color: var(--ink); }
+.klaviyo-root .pagination button:disabled { color: var(--ink-4); cursor: not-allowed; }
+.klaviyo-root .pg-info b { color: var(--ink); font-weight: 800; }
+
+.klaviyo-root .insight-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 16px; }
+.klaviyo-root .insight-card { background: var(--paper); border: 1.5px solid var(--line); border-radius: 16px; padding: 20px; }
+.klaviyo-root .insight-card.green { border-color: var(--green); background: linear-gradient(180deg, var(--paper), var(--green-soft)); }
+.klaviyo-root .insight-card.red { border-color: var(--red); background: linear-gradient(180deg, var(--paper), var(--red-soft)); }
+.klaviyo-root .insight-card.blue { border-color: var(--blue); background: linear-gradient(180deg, var(--paper), var(--blue-soft)); }
+.klaviyo-root .insight-card h3 { font-size: 14px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 12px; }
+.klaviyo-root .insight-card.green h3 { color: var(--green); }
+.klaviyo-root .insight-card.red h3 { color: var(--red); }
+.klaviyo-root .insight-card.blue h3 { color: var(--blue); }
+.klaviyo-root .insight-card ul { list-style: none; padding: 0; margin: 0; }
+.klaviyo-root .insight-card li { padding: 8px 0; font-size: 13px; color: var(--ink-2); border-bottom: 1px dashed var(--line); }
+.klaviyo-root .insight-card li:last-child { border-bottom: none; }
+
+.klaviyo-root .bm-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+.klaviyo-root .bm-card { background: var(--paper); border: 1.5px solid var(--line); border-radius: 16px; padding: 20px; }
+.klaviyo-root .bm-card h4 { font-size: 14px; font-weight: 800; letter-spacing: -0.01em; margin-bottom: 12px; }
+.klaviyo-root .bm-row { display: grid; grid-template-columns: 60px 1fr 80px 80px; gap: 8px; padding: 8px 0; align-items: center; border-top: 1px solid var(--line); font-size: 12px; }
+.klaviyo-root .bm-row .bm-label { font-weight: 800; color: var(--ink-3); letter-spacing: 0.06em; text-transform: uppercase; font-size: 10px; }
+.klaviyo-root .bm-row .bm-val { font-weight: 800; color: var(--ink); }
+.klaviyo-root .bm-row .bm-bench { font-weight: 600; color: var(--ink-3); font-size: 11px; }
+
+.klaviyo-root .foot {
+  margin-top: 60px; padding: 22px 0;
+  border-top: 1.5px solid var(--line); font-size: 11px;
+  color: var(--ink-3); font-weight: 500; text-align: center; letter-spacing: 0.04em;
 }
 
-/* Tabs (Overview/Campaigns/etc) */
-.klaviyo-root .kv-tabs {
-  display: flex;
-  gap: 4px;
-  border-bottom: 1px solid var(--kv-border);
-  margin-bottom: 24px;
-}
-.klaviyo-root .kv-tab {
-  padding: 12px 20px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--kv-ink-muted);
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  transition: all 0.15s;
-  background: transparent;
-  border: none;
-  border-radius: 0;
-}
-.klaviyo-root .kv-tab:hover {
-  color: var(--kv-ink);
-}
-.klaviyo-root .kv-tab.active {
-  color: var(--kv-ink);
-  border-bottom-color: var(--kv-accent);
-}
+.klaviyo-root .loading { text-align: center; padding: 60px 20px; font-size: 14px; color: var(--ink-3); }
+.klaviyo-root .empty { text-align: center; padding: 30px; color: var(--ink-3); font-size: 13px; }
 
-/* Sub-tabs (categoria de flow) */
-.klaviyo-root .kv-subtab {
-  padding: 6px 14px;
-  font-size: 12px;
-  font-weight: 600;
-  border-radius: 999px;
-  cursor: pointer;
-  transition: all 0.15s;
-  background: var(--kv-paper);
-  border: 1px solid var(--kv-border);
-  color: var(--kv-ink);
-}
-.klaviyo-root .kv-subtab.active {
-  background: var(--kv-ink);
-  color: #fff;
-  border-color: var(--kv-ink);
-}
+.klaviyo-root .chart-row { display: grid; gap: 14px; margin: 14px 0; }
+.klaviyo-root .chart-row-1 { grid-template-columns: 1fr; }
+.klaviyo-root .chart-row-2 { grid-template-columns: repeat(2, 1fr); }
+.klaviyo-root .chart-row-3 { grid-template-columns: repeat(3, 1fr); }
 
-/* Period filter container */
-.klaviyo-root .kv-period-bar {
-  background: var(--kv-paper);
-  border: 1px solid var(--kv-border);
-  border-radius: 16px;
-  padding: 12px 20px;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
+/* ---- flow-subtabs.css (escopado) ---- */
+.klaviyo-root .flow-subtabs {
+  display: flex; gap: 4px; margin: 16px 0 24px;
+  border-bottom: 1.5px solid var(--line);
+  overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: thin;
 }
-.klaviyo-root .kv-period-pill {
-  padding: 6px 16px;
-  font-size: 12px;
-  font-weight: 600;
-  border-radius: 999px;
-  background: var(--kv-paper-deep);
-  color: var(--kv-ink);
-  border: none;
-  cursor: pointer;
-  transition: all 0.15s;
+.klaviyo-root .flow-subtab {
+  position: relative; padding: 12px 18px; font-size: 11.5px; font-weight: 800;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3);
+  border: none; background: transparent; cursor: pointer; white-space: nowrap;
+  transition: color 0.15s; display: inline-flex; align-items: center; gap: 8px;
 }
-.klaviyo-root .kv-period-pill.active {
-  background: var(--kv-ink);
-  color: #fff;
+.klaviyo-root .flow-subtab:hover { color: var(--ink-2); }
+.klaviyo-root .flow-subtab.active { color: var(--pink); background: var(--pink-soft); border-radius: 8px 8px 0 0; }
+.klaviyo-root .flow-subtab.active::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1.5px; height: 2px; background: var(--pink); }
+.klaviyo-root .flow-subtab .badge {
+  display: inline-block; padding: 2px 8px; border-radius: 100px;
+  background: var(--bg-soft); font-size: 10px; font-weight: 700;
+  color: var(--ink-2); letter-spacing: 0;
 }
-.klaviyo-root .kv-period-pill:hover:not(.active) {
-  background: var(--kv-border);
-}
+.klaviyo-root .flow-subtab.active .badge { background: var(--pink); color: white; }
 
-/* Section markers */
-.klaviyo-root .kv-section-label {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--kv-ink-muted);
-  margin-bottom: 12px;
+/* ---- responsivo (escopado) ---- */
+@media (max-width: 1400px) {
+  .klaviyo-root .kpi-grid-8 { grid-template-columns: repeat(4, 1fr); }
 }
-
-/* Table */
-.klaviyo-root table {
-  background: var(--kv-paper);
-  width: 100%;
+@media (max-width: 1100px) {
+  .klaviyo-root .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .klaviyo-root .insight-grid { grid-template-columns: 1fr; }
+  .klaviyo-root .bm-grid { grid-template-columns: 1fr; }
+  .klaviyo-root .chart-row-3 { grid-template-columns: repeat(2, 1fr); }
 }
-.klaviyo-root thead tr {
-  background: var(--kv-paper-deep);
+@media (max-width: 820px) {
+  .klaviyo-root .kpi-grid-8 { grid-template-columns: repeat(3, 1fr); }
+  .klaviyo-root .chart-row-2, .klaviyo-root .chart-row-3 { grid-template-columns: 1fr; }
 }
-.klaviyo-root tbody tr:hover {
-  background: var(--kv-paper-deep);
+@media (max-width: 720px) {
+  .klaviyo-root .app { padding: 24px 18px 60px; }
+  .klaviyo-root header h1 { font-size: 28px; }
+  .klaviyo-root .kpi-grid, .klaviyo-root .kpi-grid-8 { grid-template-columns: repeat(2, 1fr); }
+  .klaviyo-root .filter-card { flex-direction: column; align-items: stretch; }
+  .klaviyo-root .flow-subtab { padding: 10px 12px; font-size: 10.5px; }
+  .klaviyo-root .flow-subtab .badge { padding: 2px 6px; font-size: 9px; }
 }
-
-/* Inputs */
-.klaviyo-root input[type='date'],
-.klaviyo-root select {
-  background: var(--kv-paper);
-  border: 1px solid var(--kv-border);
-  color: var(--kv-ink);
+@media (max-width: 460px) {
+  .klaviyo-root .kpi-grid, .klaviyo-root .kpi-grid-8 { grid-template-columns: 1fr; }
+  .klaviyo-root header h1 { font-size: 24px; }
+  .klaviyo-root .market-row { overflow-x: auto; flex-wrap: nowrap; }
+  .klaviyo-root .tab-nav { overflow-x: auto; }
 }
-
-/* Insight cards */
-.klaviyo-root .kv-insight {
-  padding: 16px 18px;
-  border-radius: 12px;
-  border: 1px solid;
-}
-.klaviyo-root .kv-insight.green {
-  background: var(--kv-positive-soft);
-  border-color: var(--kv-positive);
-}
-.klaviyo-root .kv-insight.red {
-  background: var(--kv-negative-soft);
-  border-color: var(--kv-negative);
-}
-.klaviyo-root .kv-insight.next {
-  background: var(--kv-warning-soft);
-  border-color: var(--kv-warning);
+@media (max-width: 900px) {
+  .klaviyo-root .list-card { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .klaviyo-root .list-table { min-width: 720px; }
+  .klaviyo-root .tab-nav { gap: 2px; padding-bottom: 2px; }
+  .klaviyo-root .tab-btn { padding: 10px 12px; font-size: 11px; }
 }

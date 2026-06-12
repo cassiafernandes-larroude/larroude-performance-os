@@ -1,61 +1,54 @@
-'use client';
+﻿'use client';
+import React, { useEffect, useState } from 'react';
+import { api } from './fetcher';
+import { Kpi, SectionHead, HBar, fmtMoney, fmtMoneyCents, fmtInt, fmtPct } from './ui';
+import type { Market, Period, CustomRange, SegmentRow } from '@/types/klaviyo/models';
 
-import { useEffect, useState } from 'react';
-import type { Market, Period } from '@/lib/klaviyo/types';
-import { fmtNumber } from './fetcher';
-
-interface Props {
-  market: Market;
-  period?: Period;
-  customRange?: { from: string; to: string };
-}
-
-export default function TabSegments({ market }: Props) {
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
+export default function TabSegments({ market, period, custom }: { market: Market; period: Period; custom?: CustomRange }) {
+  const [data, setData] = useState<{ rows: SegmentRow[]; totalSegments: number; totalLists?: number } | null>(null);
+  const [err, setErr] = useState('');
   useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    fetch(`/api/klaviyo/segments/${market}`)
-      .then((r) => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
-      .then((json) => { if (!cancelled) { setData(json); setLoading(false); } })
-      .catch((err) => { if (!cancelled) { setError(err.message); setLoading(false); } });
-    return () => { cancelled = true; };
-  }, [market]);
+    setData(null); setErr('');
+    api('segments', market, period, custom).then(setData).catch(e => setErr(String(e.message || e)));
+  }, [market, period, custom?.start, custom?.end]);
 
-  if (loading) return <div className="card p-8 text-center text-sm" style={{ color: 'var(--kv-ink-muted)' }}>Loading segments…</div>;
-  if (error) return <div className="card p-4" style={{ borderColor: 'var(--kv-negative)', background: 'var(--kv-negative-soft)', color: 'var(--kv-negative)' }}><strong>Error:</strong> {error}</div>;
-  if (!data) return null;
+  if (err) return <div className="empty">{err.slice(0, 200)}</div>;
+  if (!data) return <div className="loading">Loading segments...</div>;
 
-  const rows = data.rows || [];
+  const maxRev = Math.max(...data.rows.map(r => r.revenue), 1);
+
   return (
-    <section className="card overflow-x-auto">
-      <div className="px-5 pt-5 text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--kv-ink-muted)' }}>
-        All Segments ({rows.length}) — {market}
-      </div>
-      <table className="w-full text-[12px] mt-3">
-        <thead>
-          <tr className="text-left text-[10px] uppercase font-bold tracking-wide border-b" style={{ borderColor: 'var(--kv-border)', color: 'var(--kv-ink-muted)' }}>
-            <th className="px-3 py-2.5">#</th>
-            <th className="px-3 py-2.5">Segment</th>
-            <th className="px-3 py-2.5 text-right">Profiles</th>
-            <th className="px-3 py-2.5">Created</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r: any, i: number) => (
-            <tr key={r.id} className="border-t" style={{ borderColor: 'var(--kv-border-soft)' }}>
-              <td className="px-3 py-2 text-[10px]" style={{ color: 'var(--kv-ink-muted)' }}>{i + 1}</td>
-              <td className="px-3 py-2">{r.name}</td>
-              <td className="px-3 py-2 text-right font-num font-semibold">{fmtNumber(r.profileCount, market)}</td>
-              <td className="px-3 py-2 text-[11px]" style={{ color: 'var(--kv-ink-muted)' }}>{r.created?.slice(0, 10) || '—'}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </section>
+    <>
+      <SectionHead pill="Segments" pillVariant="purple" title={<><b>All segments by revenue</b> &middot; aggregated by campaigns including each segment</>} right={`${data.rows.length} segments with revenue · ${data.totalSegments} total${data.totalLists ? ` · ${data.totalLists} lists` : ''}`} />
+
+      {data.rows.length === 0 && <div className="empty">No segment with attributed revenue in this period. Check that campaigns have audiences configured.</div>}
+
+      {data.rows.length > 0 && <div className="list-card">
+        <table className="list-table">
+          <thead><tr>
+            <th>Segment</th>
+            <th className="num">Recipients</th>
+            <th className="num">OR%</th>
+            <th className="num">CTR%</th>
+            <th className="num">RPR</th>
+            <th className="num">Revenue</th>
+            <th className="bar">Bar</th>
+          </tr></thead>
+          <tbody>
+            {data.rows.map(r => (
+              <tr key={r.id}>
+                <td className="product"><div className="name">{r.name}</div><div className="sku">{r.id}</div></td>
+                <td className="num">{fmtInt(r.recipients)}</td>
+                <td className="num">{fmtPct(r.openRate)}</td>
+                <td className="num">{fmtPct(r.clickRate, 2)}</td>
+                <td className="num">{fmtMoneyCents(r.rpr, market)}</td>
+                <td className="num"><b>{fmtMoney(r.revenue, market)}</b></td>
+                <td className="bar"><HBar value={r.revenue} max={maxRev} color="purple" label={fmtMoney(r.revenue, market)} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>}
+    </>
   );
 }

@@ -1,33 +1,12 @@
-import type { Market, Period } from '@/lib/klaviyo/types';
+﻿import type { Market, Period, CustomRange } from '@/types/klaviyo/models';
 
-export function buildKlaviyoUrl(
-  endpoint: string,
-  market: Market,
-  period: Period,
-  customRange?: { from: string; to: string },
-): string {
-  const params = new URLSearchParams();
-  params.set('period', period);
-  if (period === 'custom' && customRange) {
-    params.set('from', customRange.from);
-    params.set('to', customRange.to);
+export async function api<T = any>(path: string, market: Market, period: Period, custom?: CustomRange): Promise<T> {
+  const qs = new URLSearchParams({ market, period });
+  if (period === 'CUSTOM' && custom?.start && custom?.end) {
+    qs.set('start', custom.start);
+    qs.set('end', custom.end);
   }
-  return `/api/klaviyo/${endpoint}/${market}?${params.toString()}`;
-}
-
-export function fmtMoney(value: number, market: Market, compact = false): string {
-  const symbol = market === 'US' ? '$' : 'R$';
-  if (compact) {
-    if (Math.abs(value) >= 1_000_000) return `${symbol}${(value / 1_000_000).toFixed(2)}M`;
-    if (Math.abs(value) >= 1_000) return `${symbol}${Math.round(value / 1_000)}K`;
-  }
-  return `${symbol}${Math.round(value).toLocaleString(market === 'US' ? 'en-US' : 'pt-BR')}`;
-}
-
-export function fmtPct(v: number, digits = 2): string {
-  return `${(v * 100).toFixed(digits)}%`;
-}
-
-export function fmtNumber(n: number, market: Market = 'US'): string {
-  return Math.round(n).toLocaleString(market === 'US' ? 'en-US' : 'pt-BR');
+  const res = await fetch(`/api/klaviyo/${path}?${qs.toString()}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
 }
