@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import type { Market, Period } from '@/lib/klaviyo/types';
 import { buildKlaviyoUrl, fmtMoney, fmtPct, fmtNumber } from './fetcher';
+import DailyBarChart from './DailyBarChart';
 
 interface Props {
   market: Market;
@@ -12,6 +13,8 @@ interface Props {
 
 export default function TabOverview({ market, period, customRange }: Props) {
   const [data, setData] = useState<any>(null);
+  const [shopifyAttr, setShopifyAttr] = useState<any>(null);
+  const [insights, setInsights] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -19,11 +22,23 @@ export default function TabOverview({ market, period, customRange }: Props) {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    const url = buildKlaviyoUrl('overview', market, period, customRange);
-    fetch(url)
-      .then((r) => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
-      .then((json) => { if (!cancelled) { setData(json); setLoading(false); } })
-      .catch((err) => { if (!cancelled) { setError(err.message); setLoading(false); } });
+    const overview = fetch(buildKlaviyoUrl('overview', market, period, customRange))
+      .then((r) => r.ok ? r.json() : Promise.reject(new Error(`overview HTTP ${r.status}`)));
+    const attr = fetch(buildKlaviyoUrl('shopify-attribution', market, period, customRange))
+      .then((r) => r.ok ? r.json() : null)
+      .catch(() => null);
+    const ins = fetch(buildKlaviyoUrl('insights', market, period, customRange))
+      .then((r) => r.ok ? r.json() : null)
+      .catch(() => null);
+    Promise.all([overview, attr, ins]).then(([o, a, i]) => {
+      if (cancelled) return;
+      setData(o);
+      setShopifyAttr(a);
+      setInsights(i);
+      setLoading(false);
+    }).catch((err) => {
+      if (!cancelled) { setError(err.message); setLoading(false); }
+    });
     return () => { cancelled = true; };
   }, [market, period, customRange?.from, customRange?.to]);
 
@@ -33,6 +48,9 @@ export default function TabOverview({ market, period, customRange }: Props) {
 
   const k = data.kpis;
   const lh = data.listHealth;
+  const daily = data.daily || {};
+  const dow = data.dayOfWeek || [];
+  const flags = insights?.flags || [];
 
   return (
     <div className="space-y-5">
@@ -48,6 +66,26 @@ export default function TabOverview({ market, period, customRange }: Props) {
         <Kpi label="ORDERS" value={fmtNumber(k.totalOrders, market)} hint="attributed" />
       </div>
 
+      {/* 11 Daily Charts */}
+      <div className="section-marker">
+        <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--ink-muted)' }}>
+          DAILY EVOLUTION ({data.period.start} → {data.period.end})
+        </span>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <DailyBarChart title="Total Revenue / day" data={daily.revenue || []} color="#10b981" unit="currency" market={market} height={180} />
+        <DailyBarChart title="Recipients / day" data={daily.recipients || []} color="#5d4ec5" unit="number" market={market} height={180} />
+        <DailyBarChart title="Opens / day" data={daily.opens || []} color="#0ea5e9" unit="number" market={market} height={180} />
+        <DailyBarChart title="Clicks / day" data={daily.clicks || []} color="#d97757" unit="number" market={market} height={180} />
+        <DailyBarChart title="Unsubscribes / day" data={daily.unsubscribes || []} color="#dc2626" unit="number" market={market} height={180} />
+        <DailyBarChart title="Bounces / day" data={daily.bounced || []} color="#a16207" unit="number" market={market} height={180} />
+        <DailyBarChart title="Campaigns Revenue / day" data={data.dailyCampaigns?.revenue || []} color="#ec4899" unit="currency" market={market} height={180} />
+        <DailyBarChart title="Flows Revenue / day" data={data.dailyFlows?.revenue || []} color="#2c7a5b" unit="currency" market={market} height={180} />
+        <DailyBarChart title="Campaigns Sends / day" data={data.dailyCampaigns?.recipients || []} color="#f59e0b" unit="number" market={market} height={180} />
+        <DailyBarChart title="Flows Sends / day" data={data.dailyFlows?.recipients || []} color="#06b6d4" unit="number" market={market} height={180} />
+        <DailyBarChart title="Campaigns Unsubs / day" data={data.dailyCampaigns?.unsubscribes || []} color="#be123c" unit="number" market={market} height={180} />
+      </div>
+
       {/* List Health */}
       <section className="card p-5">
         <div className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: '#6b7280' }}>
@@ -60,6 +98,89 @@ export default function TabOverview({ market, period, customRange }: Props) {
           <Mini label="Spam complaints" value={fmtNumber(lh.spam, market)} tone="bad" />
         </div>
       </section>
+
+      {/* Day-of-Week */}
+      {dow.length > 0 && (
+        <section className="card p-5">
+          <div className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: '#6b7280' }}>
+            Day-of-Week Performance
+          </div>
+          <div className="grid grid-cols-7 gap-2">
+            {dow.map((d: any) => {
+              const max = Math.max(...dow.map((x: any) => x.revenue), 1);
+              return (
+                <div key={d.dow} className="text-center">
+                  <div className="text-[10px] font-semibold uppercase mb-1" style={{ color: '#6b7280' }}>{d.label}</div>
+                  <div className="h-24 flex items-end justify-center" style={{ background: '#faf8f3', borderRadius: 6 }}>
+                    <div style={{ width: '60%', height: `${(d.revenue / max) * 100}%`, background: '#ec4899', borderRadius: '4px 4px 0 0' }} />
+                  </div>
+                  <div className="text-[10px] mt-1 font-num">{fmtMoney(d.revenue, market, true)}</div>
+                  <div className="text-[9px]" style={{ color: '#9ca3af' }}>{fmtNumber(d.sends, market)} sends</div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* Insights (Green/Red/Next) */}
+      {flags.length > 0 && (
+        <section>
+          <div className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: 'var(--ink-muted)' }}>
+            Insights ({flags.length})
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            {flags.map((f: any, i: number) => {
+              const colors = {
+                green: { bg: '#ecf6f0', border: '#2c7a5b', text: '#1d5b41', icon: '✓' },
+                red:   { bg: '#fff5f5', border: '#b3382f', text: '#7a221c', icon: '!' },
+                next:  { bg: '#fff7e0', border: '#c0822a', text: '#8a5b18', icon: '→' },
+              }[f.kind as 'green' | 'red' | 'next'];
+              return (
+                <div key={i} className="p-4 rounded-xl" style={{ background: colors.bg, border: `1px solid ${colors.border}` }}>
+                  <div className="text-[11px] font-bold uppercase tracking-wider mb-1 flex items-center gap-2" style={{ color: colors.text }}>
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      width: 16, height: 16, borderRadius: 999, background: colors.border, color: '#fff', fontSize: 10, fontWeight: 700,
+                    }}>{colors.icon}</span>
+                    {f.title}
+                  </div>
+                  <div className="text-[12px] leading-relaxed" style={{ color: colors.text }}>{f.body}</div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* Shopify Last-Click attribution */}
+      {shopifyAttr && (
+        <section className="card p-5">
+          <div className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: '#6b7280' }}>
+            Shopify Last-Click Attribution (Klaviyo)
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <Mini label="Klaviyo orders" value={fmtNumber(shopifyAttr.ordersCount, market)} tone="good" />
+            <Mini label="Klaviyo revenue" value={fmtMoney(shopifyAttr.revenue, market, true)} tone="good" />
+            <Mini label="Share of total" value={fmtPct(shopifyAttr.matchedShare, 1)} tone="warn" />
+            <Mini label="Total period revenue" value={fmtMoney(shopifyAttr.totalRevenueInPeriod, market, true)} tone="warn" />
+          </div>
+          {shopifyAttr.byCampaign?.length > 0 && (
+            <div className="mt-4">
+              <div className="text-[10px] font-bold uppercase mb-2" style={{ color: '#9ca3af' }}>Top campaigns by Shopify attribution</div>
+              <div className="space-y-1">
+                {shopifyAttr.byCampaign.slice(0, 10).map((c: any) => (
+                  <div key={c.campaign} className="flex items-center gap-2 text-[11px]">
+                    <span className="flex-1 truncate" style={{ color: '#374151' }} title={c.campaign}>{c.campaign}</span>
+                    <span className="text-right w-16">{fmtNumber(c.orders, market)} ord.</span>
+                    <span className="text-right w-20 font-semibold font-num">{fmtMoney(c.revenue, market, true)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Top Campaigns + Top Flows */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -98,7 +219,7 @@ function Mini({ label, value, tone }: { label: string; value: string; tone: 'goo
   const colors = {
     good: { bg: '#ecf6f0', border: '#2c7a5b', text: '#1d5b41' },
     warn: { bg: '#fff7e0', border: '#c0822a', text: '#8a5b18' },
-    bad: { bg: '#fff5f5', border: '#b3382f', text: '#7a221c' },
+    bad:  { bg: '#fff5f5', border: '#b3382f', text: '#7a221c' },
   }[tone];
   return (
     <div className="rounded-xl p-3" style={{ background: colors.bg, border: `1px solid ${colors.border}` }}>

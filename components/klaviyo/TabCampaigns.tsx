@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import type { Market, Period } from '@/lib/klaviyo/types';
 import { buildKlaviyoUrl, fmtMoney, fmtPct, fmtNumber } from './fetcher';
+import DailyBarChart from './DailyBarChart';
 
 interface Props {
   market: Market;
@@ -46,6 +47,13 @@ export default function TabCampaigns({ market, period, customRange }: Props) {
         <Kpi label="UNSUB RATE" value={fmtPct(t.unsubRate, 3)} />
         <Kpi label="REV / RECIP." value={fmtMoney(t.revenuePerRecipient, market)} />
         <Kpi label="CAMPAIGNS" value={fmtNumber(rows.length, market)} />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <DailyBarChart title="Revenue" data={data.daily?.revenue || []} color="#ec4899" unit="currency" market={market} height={180} />
+        <DailyBarChart title="Recipients" data={data.daily?.recipients || []} color="#5d4ec5" unit="number" market={market} height={180} />
+        <DailyBarChart title="Opens" data={data.daily?.opens || []} color="#0ea5e9" unit="number" market={market} height={180} />
+        <DailyBarChart title="Unsubs" data={data.daily?.unsubscribes || []} color="#dc2626" unit="number" market={market} height={180} />
       </div>
 
       <section className="card overflow-x-auto">

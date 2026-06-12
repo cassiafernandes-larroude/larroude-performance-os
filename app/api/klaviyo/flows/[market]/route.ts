@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import type { Market, Period } from '@/lib/klaviyo/types';
 import { periodToRange } from '@/lib/klaviyo/period';
 import { listFlows, flowReports } from '@/lib/klaviyo/queries';
+import { flowSeriesDaily } from '@/lib/klaviyo/series';
 import { buildFlowRows, aggregateRows } from '@/lib/klaviyo/transform';
 import { FLOW_CATEGORY_LABELS } from '@/lib/klaviyo/classify';
 import { memo, TTL_6H } from '@/lib/ltv-dashboard/memo-cache';
@@ -27,7 +28,9 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
   try {
     const result = await memo(cacheKey, TTL_6H, async () => {
       const flows = await listFlows(market);
-      const reports = await flowReports(market, range, flows.map((f: any) => f.id)).catch(() => []);
+      const flowIds = flows.map((f: any) => f.id);
+      const reports = await flowReports(market, range, flowIds).catch(() => []);
+      const daily = await flowSeriesDaily(market, range, flowIds).catch(() => ({}));
       const rows = buildFlowRows(flows, reports);
       const totals = aggregateRows(rows);
 
@@ -49,6 +52,7 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
         market,
         period: { start: range.start, end: range.end },
         rows: rows.sort((a, b) => b.revenue - a.revenue),
+        daily,
         totals: {
           ...totals,
           openRate: totals.delivered > 0 ? totals.opens / totals.delivered : 0,

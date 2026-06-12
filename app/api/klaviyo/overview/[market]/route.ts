@@ -9,6 +9,7 @@ import type { Market, Period } from '@/lib/klaviyo/types';
 import { periodToRange, priorRange, pctChange } from '@/lib/klaviyo/period';
 import { listCampaigns, listFlows, campaignReports, flowReports, listHealthAggregate } from '@/lib/klaviyo/queries';
 import { buildCampaignRows, buildFlowRows, aggregateRows } from '@/lib/klaviyo/transform';
+import { campaignSeriesDaily, flowSeriesDaily, mergeDailies, dayOfWeekAggregate } from '@/lib/klaviyo/series';
 import { memo, TTL_6H } from '@/lib/ltv-dashboard/memo-cache';
 
 export const dynamic = 'force-dynamic';
@@ -66,9 +67,19 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
 
       const listHealth = await listHealthAggregate(market, range).catch(() => ({ subs: 0, unsubs: 0, bounces: 0, spam: 0 }));
 
+      // Daily series (campaigns + flows) — para 11 charts no Overview
+      const campSeries = await campaignSeriesDaily(market, range, campaignIds).catch(() => ({}));
+      const flwSeries = await flowSeriesDaily(market, range, flowIds).catch(() => ({}));
+      const dailyCombined = mergeDailies(campSeries, flwSeries);
+      const dow = dayOfWeekAggregate(dailyCombined);
+
       return {
         market,
         period: { start: range.start, end: range.end },
+        daily: dailyCombined,
+        dailyCampaigns: campSeries,
+        dailyFlows: flwSeries,
+        dayOfWeek: dow,
         kpis: {
           totalRevenue,
           totalRecipients,

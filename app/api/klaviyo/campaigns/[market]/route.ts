@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import type { Market, Period } from '@/lib/klaviyo/types';
 import { periodToRange } from '@/lib/klaviyo/period';
 import { listCampaigns, campaignReports } from '@/lib/klaviyo/queries';
+import { campaignSeriesDaily } from '@/lib/klaviyo/series';
 import { buildCampaignRows, aggregateRows } from '@/lib/klaviyo/transform';
 import { memo, TTL_6H } from '@/lib/ltv-dashboard/memo-cache';
 
@@ -26,13 +27,16 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
   try {
     const result = await memo(cacheKey, TTL_6H, async () => {
       const campaigns = await listCampaigns(market, range);
-      const reports = await campaignReports(market, range, campaigns.map((c: any) => c.id)).catch(() => []);
+      const campaignIds = campaigns.map((c: any) => c.id);
+      const reports = await campaignReports(market, range, campaignIds).catch(() => []);
+      const daily = await campaignSeriesDaily(market, range, campaignIds).catch(() => ({}));
       const rows = buildCampaignRows(campaigns, reports);
       const totals = aggregateRows(rows);
       return {
         market,
         period: { start: range.start, end: range.end },
         rows: rows.sort((a, b) => b.revenue - a.revenue),
+        daily,
         totals: {
           ...totals,
           openRate: totals.delivered > 0 ? totals.opens / totals.delivered : 0,
