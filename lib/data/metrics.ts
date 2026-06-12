@@ -98,8 +98,8 @@ export async function getMetricBundle(
   customRange?: { from: string; to: string }
 ): Promise<MetricBundle> {
   const cacheKey = customRange
-    ? `metrics-v11-today:${market}:custom:${customRange.from}:${customRange.to}`
-    : `metrics-v11-today:${market}:${period}`;
+    ? `metrics-v12-today-google:${market}:custom:${customRange.from}:${customRange.to}`
+    : `metrics-v12-today-google:${market}:${period}`;
   return cached(cacheKey, 1800, async () => {
     const range = customRange ?? dateRangeCompleted(period);
     const prevRange = customRange
@@ -117,7 +117,7 @@ export async function getMetricBundle(
 
     // Cassia 2026-06-12: se o range eh "hoje" (D0) no fuso do market, BQ ainda
     // nao tem os dados (pipeline diario). Override sales/orders/aov via Shopify
-    // Admin API direto (intra-dia, near real-time).
+    // Admin API direto (intra-dia, near real-time) + Google spend via Supermetrics.
     const todayMkt = todayInMarket(market);
     const isToday = range.from === todayMkt && range.to === todayMkt;
     if (isToday) {
@@ -134,6 +134,14 @@ export async function getMetricBundle(
         // new_customers nao calculado D0 — manter o que BQ deu (provavelmente 0).
       } catch (err) {
         console.warn(`[overview today] Shopify ${market} live fetch failed:`, err);
+      }
+      // Google spend D0 via Supermetrics (BQ pipeline ainda nao processou hoje).
+      try {
+        const { queryGoogleAdsTotalViaSupermetrics } = await import("@/lib/main-dashboard/supermetrics");
+        const gads = await queryGoogleAdsTotalViaSupermetrics(market, range.from, range.to);
+        if (gads.spend > 0) c.google_spend = gads.spend;
+      } catch (err) {
+        console.warn(`[overview today] Google Supermetrics ${market} failed:`, err);
       }
     }
     const currency = market === "US" ? "USD" : "BRL";
