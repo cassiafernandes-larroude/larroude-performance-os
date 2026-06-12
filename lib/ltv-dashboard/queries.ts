@@ -73,6 +73,8 @@ const ORDERS_TABLE: Record<Market, string> = {
  *   US: Loop Returns (name 'EXC-' prefix, note "new exchange order" / "exchange for order",
  *        tags "loop:")
  */
+// Cassia 2026-06-12: alinhado com Main/CAC/UE → exclui b2b|wholesale|marketplace|redo|influencer
+// tanto em customer.tags quanto em order.tags.
 const COMMON_FILTERS = `
   cancelled_at IS NULL
   AND test = FALSE
@@ -80,11 +82,9 @@ const COMMON_FILTERS = `
   AND JSON_VALUE(customer, '$.id') != '5025734230182'
   AND (
     JSON_VALUE(customer, '$.tags') IS NULL
-    OR (
-      NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(customer, '$.tags')), r'b2b')
-      AND NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(customer, '$.tags')), r'wholesale')
-    )
+    OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(customer, '$.tags')), r'b2b|wholesale|marketplace|redo|influencer')
   )
+  AND NOT REGEXP_CONTAINS(LOWER(IFNULL(tags, '')), r'b2b|wholesale|marketplace|redo|influencer')
   AND NOT (
     -- BR: TroquEcommerce
     LOWER(IFNULL(tags, '')) LIKE '%troquecommerce%'
