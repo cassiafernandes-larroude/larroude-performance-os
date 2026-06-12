@@ -31,7 +31,8 @@ export async function listFlows(market: Market) {
 // SEGMENTS — page_size max = 10
 // ============================================================================
 export async function listSegments(market: Market) {
-  const path = `/segments/?page[size]=10&fields[segment]=name,created,profile_count`;
+  // page_size MAX = 10 (limite Klaviyo). additional-fields=profile_count para profile count.
+  const path = `/segments/?page[size]=10&additional-fields[segment]=profile_count&fields[segment]=name,created`;
   return klaviyoPaginate<any>(market, path);
 }
 

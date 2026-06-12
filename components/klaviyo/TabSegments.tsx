@@ -1,10 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import type { Market } from '@/lib/klaviyo/types';
+import type { Market, Period } from '@/lib/klaviyo/types';
 import { fmtNumber } from './fetcher';
 
-interface Props { market: Market; }
+interface Props {
+  market: Market;
+  period?: Period;
+  customRange?: { from: string; to: string };
+}
 
 export default function TabSegments({ market }: Props) {
   const [data, setData] = useState<any>(null);
@@ -14,6 +18,7 @@ export default function TabSegments({ market }: Props) {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setError(null);
     fetch(`/api/klaviyo/segments/${market}`)
       .then((r) => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
       .then((json) => { if (!cancelled) { setData(json); setLoading(false); } })
@@ -21,19 +26,19 @@ export default function TabSegments({ market }: Props) {
     return () => { cancelled = true; };
   }, [market]);
 
-  if (loading) return <div className="card p-8 text-center text-sm" style={{ color: '#6b7280' }}>Loading segments…</div>;
-  if (error) return <div className="card p-4" style={{ borderColor: '#b3382f', background: '#fff5f5', color: '#b3382f' }}>{error}</div>;
+  if (loading) return <div className="card p-8 text-center text-sm" style={{ color: 'var(--kv-ink-muted)' }}>Loading segments…</div>;
+  if (error) return <div className="card p-4" style={{ borderColor: 'var(--kv-negative)', background: 'var(--kv-negative-soft)', color: 'var(--kv-negative)' }}><strong>Error:</strong> {error}</div>;
   if (!data) return null;
 
   const rows = data.rows || [];
   return (
     <section className="card overflow-x-auto">
-      <div className="px-5 pt-5 text-xs font-bold uppercase tracking-wider" style={{ color: '#6b7280' }}>
+      <div className="px-5 pt-5 text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--kv-ink-muted)' }}>
         All Segments ({rows.length}) — {market}
       </div>
       <table className="w-full text-[12px] mt-3">
         <thead>
-          <tr className="text-left text-[10px] uppercase font-bold text-steel tracking-wide border-b" style={{ borderColor: 'var(--border)' }}>
+          <tr className="text-left text-[10px] uppercase font-bold tracking-wide border-b" style={{ borderColor: 'var(--kv-border)', color: 'var(--kv-ink-muted)' }}>
             <th className="px-3 py-2.5">#</th>
             <th className="px-3 py-2.5">Segment</th>
             <th className="px-3 py-2.5 text-right">Profiles</th>
@@ -42,11 +47,11 @@ export default function TabSegments({ market }: Props) {
         </thead>
         <tbody>
           {rows.map((r: any, i: number) => (
-            <tr key={r.id} className="border-t" style={{ borderColor: 'var(--border-soft)' }}>
-              <td className="px-3 py-2 text-[10px]" style={{ color: '#9ca3af' }}>{i + 1}</td>
+            <tr key={r.id} className="border-t" style={{ borderColor: 'var(--kv-border-soft)' }}>
+              <td className="px-3 py-2 text-[10px]" style={{ color: 'var(--kv-ink-muted)' }}>{i + 1}</td>
               <td className="px-3 py-2">{r.name}</td>
               <td className="px-3 py-2 text-right font-num font-semibold">{fmtNumber(r.profileCount, market)}</td>
-              <td className="px-3 py-2 text-[11px]" style={{ color: '#6b7280' }}>{r.created?.slice(0, 10) || '—'}</td>
+              <td className="px-3 py-2 text-[11px]" style={{ color: 'var(--kv-ink-muted)' }}>{r.created?.slice(0, 10) || '—'}</td>
             </tr>
           ))}
         </tbody>

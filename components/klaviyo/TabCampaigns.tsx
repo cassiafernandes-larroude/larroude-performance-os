@@ -56,6 +56,15 @@ export default function TabCampaigns({ market, period, customRange }: Props) {
         <DailyBarChart title="Unsubs" data={data.daily?.unsubscribes || []} color="#dc2626" unit="number" market={market} height={180} />
       </div>
 
+      {/* 5 rankings — Revenue / CTR / OR / Bounce / Unsub */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
+        <Ranking title="Top Revenue" rows={[...rows].filter((r) => r.revenue > 0).slice(0, 10)} key1="revenue" market={market} fmt={(v) => fmtMoney(v, market, true)} />
+        <Ranking title="Top CTR" rows={[...rows].filter((r) => r.delivered > 100).sort((a, b) => b.clickRate - a.clickRate).slice(0, 10)} key1="clickRate" market={market} fmt={(v) => fmtPct(v, 2)} />
+        <Ranking title="Top Open Rate" rows={[...rows].filter((r) => r.delivered > 100).sort((a, b) => b.openRate - a.openRate).slice(0, 10)} key1="openRate" market={market} fmt={(v) => fmtPct(v, 1)} />
+        <Ranking title="Worst Bounce Rate" rows={[...rows].filter((r) => r.recipients > 100 && r.bounceRate > 0).sort((a, b) => b.bounceRate - a.bounceRate).slice(0, 10)} key1="bounceRate" market={market} fmt={(v) => fmtPct(v, 3)} tone="bad" />
+        <Ranking title="Worst Unsub Rate" rows={[...rows].filter((r) => r.delivered > 100 && r.unsubRate > 0).sort((a, b) => b.unsubRate - a.unsubRate).slice(0, 10)} key1="unsubRate" market={market} fmt={(v) => fmtPct(v, 3)} tone="bad" />
+      </div>
+
       <section className="card overflow-x-auto">
         <table className="w-full text-[12px]">
           <thead>
@@ -96,9 +105,36 @@ export default function TabCampaigns({ market, period, customRange }: Props) {
 
 function Kpi({ label, value }: { label: string; value: string }) {
   return (
-    <div className="card p-2.5 flex flex-col">
-      <div className="text-[8.5px] font-bold tracking-wider text-steel uppercase">{label}</div>
-      <div className="text-xl font-bold text-ink leading-tight mt-0.5">{value}</div>
+    <div className="kvkpi">
+      <div className="kvkpi-label">{label}</div>
+      <div className="kvkpi-value">{value}</div>
+    </div>
+  );
+}
+
+function Ranking({ title, rows, key1, market, fmt, tone }: {
+  title: string;
+  rows: any[];
+  key1: string;
+  market: Market;
+  fmt: (v: number) => string;
+  tone?: 'bad';
+}) {
+  if (!rows || rows.length === 0) return null;
+  return (
+    <div className="card p-4">
+      <div className="text-[11px] font-bold uppercase tracking-wider mb-3" style={{ color: tone === 'bad' ? 'var(--kv-negative)' : 'var(--kv-ink-muted)' }}>
+        {title}
+      </div>
+      <div className="space-y-1.5">
+        {rows.map((r, i) => (
+          <div key={r.id} className="flex items-center gap-2 text-[11px]">
+            <span className="font-bold w-5" style={{ color: 'var(--kv-ink-muted)' }}>#{i + 1}</span>
+            <div className="flex-1 truncate" style={{ color: 'var(--kv-ink-soft)' }} title={r.name}>{r.name}</div>
+            <span className="font-num font-semibold" style={{ color: tone === 'bad' ? 'var(--kv-negative)' : 'var(--kv-ink)' }}>{fmt(r[key1])}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

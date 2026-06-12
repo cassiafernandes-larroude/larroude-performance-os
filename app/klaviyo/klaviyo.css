@@ -1,0 +1,233 @@
+/**
+ * Larroude CRM Klaviyo — design system isolado (cream theme #F4ECDF).
+ * Replicado do original https://larroude-crm-dashboard.vercel.app
+ *
+ * Escopo: tudo dentro de <div class="klaviyo-root"> usa este tema.
+ * Não afeta o resto do Performance OS.
+ */
+
+.klaviyo-root {
+  --kv-bg: #F4ECDF;
+  --kv-paper: #FFFDF8;
+  --kv-paper-deep: #EEE5D2;
+  --kv-ink: #1A1A1A;
+  --kv-ink-soft: #4A4A4A;
+  --kv-ink-muted: #8A8A8A;
+  --kv-border: #E5DCC9;
+  --kv-border-soft: #EFE7D3;
+  --kv-accent: #ec4899;
+  --kv-accent-soft: #FCE7F0;
+  --kv-positive: #2c7a5b;
+  --kv-positive-soft: #E8F4ED;
+  --kv-warning: #c0822a;
+  --kv-warning-soft: #FFF3D9;
+  --kv-negative: #b3382f;
+  --kv-negative-soft: #FBEBEA;
+
+  background: var(--kv-bg);
+  color: var(--kv-ink);
+  min-height: 100vh;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.klaviyo-root h1,
+.klaviyo-root h2,
+.klaviyo-root h3,
+.klaviyo-root h4 {
+  color: var(--kv-ink);
+  font-family: 'Inter', system-ui, sans-serif;
+  letter-spacing: -0.01em;
+}
+
+/* Cards no cream theme */
+.klaviyo-root .card {
+  background: var(--kv-paper);
+  border: 1px solid var(--kv-border);
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+/* KPI card pattern do original — border-top colorida */
+.klaviyo-root .kvkpi {
+  background: var(--kv-paper);
+  border: 1px solid var(--kv-border);
+  border-top: 3px solid var(--kv-accent);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 88px;
+}
+.klaviyo-root .kvkpi-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--kv-ink-muted);
+}
+.klaviyo-root .kvkpi-value {
+  font-size: clamp(20px, 1.8vw, 26px);
+  font-weight: 700;
+  color: var(--kv-ink);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.klaviyo-root .kvkpi-hint {
+  font-size: 10px;
+  color: var(--kv-ink-muted);
+  line-height: 1.3;
+}
+.klaviyo-root .kvkpi.tone-good { border-top-color: var(--kv-positive); }
+.klaviyo-root .kvkpi.tone-warn { border-top-color: var(--kv-warning); }
+.klaviyo-root .kvkpi.tone-bad  { border-top-color: var(--kv-negative); }
+.klaviyo-root .kvkpi.tone-info { border-top-color: var(--kv-accent); }
+
+/* Market pills (pink) */
+.klaviyo-root .kv-market-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  user-select: none;
+  border: 1px solid var(--kv-border);
+  background: var(--kv-paper);
+  color: var(--kv-ink);
+}
+.klaviyo-root .kv-market-pill.active {
+  background: var(--kv-accent);
+  border-color: var(--kv-accent);
+  color: #fff;
+}
+.klaviyo-root .kv-market-pill:hover:not(.active) {
+  background: var(--kv-paper-deep);
+}
+
+/* Tabs (Overview/Campaigns/etc) */
+.klaviyo-root .kv-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--kv-border);
+  margin-bottom: 24px;
+}
+.klaviyo-root .kv-tab {
+  padding: 12px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--kv-ink-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+}
+.klaviyo-root .kv-tab:hover {
+  color: var(--kv-ink);
+}
+.klaviyo-root .kv-tab.active {
+  color: var(--kv-ink);
+  border-bottom-color: var(--kv-accent);
+}
+
+/* Sub-tabs (categoria de flow) */
+.klaviyo-root .kv-subtab {
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.15s;
+  background: var(--kv-paper);
+  border: 1px solid var(--kv-border);
+  color: var(--kv-ink);
+}
+.klaviyo-root .kv-subtab.active {
+  background: var(--kv-ink);
+  color: #fff;
+  border-color: var(--kv-ink);
+}
+
+/* Period filter container */
+.klaviyo-root .kv-period-bar {
+  background: var(--kv-paper);
+  border: 1px solid var(--kv-border);
+  border-radius: 16px;
+  padding: 12px 20px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.klaviyo-root .kv-period-pill {
+  padding: 6px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 999px;
+  background: var(--kv-paper-deep);
+  color: var(--kv-ink);
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.klaviyo-root .kv-period-pill.active {
+  background: var(--kv-ink);
+  color: #fff;
+}
+.klaviyo-root .kv-period-pill:hover:not(.active) {
+  background: var(--kv-border);
+}
+
+/* Section markers */
+.klaviyo-root .kv-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--kv-ink-muted);
+  margin-bottom: 12px;
+}
+
+/* Table */
+.klaviyo-root table {
+  background: var(--kv-paper);
+  width: 100%;
+}
+.klaviyo-root thead tr {
+  background: var(--kv-paper-deep);
+}
+.klaviyo-root tbody tr:hover {
+  background: var(--kv-paper-deep);
+}
+
+/* Inputs */
+.klaviyo-root input[type='date'],
+.klaviyo-root select {
+  background: var(--kv-paper);
+  border: 1px solid var(--kv-border);
+  color: var(--kv-ink);
+}
+
+/* Insight cards */
+.klaviyo-root .kv-insight {
+  padding: 16px 18px;
+  border-radius: 12px;
+  border: 1px solid;
+}
+.klaviyo-root .kv-insight.green {
+  background: var(--kv-positive-soft);
+  border-color: var(--kv-positive);
+}
+.klaviyo-root .kv-insight.red {
+  background: var(--kv-negative-soft);
+  border-color: var(--kv-negative);
+}
+.klaviyo-root .kv-insight.next {
+  background: var(--kv-warning-soft);
+  border-color: var(--kv-warning);
+}

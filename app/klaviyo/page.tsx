@@ -1,4 +1,5 @@
 import KlaviyoDashboard from '@/components/klaviyo/Dashboard';
+import './klaviyo.css';
 
 export const dynamic = 'force-dynamic';
 
