@@ -827,6 +827,107 @@ body::-webkit-scrollbar-thumb:hover {
   background: var(--pink-deep);
 }
 
+/* ============================================================================
+   PADRONIZACAO UNIVERSAL DE DASHBOARDS — Cassia 2026-06-13
+   "todos os dashboards tenham mesmo tamanho de fonte, mesma fonte e mesmo
+    espacamento com as margens"
+   ============================================================================ */
+
+/* ---- 1) TIPOGRAFIA UNIVERSAL ----
+   Todos os escopos isolados (.klaviyo-root, .cac-root, .ltv-root,
+   .main-dashboard-root) usam a mesma font-family Inter herdada do body do POS. */
+.klaviyo-root,
+.klaviyo-root *,
+.cac-root,
+.cac-root *,
+.ltv-root,
+.ltv-root *,
+.main-dashboard-root,
+.main-dashboard-root * {
+  font-family: var(--font-inter), Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+}
+
+/* Body font-size padronizado em todos os escopos isolados (14px = lpos padrao) */
+.klaviyo-root { font-size: 14px; line-height: 1.5; }
+
+/* ---- 2) HEADERS H1 PADRONIZADOS ----
+   Estende o sistema existente (linhas 156-185 deste arquivo) pra incluir
+   tambem .klaviyo-root header h1 (que originalmente vinha do source com 46px). */
+.klaviyo-root header h1 {
+  font-size: 40px !important;
+  line-height: 1.1 !important;
+  letter-spacing: -0.025em !important;
+  font-weight: 700 !important;
+  color: var(--ink) !important;
+}
+@media (max-width: 1023px) {
+  .klaviyo-root header h1 { font-size: 28px !important; }
+}
+@media (max-width: 640px) {
+  .klaviyo-root header h1 { font-size: 24px !important; }
+}
+
+/* ---- 3) PADDING/MARGINS PADRONIZADOS ----
+   Container principal de todos os dashboards isolados segue o mesmo padrao
+   do POS shell: padding-x maior em desktop, menor em mobile. */
+.klaviyo-root .app,
+.cac-root,
+.ltv-root,
+.main-dashboard-root {
+  max-width: 1700px !important;
+  margin: 0 auto !important;
+  padding: 20px 16px 40px !important;
+}
+@media (min-width: 1024px) {
+  .klaviyo-root .app,
+  .cac-root,
+  .ltv-root,
+  .main-dashboard-root {
+    padding: 28px 32px 60px !important;
+  }
+}
+
+/* ---- 4) SUBTITULOS PADRONIZADOS ---- */
+.klaviyo-root .subtitle,
+.cac-root .subtitle,
+.ltv-root .subtitle,
+.main-dashboard-root .subtitle {
+  font-size: 12px !important;
+  color: var(--ink-soft, #6b7280) !important;
+  margin-top: 4px !important;
+  font-weight: 500 !important;
+}
+@media (min-width: 1024px) {
+  .klaviyo-root .subtitle,
+  .cac-root .subtitle,
+  .ltv-root .subtitle,
+  .main-dashboard-root .subtitle {
+    font-size: 13px !important;
+  }
+}
+
+/* ---- 5) IFRAME WRAPPER (Klaviyo Journey) RESPONSIVE ---- */
+@media (max-width: 768px) {
+  .dashboard-iframe-wrapper {
+    height: calc(100vh - 200px);
+    border-radius: 8px;
+  }
+}
+@media (max-width: 480px) {
+  .dashboard-iframe-wrapper {
+    height: calc(100vh - 240px);
+  }
+}
+
+/* ---- 6) TABELA DE DATA SOURCES (BQ freshness) RESPONSIVE ----
+   Em mobile, esconde colunas auxiliares (Region, Rows, Size) e quebra texto. */
+@media (max-width: 768px) {
+  .fontes-table-mobile-hide { display: none !important; }
+  .fontes-table-row td { padding: 10px 8px !important; font-size: 11px !important; }
+  .fontes-table-row .table-name { font-size: 12px !important; }
+}
+
+
 /* LTV scope: scrollbar com paleta cream/peach do LTV */
 .ltv-root::-webkit-scrollbar-thumb,
 .ltv-root *::-webkit-scrollbar-thumb {

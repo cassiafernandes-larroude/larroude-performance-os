@@ -273,13 +273,13 @@ export default async function FontesPage() {
               <thead>
                 <tr style={{ background: "var(--paper)", borderBottom: "1px solid var(--border-soft)" }}>
                   <th className="text-left px-4 py-3" style={{ color: "var(--ink-muted)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em" }}>Table</th>
-                  <th className="text-left px-3 py-3" style={{ color: "var(--ink-muted)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em" }}>Region</th>
+                  <th className="text-left px-3 py-3 fontes-table-mobile-hide" style={{ color: "var(--ink-muted)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em" }}>Region</th>
                   <th className="text-left px-3 py-3" style={{ color: "var(--ink-muted)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em" }}>Last modified</th>
-                  <th className="text-left px-3 py-3" style={{ color: "var(--ink-muted)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em" }}>Last data</th>
-                  <th className="text-right px-3 py-3" style={{ color: "var(--ink-muted)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em" }}>Rows</th>
-                  <th className="text-right px-3 py-3" style={{ color: "var(--ink-muted)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em" }}>Size</th>
+                  <th className="text-left px-3 py-3 fontes-table-mobile-hide" style={{ color: "var(--ink-muted)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em" }}>Last data</th>
+                  <th className="text-right px-3 py-3 fontes-table-mobile-hide" style={{ color: "var(--ink-muted)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em" }}>Rows</th>
+                  <th className="text-right px-3 py-3 fontes-table-mobile-hide" style={{ color: "var(--ink-muted)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em" }}>Size</th>
                   <th className="text-left px-3 py-3" style={{ color: "var(--ink-muted)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em" }}>Status</th>
-                  <th className="text-left px-3 py-3" style={{ color: "var(--ink-muted)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em" }}>Used in</th>
+                  <th className="text-left px-3 py-3 fontes-table-mobile-hide" style={{ color: "var(--ink-muted)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em" }}>Used in</th>
                 </tr>
               </thead>
               <tbody>
