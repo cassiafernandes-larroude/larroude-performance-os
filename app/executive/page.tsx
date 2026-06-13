@@ -12,7 +12,7 @@ import { yesterdayInMarket } from "@/lib/utils/market-tz";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const VALID_PERIODS: ExecutivePeriod[] = ["7d", "14d", "28d", "3M", "6M", "12M"];
+const VALID_PERIODS: ExecutivePeriod[] = ["1d", "7d", "14d", "28d", "3M", "6M", "12M"];
 
 export default async function ExecutivePage({
   searchParams,

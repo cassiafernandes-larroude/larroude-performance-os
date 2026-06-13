@@ -212,12 +212,18 @@ function safeDiv(num: number, den: number): number {
  * Cassia 2026-06-12: filtro de período igual Main Dashboard.
  * Aceita preset (7d/14d/28d/3M/6M/12M) OU custom range {from, to}.
  */
-export type ExecutivePeriod = '7d' | '14d' | '28d' | '3M' | '6M' | '12M';
+// Cassia 2026-06-13: adicionado preset '1d' (Ontem / D-1) no inicio
+export type ExecutivePeriod = '1d' | '7d' | '14d' | '28d' | '3M' | '6M' | '12M';
 
 function rangeForPeriod(period: ExecutivePeriod, customRange?: { from: string; to: string }): { from: string; to: string } {
   if (customRange) return customRange;
   const today = new Date();
   const to = new Date(today.getTime() - 24 * 3600 * 1000);
+  // D-1: somente ontem (from = to = ontem)
+  if (period === '1d') {
+    const iso = to.toISOString().slice(0, 10);
+    return { from: iso, to: iso };
+  }
   // Cassia 2026-06-13: 3M/6M/12M usam "primeiro dia do mês N-1 atrás → hoje (D-1)".
   if (period === '3M' || period === '6M' || period === '12M') {
     const n = period === '3M' ? 3 : period === '6M' ? 6 : 12;

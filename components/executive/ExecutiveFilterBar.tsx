@@ -12,8 +12,9 @@ import { useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 
-type Preset = "7d" | "14d" | "28d" | "3M" | "6M" | "12M";
-const PRESETS: Preset[] = ["7d", "14d", "28d", "3M", "6M", "12M"];
+// Cassia 2026-06-13: adicionado preset "1d" (Ontem / D-1) no inicio
+type Preset = "1d" | "7d" | "14d" | "28d" | "3M" | "6M" | "12M";
+const PRESETS: Preset[] = ["1d", "7d", "14d", "28d", "3M", "6M", "12M"];
 
 const PILL_BASE =
   "inline-flex items-center justify-center rounded-full text-[12px] sm:text-[13px] font-semibold transition-all duration-150 select-none";
@@ -31,6 +32,7 @@ function isoDaysAgo(days: number, ref: Date = new Date()): string {
 }
 
 function defaultStartFor(preset: Preset, refDate: string): string {
+  if (preset === "1d") return refDate; // somente ontem
   const ref = new Date(refDate + "T12:00:00");
   const days = preset === "7d" ? 7 : preset === "14d" ? 14 : preset === "28d" ? 28
              : preset === "3M" ? 90 : preset === "6M" ? 180 : 365;
@@ -40,6 +42,7 @@ function defaultStartFor(preset: Preset, refDate: string): string {
 function periodLabel(preset: Preset | "custom", days?: number): string {
   if (preset === "custom") return days ? `Last ${days} day${days === 1 ? "" : "s"}` : "Custom range";
   switch (preset) {
+    case "1d": return "Yesterday";
     case "7d": return "Last 7 days";
     case "14d": return "Last 14 days";
     case "28d": return "Last 28 days";
@@ -126,7 +129,7 @@ export default function ExecutiveFilterBar({ maxDate }: Props) {
               onClick={() => setPreset(p)}
               className={active ? PILL_ACTIVE : PILL_INACTIVE}
             >
-              {p.toUpperCase()}
+              {p === "1d" ? "D-1" : p.toUpperCase()}
             </button>
           );
         })}
