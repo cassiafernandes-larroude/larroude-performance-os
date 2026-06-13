@@ -248,7 +248,7 @@ export default async function FontesPage() {
           Data Sources &amp; Rules
         </h1>
         <p className="text-[12px] lg:text-[14px] mt-1" style={{ color: "var(--ink-soft)" }}>
-          {counts.ok} of {allSources.length} integrations connected · BigQuery is the primary source · business rules below
+          {counts.ok} of {allSources.length} integrations connected · BigQuery is the primary source · business + calculation rules below
         </p>
         <div className="flex items-center gap-3 mt-3">
           <span className="badge" style={{ background: "var(--positive-soft)", color: "var(--positive)" }}>
@@ -275,6 +275,23 @@ export default async function FontesPage() {
         <p className="text-[10px] mt-3" style={{ color: "var(--ink-muted)" }}>
           Last audit: 2026-06-13 · Source: Obsidian REGRAS-LARROUDE-OS.md + code grep in <code>lib/</code>
         </p>
+      </section>
+
+      {/* === Calculation Rules === */}
+      <section className="mb-10">
+        <div className="section-marker mb-3">
+          <span
+            className="text-[11px] font-semibold uppercase tracking-wider"
+            style={{ color: "var(--ink-muted)", letterSpacing: "0.06em" }}
+          >
+            Calculation rules — KPI formulas used across dashboards
+          </span>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          {CALCULATION_RULES.map((calc) => (
+            <CalculationCard key={calc.metric} calc={calc} />
+          ))}
+        </div>
       </section>
 
       {/* === BigQuery tables freshness table === */}
@@ -422,6 +439,19 @@ const BUSINESS_RULES: Rule[] = [
       "BR: total_price > R$25,000",
     ],
     appliesTo: "Main, CAC, LTV, Channel Share",
+  },
+  {
+    title: "REDO (exchanges) — handling",
+    category: "filters",
+    desc: "Orders tagged REDO are exchanges (refund + new order). They get special treatment per dashboard.",
+    details: [
+      "Tag 'redo' in BOTH order.tags and customer.tags excludes from B2B-style filters (above)",
+      "In Unit Economics: counted SEPARATELY as 'Exchange' (not Return) — different KPI",
+      "In Products to Bet On: Exchange-Only orders REMOVED from volume base (Cassia 2026-06-12)",
+      "Exchange cost (30d) = COGS of replacement units = exchangeCostPerUnit in UE",
+      "Distinguished from Return: Return = refund without replacement; Exchange = refund WITH new order",
+    ],
+    appliesTo: "UE (Exchange Rate, Exchange Cost), Apostar (score), Main (Net Sales)",
   },
   {
     title: "PIX (BR) - exclude pending",
@@ -599,6 +629,431 @@ const BUSINESS_RULES: Rule[] = [
     appliesTo: "Products to Bet On",
   },
 ];
+
+// =====================================================================
+// Calculation Rules — formulas used to compute every KPI
+// =====================================================================
+
+type Calculation = {
+  metric: string;
+  formula: string;
+  numerator?: string;
+  denominator?: string;
+  notes?: string[];
+  appliesTo?: string;
+  group: "revenue" | "ads" | "funnel" | "email" | "product" | "customer";
+};
+
+const CALC_GROUP_LABEL: Record<Calculation["group"], string> = {
+  revenue: "Revenue",
+  ads: "Paid media",
+  funnel: "Funnel",
+  email: "Email",
+  product: "Product",
+  customer: "Customer",
+};
+
+const CALC_GROUP_COLOR: Record<Calculation["group"], string> = {
+  revenue: "#16a34a",
+  ads: "#ec4899",
+  funnel: "#2563eb",
+  email: "#a855f7",
+  product: "#f97316",
+  customer: "#0891b2",
+};
+
+const CALCULATION_RULES: Calculation[] = [
+  {
+    metric: "Gross Sales",
+    formula: "SUM(total_price) where filters apply",
+    notes: [
+      "Excludes B2B/wholesale/marketplace/redo/influencer",
+      "Excludes orders > $30k US / R$25k BR",
+      "Excludes PIX pending (BR)",
+      "Excludes financial_status IN ('voided','refunded')",
+    ],
+    appliesTo: "Overview, Main, Channel Share, Executive",
+    group: "revenue",
+  },
+  {
+    metric: "Net Sales",
+    formula: "Gross Sales − Returns",
+    notes: [
+      "Returns from larroude-data-prod.gold_sales.returns_daily",
+      "Lag: D-2 (returns processed with delay)",
+    ],
+    appliesTo: "Main Dashboard (Net Sales card)",
+    group: "revenue",
+  },
+  {
+    metric: "Total Sales (for ROAS)",
+    formula: "Gross Sales + tax + shipping",
+    notes: ["Used as numerator in ROAS calculation (not Order Sales)"],
+    appliesTo: "Overview, Main, CAC, Channel Share, Consolidated",
+    group: "revenue",
+  },
+  {
+    metric: "AOV — Average Order Value",
+    formula: "Total Revenue ÷ Total Orders",
+    numerator: "Gross Sales",
+    denominator: "COUNT(DISTINCT order_id)",
+    appliesTo: "Overview, Main, LTV, UE",
+    group: "revenue",
+  },
+  {
+    metric: "Total Spend",
+    formula: "Σ (Meta + Google + Klaviyo + Attentive + Criteo + Agent.shop)",
+    notes: [
+      "Meta: 3 US accounts + BR (USD reporting × FX)",
+      "Google: via Supermetrics (OAuth pending)",
+      "Tools cost: monthly fixed (US Klaviyo $11,323 · BR Klaviyo R$13,000 · BR Agent.shop = 10% of revenue)",
+    ],
+    appliesTo: "Overview, Main, CAC, Channel Share",
+    group: "ads",
+  },
+  {
+    metric: "ROAS",
+    formula: "Total Sales ÷ Total Spend",
+    numerator: "Gross Sales + tax + shipping",
+    denominator: "Σ all paid + tools cost",
+    notes: ["Changed 2026-05-25 from 'Order Sales' to 'Total Sales' base"],
+    appliesTo: "Overview, Main, Channel Share, Consolidated",
+    group: "ads",
+  },
+  {
+    metric: "CAC — Customer Acquisition Cost",
+    formula: "Total Spend ÷ New Customers (in window)",
+    numerator: "Σ Meta + Google + Klaviyo + Attentive + Criteo + Agent.shop (BR)",
+    denominator: "COUNT(DISTINCT customer_id WHERE first_purchase_date = order_date)",
+    notes: [
+      "New customer detected via window function: MIN(created_at) per customer_id",
+      "Source: lib/cac-dashboard/queries-bq.ts → queryDailyCac",
+      "Daily chart must sum to aggregated CAC (paridade rule)",
+      "Excludes B2B/wholesale/marketplace/redo/influencer + cap filters",
+    ],
+    appliesTo: "CAC Dashboard, Overview, Main",
+    group: "customer",
+  },
+  {
+    metric: "nCAC — Marketing-only CAC",
+    formula: "Marketing Spend (paid ads only) ÷ New Customers",
+    numerator: "Σ Meta + Google (excludes tools cost: Klaviyo, Attentive, Criteo)",
+    denominator: "Same as CAC (new customers in window)",
+    notes: ["Stricter than CAC — measures cost from paid acquisition channels only"],
+    appliesTo: "CAC Dashboard",
+    group: "customer",
+  },
+  {
+    metric: "CRC — Cost to Retain Customer",
+    formula: "Total Spend ÷ Returning Customers",
+    denominator: "COUNT(DISTINCT customer_id WHERE first_purchase_date < order_date)",
+    notes: ["Returning customer = had at least 1 previous order before the window"],
+    appliesTo: "CAC Dashboard",
+    group: "customer",
+  },
+  {
+    metric: "CAC per SKU (allocation)",
+    formula: "Σ allocatedSpend[sku] ÷ Σ newCustomers[sku]",
+    notes: [
+      "Spend allocated proportionally by SKU revenue share per day",
+      "Used in CAC product heatmap and trend",
+      "Source: lib/cac-dashboard/queries-bq.ts:294",
+    ],
+    appliesTo: "CAC Dashboard (product table)",
+    group: "customer",
+  },
+  {
+    metric: "CPO — Cost Per Order",
+    formula: "Total Spend ÷ Total Orders",
+    appliesTo: "Overview, Main, CAC",
+    group: "ads",
+  },
+  {
+    metric: "LTV Histórico (real)",
+    formula: "total_net_sales ÷ total_customers",
+    numerator: "Σ net_sales across ALL orders in window (no filter)",
+    denominator: "COUNT(DISTINCT customer_id) in window",
+    notes: [
+      "What every customer has actually spent so far",
+      "Uses NET sales (gross − returns)",
+      "Default LTV exibido nos dashboards",
+      "Source: lib/ltv-dashboard/queries.ts:18",
+    ],
+    appliesTo: "LTV Dashboard, Executive",
+    group: "customer",
+  },
+  {
+    metric: "LTV Preditivo (forecast)",
+    formula: "AOV × Purchase Frequency × Customer Lifetime",
+    notes: [
+      "AOV = avg order value per customer",
+      "Purchase Frequency = orders ÷ unique customers (window)",
+      "Customer Lifetime = expected active months (proxy from BG/NBD model)",
+      "Não reconcilia com planilha oficial Cassia desde mudança em maio/2026",
+      "Source: lib/ltv-dashboard/queries.ts:6",
+    ],
+    appliesTo: "LTV Dashboard (preditivo card)",
+    group: "customer",
+  },
+  {
+    metric: "LTV Mediana / P75 / P90",
+    formula: "Percentil de revenue per customer no window",
+    notes: [
+      "ltvMedian = APPROX_QUANTILES(revenue_per_customer, 100)[50]",
+      "ltvP75 = ...[75]",
+      "ltvP90 = ...[90]",
+      "Mostra distribuição (top customers concentram receita)",
+    ],
+    appliesTo: "LTV Dashboard",
+    group: "customer",
+  },
+  {
+    metric: "LTV windowed (Klaviyo)",
+    formula: "revenue ÷ uniqueBuyerMonths (L3M, L6M, L12M)",
+    notes: [
+      "Computed from Klaviyo Placed Order metric (uniques + sum_value)",
+      "Forecast 3M = trailing 12m average × 3",
+      "Source: public/klaviyo-journey/index.html (lib na api/data.js)",
+    ],
+    appliesTo: "Klaviyo Journey (LTV cards)",
+    group: "customer",
+  },
+  {
+    metric: "LTV / CAC ratio",
+    formula: "LTV Histórico ÷ CAC",
+    notes: [
+      "Healthy threshold: > 3.0×",
+      "Yellow: 1.5–3.0×",
+      "Red: < 1.5×",
+      "Excellent: > 5.0×",
+    ],
+    appliesTo: "LTV Dashboard, Executive, North Star",
+    group: "customer",
+  },
+  {
+    metric: "Purchase Frequency",
+    formula: "Total Orders ÷ Unique Customers (in window)",
+    notes: ["Used as one of the 3 components of LTV Preditivo"],
+    appliesTo: "LTV Dashboard",
+    group: "customer",
+  },
+  {
+    metric: "Customer Lifetime (months)",
+    formula: "Expected active months per customer",
+    notes: [
+      "Proxy via avg gap between orders + decay function",
+      "Used as Lifetime factor in LTV Preditivo",
+    ],
+    appliesTo: "LTV Dashboard",
+    group: "customer",
+  },
+  {
+    metric: "CVR — Conversion Rate",
+    formula: "Orders ÷ Sessions",
+    notes: ["Sessions sourced from Shopify online store (referrer-based)"],
+    appliesTo: "Main Dashboard (conversion funnel)",
+    group: "funnel",
+  },
+  {
+    metric: "CPC — Cost Per Click",
+    formula: "Spend ÷ Clicks",
+    notes: ["Sourced from Meta + Google ad-platform metrics"],
+    appliesTo: "Main, Meta Ads, Google Ads",
+    group: "ads",
+  },
+  {
+    metric: "CTR — Click-Through Rate",
+    formula: "Clicks ÷ Impressions",
+    appliesTo: "Meta Ads, Google Ads",
+    group: "ads",
+  },
+  {
+    metric: "Conversion Funnel (Shopify)",
+    formula: "Sessions → Added to cart → Checkout started → Orders",
+    notes: [
+      "Sessions: 1M+/period (was wrongly 16k in earlier version, fixed)",
+      "Each stage % = stage ÷ previous stage",
+    ],
+    appliesTo: "Main Dashboard (Conversions by Step)",
+    group: "funnel",
+  },
+  {
+    metric: "Open Rate (email)",
+    formula: "opens_unique ÷ delivered",
+    notes: ["From Klaviyo campaign-values-report and flow-values-report"],
+    appliesTo: "Klaviyo CRM, Klaviyo Journey",
+    group: "email",
+  },
+  {
+    metric: "Click Rate (email)",
+    formula: "clicks_unique ÷ delivered",
+    appliesTo: "Klaviyo CRM, Klaviyo Journey",
+    group: "email",
+  },
+  {
+    metric: "RPR — Revenue per Recipient",
+    formula: "conversion_value ÷ recipients",
+    notes: ["Klaviyo statistic from Placed Order conversion metric"],
+    appliesTo: "Klaviyo CRM (Campaigns, Flows, Segments)",
+    group: "email",
+  },
+  {
+    metric: "Conversion Rate (email)",
+    formula: "conversions ÷ recipients",
+    appliesTo: "Klaviyo CRM",
+    group: "email",
+  },
+  {
+    metric: "Bounce Rate (email)",
+    formula: "bounced ÷ delivered",
+    notes: ["Hard + soft bounces aggregated"],
+    appliesTo: "Klaviyo CRM (Health card)",
+    group: "email",
+  },
+  {
+    metric: "Return Rate (product)",
+    formula: "Returns 30d ÷ Orders 30d (per product)",
+    notes: ["Window: trailing 30 days from selected date"],
+    appliesTo: "Unit Economics, Apostar",
+    group: "product",
+  },
+  {
+    metric: "Exchange Rate (product)",
+    formula: "Exchanges 30d ÷ Orders 30d (per product)",
+    notes: [
+      "Exchange = refund where new order created (tag REDO)",
+      "Distinct from Return (refund without replacement)",
+    ],
+    appliesTo: "Unit Economics, Apostar",
+    group: "product",
+  },
+  {
+    metric: "Gross Margin",
+    formula: "(Revenue − COGS) ÷ Revenue",
+    notes: ["COGS from product cost field (Shopify)"],
+    appliesTo: "Unit Economics, Apostar",
+    group: "product",
+  },
+  {
+    metric: "Unit Economics",
+    formula: "Price × (1 − discount) − COGS − Marketing − Returns_cost",
+    notes: [
+      "Base price = compareAtPrice (full price, not discount price)",
+      "Marketing % from premissa editable in UE",
+      "Returns_cost = REDO 30d cost per unit",
+    ],
+    appliesTo: "Unit Economics Dashboard",
+    group: "product",
+  },
+  {
+    metric: "Apostar Score",
+    formula: "(Gross_sales_28d − Exchange_volume_28d) × Margin × Velocity",
+    notes: [
+      "Cassia 2026-06-12: removed standalone 'Exchange rule' from score",
+      "Exchange-Only orders excluded entirely from volume base",
+      "Velocity = orders ÷ days_with_inventory",
+    ],
+    appliesTo: "Products to Bet On",
+    group: "product",
+  },
+  {
+    metric: "Channel Share",
+    formula: "Channel Revenue ÷ Total Revenue",
+    notes: [
+      "Organic Search + Organic Social → 'Orgânico'",
+      "Klaviyo/SMS/Awin/ShopMy = NOT paid (owned/affiliate)",
+    ],
+    appliesTo: "Channel Share, Main, Executive",
+    group: "ads",
+  },
+  {
+    metric: "Period filter windows",
+    formula: "L1D / L7D / L28D / 3M / 6M / 12M = trailing rolling",
+    notes: [
+      "L1D = today only",
+      "L7D = trailing 7 days from yesterday (D-1 inclusive)",
+      "All windows use market timezone (US: NY, BR: SP)",
+    ],
+    appliesTo: "Every dashboard with period filter",
+    group: "funnel",
+  },
+];
+
+function CalculationCard({ calc }: { calc: Calculation }) {
+  return (
+    <div className="card" style={{ borderLeft: `3px solid ${CALC_GROUP_COLOR[calc.group]}` }}>
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <h3 className="text-[14px] font-semibold" style={{ color: "var(--ink)" }}>
+          {calc.metric}
+        </h3>
+        <span
+          style={{
+            fontSize: 9,
+            padding: "2px 8px",
+            borderRadius: 100,
+            background: CALC_GROUP_COLOR[calc.group] + "20",
+            color: CALC_GROUP_COLOR[calc.group],
+            fontWeight: 700,
+            textTransform: "uppercase",
+            letterSpacing: "0.04em",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {CALC_GROUP_LABEL[calc.group]}
+        </span>
+      </div>
+      <div
+        className="font-num"
+        style={{
+          fontSize: 12,
+          padding: "8px 10px",
+          background: "var(--paper)",
+          borderRadius: 6,
+          color: "var(--ink)",
+          fontWeight: 600,
+          marginBottom: 8,
+          border: "1px solid var(--border-soft)",
+          fontFamily: "ui-monospace, SFMono-Regular, monospace",
+        }}
+      >
+        {calc.formula}
+      </div>
+      {(calc.numerator || calc.denominator) && (
+        <div className="text-[11px] mb-2" style={{ color: "var(--ink-muted)" }}>
+          {calc.numerator && (
+            <div>
+              <b>numerator:</b> {calc.numerator}
+            </div>
+          )}
+          {calc.denominator && (
+            <div>
+              <b>denominator:</b> {calc.denominator}
+            </div>
+          )}
+        </div>
+      )}
+      {calc.notes && calc.notes.length > 0 && (
+        <ul className="space-y-1 mb-2">
+          {calc.notes.map((n, i) => (
+            <li
+              key={i}
+              className="text-[11px] flex items-start gap-1.5"
+              style={{ color: "var(--ink-muted)" }}
+            >
+              <span style={{ color: CALC_GROUP_COLOR[calc.group] }}>•</span>
+              <span>{n}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {calc.appliesTo && (
+        <p className="text-[10px] italic" style={{ color: "var(--ink-muted)" }}>
+          Applies to: {calc.appliesTo}
+        </p>
+      )}
+    </div>
+  );
+}
 
 function RuleCard({ rule }: { rule: Rule }) {
   return (
