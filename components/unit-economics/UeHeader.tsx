@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+import { Tag } from 'lucide-react';
 import type { Market } from '@/lib/unit-economics/queries';
 
 interface Props {
@@ -58,7 +60,26 @@ export default function UeHeader({
         >
           Unit Economics
         </h1>
-        <div className="flex items-center gap-2 no-print">
+        <div className="flex items-center gap-2 no-print flex-wrap">
+          {/* Cassia 2026-06-13: link para nova aba Campaigns */}
+          <Link
+            href="/unit-economics/campaigns"
+            className="inline-flex items-center gap-1.5"
+            title="Build discount campaigns"
+            style={{
+              padding: '8px 14px',
+              borderRadius: 999,
+              background: '#FFFFFF',
+              color: '#FF3D8B',
+              border: '1.5px solid #FF3D8B',
+              fontSize: 12,
+              fontWeight: 700,
+              textDecoration: 'none',
+            }}
+          >
+            <Tag style={{ width: 14, height: 14 }} />
+            <span>Campaigns</span>
+          </Link>
           <button
             onClick={onExportPdf}
             className="pill pill-ghost px-3 py-1.5 text-[12px] flex items-center gap-1.5"
