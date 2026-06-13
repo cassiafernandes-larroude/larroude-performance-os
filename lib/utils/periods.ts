@@ -24,7 +24,31 @@ export function granularityForDays(days: number): Granularity {
   return "month";
 }
 
+// Cassia 2026-06-13: "quando eu clicar em 12 meses, aparecer os dados completos
+// de todos os meses mais os dias do mes vigente".
+// 3M/6M/12M passam a usar primeiro dia do mês inicial (N-1 meses atrás) até hoje.
+// today/7d/14d/28d mantêm o comportamento rolling (trailing N dias).
+function isMonthlyPeriod(period: Period): boolean {
+  return period === "3M" || period === "6M" || period === "12M";
+}
+
+function monthsBack(period: Period): number {
+  if (period === "3M") return 3;
+  if (period === "6M") return 6;
+  return 12;
+}
+
 export function dateRangeForPeriod(period: Period, today = new Date()): { from: string; to: string } {
+  if (isMonthlyPeriod(period)) {
+    const n = monthsBack(period);
+    // Primeiro dia do mês N-1 meses atrás
+    // ex: today=2026-06-13, period=12M → from = 2025-06-01, to = 2026-06-13
+    const from = new Date(today.getFullYear(), today.getMonth() - (n - 1), 1);
+    return {
+      from: from.toISOString().slice(0, 10),
+      to: today.toISOString().slice(0, 10),
+    };
+  }
   const days = periodToDays(period);
   const to = today;
   const from = new Date(today.getTime() - days * 24 * 60 * 60 * 1000);

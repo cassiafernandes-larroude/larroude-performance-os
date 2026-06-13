@@ -213,8 +213,13 @@ function rangeForPeriod(period: ExecutivePeriod, customRange?: { from: string; t
   if (customRange) return customRange;
   const today = new Date();
   const to = new Date(today.getTime() - 24 * 3600 * 1000);
-  const days = period === '7d' ? 7 : period === '14d' ? 14 : period === '28d' ? 28
-             : period === '3M' ? 90 : period === '6M' ? 180 : 365;
+  // Cassia 2026-06-13: 3M/6M/12M usam "primeiro dia do mês N-1 atrás → hoje (D-1)".
+  if (period === '3M' || period === '6M' || period === '12M') {
+    const n = period === '3M' ? 3 : period === '6M' ? 6 : 12;
+    const from = new Date(Date.UTC(to.getUTCFullYear(), to.getUTCMonth() - (n - 1), 1));
+    return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
+  }
+  const days = period === '7d' ? 7 : period === '14d' ? 14 : 28;
   const from = new Date(to.getTime() - (days - 1) * 24 * 3600 * 1000);
   return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
 }

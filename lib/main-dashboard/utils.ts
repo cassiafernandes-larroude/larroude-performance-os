@@ -50,7 +50,27 @@ export function shiftDays(d: Date, days: number): Date {
  */
 export function calcPeriod(periodKey: PeriodKey, endDate?: string, market: 'US' | 'BR' = 'US'): PeriodRange {
   // Cassia 2026-06-12: default endDate = D-1 no fuso do market.
+  // Cassia 2026-06-13: 3M/6M/12M passam a usar "primeiro dia do mês N-1 atrás → hoje"
+  // (meses completos + dias do mês vigente) em vez de rolling 90/180/365 dias.
   const end = endDate ? parseISO(endDate) : shiftDays(parseISO(todayISO(market)), -1);
+
+  // Para 3M/6M/12M usar primeiro dia do mês (N-1) atrás
+  if (periodKey === '3M' || periodKey === '6M' || periodKey === '12M') {
+    const n = periodKey === '3M' ? 3 : periodKey === '6M' ? 6 : 12;
+    const start = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() - (n - 1), 1));
+    const days = Math.round((end.getTime() - start.getTime()) / (24 * 3600 * 1000)) + 1;
+    // Período anterior = mesmos meses imediatamente antes (também "completos")
+    const prevEnd = shiftDays(start, -1);
+    const prevStart = new Date(Date.UTC(prevEnd.getUTCFullYear(), prevEnd.getUTCMonth() - (n - 1), 1));
+    return {
+      start: formatISO(start),
+      end: formatISO(end),
+      days,
+      prevStart: formatISO(prevStart),
+      prevEnd: formatISO(prevEnd),
+    };
+  }
+
   let days = 28;
   switch (periodKey) {
     case '1d': days = 1; break;
@@ -59,9 +79,6 @@ export function calcPeriod(periodKey: PeriodKey, endDate?: string, market: 'US' 
     case '28d': days = 28; break;
     case '60d': days = 60; break;
     case '90d': days = 90; break;
-    case '3M': days = 90; break;
-    case '6M': days = 180; break;
-    case '12M': days = 365; break;
   }
   const start = shiftDays(end, -(days - 1));
   const prevEnd = shiftDays(start, -1);
