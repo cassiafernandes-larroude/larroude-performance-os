@@ -927,6 +927,93 @@ body::-webkit-scrollbar-thumb:hover {
   .fontes-table-row .table-name { font-size: 12px !important; }
 }
 
+/* ============================================================================
+   PADRONIZACAO DE PALETA DE CORES UNIVERSAL — Cassia 2026-06-13
+   "padronize as cores de todos os dashboards"
+
+   Paleta canonica Larroude Performance OS:
+   - Pink primario: #FF3D8B (--pink) — usado em CTAs, ROAS positivo, brand
+   - Cream BG: #F2EDE6 (--paper) — fundo principal
+   - White card: #FFFFFF (--card) — cards e tabelas
+   - Ink: #1A1A1A texto / #4A4A4A soft / #8A8580 muted / #B5B0A8 faint
+   - Positive: #16A34A (verde) / Negative: #DC2626 (vermelho) / Warning: #D97706 (ambar) / Info: #2563EB (azul)
+   - Chart categorical (DailyBarChart):
+     · Revenue: #10b981 (emerald)
+     · Spend:   #FF3D8B (pink)
+     · ROAS:    #5d4ec5 (roxo)
+     · Profit:  #d97757 (orange-warm)
+   ============================================================================ */
+
+/* Override das vars internas dos escopos isolados pra usar a paleta canonica.
+   .klaviyo-root vinha com #E91E78 hardcoded do source — sobrescrevemos.
+   .cac-root e .ltv-root sao mais flexiveis, ja herdam variaveis. */
+.klaviyo-root {
+  --bg: #F2EDE6 !important;
+  --bg-soft: #ECE6DD !important;
+  --paper: #FFFFFF !important;
+  --ink: #1A1A1A !important;
+  --ink-2: #4A4A4A !important;
+  --ink-3: #8A8580 !important;
+  --ink-4: #B5B0A8 !important;
+  --line: #E5E0D6 !important;
+  --line-card: #1A1A1A !important;
+  --pink: #FF3D8B !important;
+  --pink-soft: #FFE0EC !important;
+  --orange: #d97757 !important;
+  --orange-soft: #FAD9C4 !important;
+  --purple: #5d4ec5 !important;
+  --purple-soft: #E0D5F5 !important;
+  --teal: #10b981 !important;
+  --teal-soft: #D1FAE5 !important;
+  --blue: #2563EB !important;
+  --blue-soft: #DBEAFE !important;
+  --gold: #D97706 !important;
+  --gold-soft: #FEF3C7 !important;
+  --green: #16A34A !important;
+  --green-soft: #DCFCE7 !important;
+  --red: #DC2626 !important;
+  --red-soft: #FEE2E2 !important;
+}
+
+/* .cac-root e .ltv-root: forca uso das vars canonicas (caso tenham override) */
+.cac-root,
+.ltv-root,
+.main-dashboard-root {
+  --pink: var(--pink, #FF3D8B) !important;
+  --pink-soft: var(--pink-soft, #FFE0EC) !important;
+  --positive: var(--positive, #16A34A) !important;
+  --negative: var(--negative, #DC2626) !important;
+  --warning: var(--warning, #D97706) !important;
+}
+
+/* Chart bars: cores categoricas padronizadas */
+:root {
+  --chart-revenue: #10b981;  /* emerald */
+  --chart-spend:   #FF3D8B;  /* pink Larroude */
+  --chart-roas:    #5d4ec5;  /* roxo */
+  --chart-profit:  #d97757;  /* orange-warm */
+  --chart-orders:  #2563EB;  /* azul */
+  --chart-cac:     #D97706;  /* ambar */
+  --chart-aov:     #16A34A;  /* verde escuro */
+  /* Severity colors do DiagnosticsPanel */
+  --severity-critical: #DC2626;
+  --severity-critical-bg: #FEE2E2;
+  --severity-critical-border: #FECACA;
+  --severity-warning: #D97706;
+  --severity-warning-bg: #FEF3C7;
+  --severity-warning-border: #FDE68A;
+  --severity-info: #2563EB;
+  --severity-info-bg: #DBEAFE;
+  --severity-info-border: #BFDBFE;
+  --severity-positive: #16A34A;
+  --severity-positive-bg: #DCFCE7;
+  --severity-positive-border: #BBF7D0;
+}
+
+/* Klaviyo Journey iframe — herda automaticamente porque eh outro doc.
+   No HTML interno usamos #f5f3ee/#d44a8a; vamos overrider via embed=1 style. */
+
+
 
 /* LTV scope: scrollbar com paleta cream/peach do LTV */
 .ltv-root::-webkit-scrollbar-thumb,

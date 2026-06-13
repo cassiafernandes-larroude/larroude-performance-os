@@ -5,35 +5,37 @@
 import { AlertTriangle, AlertCircle, Info, CheckCircle2, ArrowRight } from "lucide-react";
 import type { Diagnostic, DiagnosticSeverity } from "@/lib/data/executive-diagnostics";
 
+// Severity styles using the canonical palette (CSS vars defined in globals.css).
+// Cassia 2026-06-13: "padronize as cores de todos os dashboards".
 const SEVERITY_STYLES: Record<
   DiagnosticSeverity,
   { color: string; bg: string; border: string; icon: React.ReactNode; label: string }
 > = {
   critical: {
-    color: "#b91c1c",
-    bg: "#fef2f2",
-    border: "#fecaca",
+    color: "var(--severity-critical)",
+    bg: "var(--severity-critical-bg)",
+    border: "var(--severity-critical-border)",
     icon: <AlertCircle className="w-4 h-4" />,
     label: "CRITICAL",
   },
   warning: {
-    color: "#b45309",
-    bg: "#fffbeb",
-    border: "#fde68a",
+    color: "var(--severity-warning)",
+    bg: "var(--severity-warning-bg)",
+    border: "var(--severity-warning-border)",
     icon: <AlertTriangle className="w-4 h-4" />,
     label: "WARNING",
   },
   info: {
-    color: "#1e40af",
-    bg: "#eff6ff",
-    border: "#bfdbfe",
+    color: "var(--severity-info)",
+    bg: "var(--severity-info-bg)",
+    border: "var(--severity-info-border)",
     icon: <Info className="w-4 h-4" />,
     label: "INFO",
   },
   positive: {
-    color: "#15803d",
-    bg: "#f0fdf4",
-    border: "#bbf7d0",
+    color: "var(--severity-positive)",
+    bg: "var(--severity-positive-bg)",
+    border: "var(--severity-positive-border)",
     icon: <CheckCircle2 className="w-4 h-4" />,
     label: "HEALTHY",
   },
