@@ -15,8 +15,8 @@ const MAX_ATTEMPTS = 5;
 const MAX_WAIT_MS = 4000;
 
 function getApiKey(account) {
-  if (account === "br") return process.env.KLAVIYO_API_KEY_BR;
-  return process.env.KLAVIYO_API_KEY_US || process.env.KLAVIYO_API_KEY;
+  if (account === "br") return (process.env.KLAVIYO_API_KEY_BR || process.env.KLAVIYO_PRIVATE_API_KEY_BR);
+  return (process.env.KLAVIYO_API_KEY_US || process.env.KLAVIYO_PRIVATE_API_KEY_US || process.env.KLAVIYO_API_KEY);
 }
 
 async function klaviyoFetchWithRetry(apiKey, path) {

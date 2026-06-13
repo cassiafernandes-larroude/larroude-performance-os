@@ -11,8 +11,8 @@ const MAX_WAIT_MS = 3500;
 const KNOWN_METRIC_IDS = { us: "RWb2qv", br: "RG3FHD" };
 
 function getApiKey(account) {
-  if (account === "br") return process.env.KLAVIYO_API_KEY_BR;
-  return process.env.KLAVIYO_API_KEY_US || process.env.KLAVIYO_API_KEY;
+  if (account === "br") return (process.env.KLAVIYO_API_KEY_BR || process.env.KLAVIYO_PRIVATE_API_KEY_BR);
+  return (process.env.KLAVIYO_API_KEY_US || process.env.KLAVIYO_PRIVATE_API_KEY_US || process.env.KLAVIYO_API_KEY);
 }
 
 async function klaviyoFetchWithRetry(apiKey, path, opts = {}) {

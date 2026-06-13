@@ -70,7 +70,7 @@ export async function GET(req: Request) {
   }
 
   const us = await warmAccount("us");
-  const br = process.env.KLAVIYO_API_KEY_BR ? await warmAccount("br") : null;
+  const br = (process.env.KLAVIYO_API_KEY_BR || process.env.KLAVIYO_PRIVATE_API_KEY_BR) ? await warmAccount("br") : null;
 
   return new Response(JSON.stringify({
     triggeredAt: new Date().toISOString(),
