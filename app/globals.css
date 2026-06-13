@@ -295,12 +295,28 @@ body {
   background: var(--ink);
   color: white;
 }
+/* .pill-pink — Cassia 2026-06-13: alto contraste forçado em todos os escopos.
+   Antes ficava semi-transparente em escopos isolados (klaviyo-root, cac-root...). */
+.pill-pink,
+.pill-pink * {
+  color: #FFFFFF !important;
+}
 .pill-pink {
-  background: var(--pink);
-  color: white;
+  background: #FF3D8B !important;
+  border: none !important;
+  font-weight: 700 !important;
+  box-shadow: 0 2px 8px rgba(255, 61, 139, 0.3) !important;
 }
 .pill-pink:hover {
-  background: var(--pink-deep);
+  background: #E91E63 !important;
+}
+.pill-pink:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+.pill-pink svg {
+  color: #FFFFFF !important;
+  stroke: #FFFFFF !important;
 }
 .pill-inactive {
   background: #e8e2d6;
