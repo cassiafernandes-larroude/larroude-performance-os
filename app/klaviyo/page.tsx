@@ -1,12 +1,16 @@
-import KlaviyoDashboard from '@/components/klaviyo/Dashboard';
-import './klaviyo.css';
-
-export const dynamic = 'force-dynamic';
+import { DashboardEmbed } from "@/components/dashboards/DashboardEmbed";
 
 export const metadata = {
-  title: 'Klaviyo CRM · Larroudé Performance OS',
+  title: 'Klaviyo Journey · Larroudé Performance OS',
 };
 
-export default function KlaviyoPage() {
-  return <KlaviyoDashboard />;
+export default function KlaviyoJourneyPage() {
+  return (
+    <DashboardEmbed
+      src="https://larroude-klaviyo-dashboard.vercel.app/"
+      title="Klaviyo Journey"
+      subtitle="Flows, campaigns, segmentation and attributed revenue"
+      externalUrl="https://larroude-klaviyo-dashboard.vercel.app/"
+    />
+  );
 }

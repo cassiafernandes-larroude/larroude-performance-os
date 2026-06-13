@@ -11,6 +11,7 @@ const titleMap: Record<string, string> = {
   "/ltv-cohorts": "LTV",
   "/cac-ncac-crc": "CAC",
   "/klaviyo": "Klaviyo Journey",
+  "/klaviyo-crm": "Klaviyo CRM",
   "/meta-ads": "Meta Ads",
   "/google-ads": "Google Ads",
   "/shopify": "Shopify",
