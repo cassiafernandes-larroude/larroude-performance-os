@@ -15,32 +15,54 @@ export default function KpiCard({ kpi }: Props) {
   const deltaColor = positive ? '#10b981' : negative ? '#ef4444' : '#9ca3af';
 
   return (
-    <div className="card p-2.5 flex flex-col" style={{ minHeight: 96 }}>
-      {/* Label: 2 linhas garantidas - valores ficam alinhados horizontalmente
-          independente do label ter 1 ou 2 linhas (Cassia 2026-06-13: "alinhe os kpis") */}
+    // Cassia 2026-06-13: "alinhe os kpis" — grid de 3 linhas com alturas FIXAS
+    // garante que o valor sempre fica na mesma linha horizontal entre todos os cards
+    // independente do tamanho do label.
+    //
+    //   row 1: LABEL  (altura FIXA 38px - acomoda 3 linhas de 8.5px+leading-tight)
+    //   row 2: VALUE  (altura FIXA 28px - texto-xl com leading-tight)
+    //   row 3: DELTA  (altura FIXA auto - reserva 1 linha)
+    <div
+      className="card"
+      style={{
+        padding: "10px 12px",
+        display: "grid",
+        gridTemplateRows: "38px 30px auto",
+        rowGap: 4,
+        minHeight: 110,
+      }}
+    >
       <div
         className="text-[8.5px] font-bold tracking-wider text-steel uppercase leading-tight"
         style={{
-          minHeight: 28,
           display: "-webkit-box",
-          WebkitLineClamp: 2,
+          WebkitLineClamp: 3,
           WebkitBoxOrient: "vertical",
           overflow: "hidden",
+          alignSelf: "start",
         }}
       >
         {kpi.label}
       </div>
-      <div className="text-xl font-bold text-ink leading-tight mt-0.5">{kpi.value}</div>
-      <div className="mt-auto pt-1">
+      <div
+        className="text-xl font-bold text-ink leading-tight"
+        style={{
+          alignSelf: "center",
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
+        {kpi.value}
+      </div>
+      <div className="text-[9px] font-medium leading-tight" style={{ alignSelf: "end", minHeight: 14 }}>
         {kpi.delta != null ? (
-          <div className="text-[9px] font-medium leading-tight" style={{ color: deltaColor, minHeight: 14 }}>
+          <span style={{ color: deltaColor }}>
             <span className="mr-1">{arrow}</span>
             <span>{d.text} vs prior</span>
-          </div>
+          </span>
         ) : kpi.hint ? (
-          <div className="text-[9px] text-steel leading-tight" style={{ minHeight: 14 }}>{kpi.hint}</div>
+          <span className="text-steel">{kpi.hint}</span>
         ) : (
-          <div className="text-[9px] text-transparent" style={{ minHeight: 14 }}>·</div>
+          <span style={{ color: "transparent" }}>·</span>
         )}
       </div>
     </div>

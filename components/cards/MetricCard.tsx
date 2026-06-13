@@ -15,24 +15,33 @@ export function MetricCard({
   hint?: string;
 }) {
   return (
-    <div className="card flex flex-col" style={{ minHeight: 110 }}>
-      {/* Label: 2 linhas reservadas — valores ficam alinhados horizontalmente
-          independente do label ter 1 ou 2 linhas (Cassia 2026-06-13). */}
+    // Grid de 3 linhas com alturas fixas — garante alinhamento horizontal dos
+    // valores entre todos os cards (Cassia 2026-06-13).
+    <div
+      className="card"
+      style={{
+        display: "grid",
+        gridTemplateRows: "36px 36px auto",
+        rowGap: 4,
+        minHeight: 120,
+      }}
+    >
       <div
         className="label-meta"
         style={{
-          minHeight: 28,
           display: "-webkit-box",
-          WebkitLineClamp: 2,
+          WebkitLineClamp: 3,
           WebkitBoxOrient: "vertical",
           overflow: "hidden",
-          marginBottom: 8,
+          alignSelf: "start",
         }}
       >
         {label}
       </div>
-      <div className="metric-value font-num">{value}</div>
-      <div className="mt-auto pt-1.5" style={{ minHeight: 18 }}>
+      <div className="metric-value font-num" style={{ alignSelf: "center" }}>
+        {value}
+      </div>
+      <div style={{ alignSelf: "end", minHeight: 18 }}>
         {delta && (
           <div
             className={`${
