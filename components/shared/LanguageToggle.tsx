@@ -14,9 +14,33 @@ import { EN_TO_PT } from "@/lib/i18n/dictionary-en-pt";
 const STORAGE_KEY = "lpos-lang";
 
 // Build a lookup map keyed by lowercased trimmed text for resilient matching.
-const LOOKUP: Map<string, string> = new Map();
+// Two structures:
+//   - DIRECT_LOOKUP for exact full-string matches (fastest path)
+//   - SORTED_ENTRIES for substring replacement, sorted DESC by length so longer
+//     phrases are replaced FIRST and don't get eaten by shorter substrings.
+const DIRECT_LOOKUP: Map<string, string> = new Map();
+const SORTED_ENTRIES: Array<[string, string, RegExp]> = [];
+
+// Word-character regex tester (works with unicode like ×, →, ↔)
+const WORD_CHAR = /[A-Za-z0-9]/;
+
 for (const [en, pt] of Object.entries(EN_TO_PT)) {
-  LOOKUP.set(en.toLowerCase().trim(), pt);
+  const norm = en.toLowerCase().trim();
+  if (norm) DIRECT_LOOKUP.set(norm, pt);
+}
+
+// Sort entries by length descending so we replace "Total Sales (Gross)" before "Total Sales"
+const allEntries = Object.entries(EN_TO_PT).sort((a, b) => b[0].length - a[0].length);
+for (const [en, pt] of allEntries) {
+  if (en.length < 3) continue;
+  // For long phrases (>=15 chars), use simple substring replace (case-insensitive, no boundary).
+  // For short keys (3-14 chars), use word-boundary regex to avoid partial matches like "all" in "tall".
+  const escaped = en.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const useBoundary = en.length < 15 && /^[A-Za-z][A-Za-z0-9\s]*[A-Za-z0-9]$/.test(en);
+  const re = useBoundary
+    ? new RegExp(`\\b${escaped}\\b`, "gi")
+    : new RegExp(escaped, "gi");
+  SORTED_ENTRIES.push([en, pt, re]);
 }
 
 // Stash original (EN) text per node so the EN ↦ PT swap is reversible.
@@ -36,7 +60,7 @@ function translateNode(node: Text, toPT: boolean) {
   if (!trimmed) return;
 
   // Direct hit on the whole string (most common case for labels / KPI tags).
-  const direct = LOOKUP.get(trimmed.toLowerCase());
+  const direct = DIRECT_LOOKUP.get(trimmed.toLowerCase());
   if (direct) {
     const lead = raw.match(/^\s*/)?.[0] ?? "";
     const trail = raw.match(/\s*$/)?.[0] ?? "";
@@ -44,12 +68,11 @@ function translateNode(node: Text, toPT: boolean) {
     return;
   }
 
-  // Substring fallback — replace any dictionary key found inside the text.
+  // Substring fallback — iterate from longest to shortest so phrases win over fragments.
   let out = raw;
-  for (const [k, v] of LOOKUP) {
-    if (k.length < 3) continue; // skip tiny keys to avoid false-positives
-    const re = new RegExp(`\\b${k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "gi");
-    out = out.replace(re, v);
+  for (const [, pt, re] of SORTED_ENTRIES) {
+    re.lastIndex = 0; // reset stateful regex
+    out = out.replace(re, pt);
   }
   if (out !== raw) node.nodeValue = out;
 }

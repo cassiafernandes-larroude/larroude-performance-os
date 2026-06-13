@@ -1013,6 +1013,102 @@ body::-webkit-scrollbar-thumb:hover {
 /* Klaviyo Journey iframe — herda automaticamente porque eh outro doc.
    No HTML interno usamos #f5f3ee/#d44a8a; vamos overrider via embed=1 style. */
 
+/* ============================================================================
+   FORÇA H1 + CONTAINER PADRONIZADOS — Cassia 2026-06-13
+   "os titulos dos dashboards ainda nao estao do mesmo tamanho e mesma fonte
+    e as margens dos dashboards ainda nao estao iguais"
+
+   Regra UNIVERSAL aplicada a TODOS os h1 dentro de dashboards, independente
+   do escopo (.klaviyo-root, .cac-root, .ltv-root, .main-dashboard-root, ou
+   dashboards nativos do POS que nao tem escopo proprio).
+   ============================================================================ */
+
+/* Todos os H1 dentro de qualquer rota de dashboard usam mesma tipografia */
+main h1,
+.dashboard-page h1,
+.klaviyo-root h1,
+.cac-root h1,
+.ltv-root h1,
+.main-dashboard-root h1,
+[class*="-root"] h1 {
+  font-family: var(--font-inter), Inter, system-ui, -apple-system, sans-serif !important;
+  font-size: 28px !important;
+  line-height: 1.15 !important;
+  letter-spacing: -0.02em !important;
+  font-weight: 700 !important;
+  color: var(--ink, #1A1A1A) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+@media (min-width: 1024px) {
+  main h1,
+  .dashboard-page h1,
+  .klaviyo-root h1,
+  .cac-root h1,
+  .ltv-root h1,
+  .main-dashboard-root h1,
+  [class*="-root"] h1 {
+    font-size: 36px !important;
+  }
+}
+
+@media (max-width: 640px) {
+  main h1,
+  .dashboard-page h1,
+  .klaviyo-root h1,
+  .cac-root h1,
+  .ltv-root h1,
+  .main-dashboard-root h1,
+  [class*="-root"] h1 {
+    font-size: 24px !important;
+  }
+}
+
+/* Containers de pagina: TODOS usam mesma margem/padding (max-width + padding-x).
+   Esta regra cobre tanto rotas do POS shell quanto dashboards isolados. */
+.lpos-page-container,
+.klaviyo-root .app,
+.cac-root,
+.ltv-root,
+.main-dashboard-root {
+  max-width: 1500px !important;
+  margin: 0 auto !important;
+  padding: 20px 16px 40px !important;
+}
+
+@media (min-width: 1024px) {
+  .lpos-page-container,
+  .klaviyo-root .app,
+  .cac-root,
+  .ltv-root,
+  .main-dashboard-root {
+    padding: 32px 32px 60px !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .lpos-page-container,
+  .klaviyo-root .app,
+  .cac-root,
+  .ltv-root,
+  .main-dashboard-root {
+    padding: 16px 14px 32px !important;
+  }
+}
+
+/* Ajustar h1 dentro do Klaviyo Journey iframe parent wrapper (no shell) */
+.dashboard-iframe-wrapper + h1,
+.klaviyo-journey-wrapper h1 {
+  font-size: 28px !important;
+}
+@media (min-width: 1024px) {
+  .dashboard-iframe-wrapper + h1,
+  .klaviyo-journey-wrapper h1 {
+    font-size: 36px !important;
+  }
+}
+
 
 
 /* LTV scope: scrollbar com paleta cream/peach do LTV */
