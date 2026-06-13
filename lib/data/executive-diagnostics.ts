@@ -17,6 +17,19 @@ export type Diagnostic = {
   recommendation?: string;
 };
 
+// Marcos de negócio que afetam interpretação de variações.
+// Cassia 2026-06-13: "o negócio no Brasil nasceu no ano passado".
+// Confirmado via BQ: BR começou nov/2024 com R$21k de spend; maturou ~jul/2025 (R$148k).
+const BR_LAUNCH_DATE = "2024-11-01";       // primeiro mês com spend BR
+const BR_MATURITY_DATE = "2025-07-01";    // mês em que spend BR triplicou (operação madura)
+
+function rangeIncludesBrLaunch(from: string, to: string): "before-launch" | "scaling" | "mature" | "mixed" {
+  if (to < BR_LAUNCH_DATE) return "before-launch";
+  if (from >= BR_MATURITY_DATE) return "mature";
+  if (from >= BR_LAUNCH_DATE && to < BR_MATURITY_DATE) return "scaling";
+  return "mixed"; // atravessa o launch ou a maturação
+}
+
 function safeDiv(a: number, b: number): number {
   return b === 0 ? 0 : a / b;
 }
@@ -391,6 +404,37 @@ export function computeExecutiveDiagnostics(c: ExecutiveConsolidated): Diagnosti
             : "Watch the lag — if the cut sticks, monitor next 2-3 days for compounding effect.",
       });
     }
+  }
+
+  // --- 13b) BR launch context — when range spans pre/post launch ----------
+  // Cassia 2026-06-13: "o negocio no Brasil nasceu no ano passado".
+  // Spend BR foi de R$21k (nov/24) → R$148k (jul/25) → R$291k (set/25).
+  // Atravessar essas datas distorce o "Δ spend" agregado da Consolidated View.
+  const brContext = rangeIncludesBrLaunch(c.period.from, c.period.to);
+  if (brContext === "mixed" || brContext === "scaling") {
+    const brShare = safeDiv(c.by_market.BR.spend, c.total_ad_spend) * 100;
+    out.push({
+      id: "br-launch-context",
+      severity: "info",
+      cause:
+        brContext === "mixed"
+          ? `This range crosses the BR launch period (Nov/2024 to Jul/2025)`
+          : `This range falls inside the BR ramp-up window (Nov/2024 to Jul/2025)`,
+      effect:
+        brContext === "mixed"
+          ? `Consolidated growth in spend/sales reflects BR coming online from near-zero, not organic acceleration. Compare to a like-for-like (post-Jul/2025) window for cleaner signal.`
+          : `BR was still scaling — month-over-month spend surges in this period are expected (the operation grew from R$21k to R$291k between Nov/2024 and Sep/2025).`,
+      evidence: [
+        `BR launch reference: ${BR_LAUNCH_DATE}`,
+        `BR maturity reference: ${BR_MATURITY_DATE}`,
+        `BR share of total spend in this window: ${brShare.toFixed(1)}%`,
+        `Spend trajectory BR: Nov/24 R$21k → Jul/25 R$148k → Sep/25 R$291k`,
+      ],
+      recommendation:
+        brContext === "mixed"
+          ? "Read the surge/pacing diagnostics below with this lens — anything dated before Jul/2025 is partly the BR launch curve, not a true marginal-ROAS signal."
+          : "For pacing decisions, weight US data more heavily until Jul/2025 — BR is still finding its baseline.",
+    });
   }
 
   // --- 14) Sharpest daily spend surge and its return ----------------------
