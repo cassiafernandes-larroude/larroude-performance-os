@@ -1,4 +1,5 @@
 import { Database, CheckCircle2, XCircle, Clock, Megaphone, ShoppingBag, Mail, Search, Cpu, Sparkles } from "lucide-react";
+import { headers } from "next/headers";
 
 export const revalidate = 300;
 
@@ -11,6 +12,18 @@ type Source = {
   envVars: string[];
   iconCategory: "bq" | "meta" | "shopify" | "klaviyo" | "google" | "ai" | "tool";
   notes?: string;
+};
+
+type TableRow = {
+  project: string;
+  dataset: string;
+  table: string;
+  region: string;
+  usedIn: string;
+  lastModifiedIso: string | null;
+  lastDayData: string | null;
+  rowCount: number | null;
+  sizeMb: number | null;
 };
 
 function check(...envs: string[]): Status {
@@ -30,18 +43,58 @@ const ICONS: Record<Source["iconCategory"], React.ReactNode> = {
   tool: <Cpu className="w-4 h-4" />,
 };
 
-export default function FontesPage() {
+async function fetchTablesFreshness(): Promise<TableRow[]> {
+  try {
+    const h = headers();
+    const host = h.get("x-forwarded-host") || h.get("host") || "localhost:3000";
+    const proto = h.get("x-forwarded-proto") || "https";
+    const url = `${proto}://${host}/api/fontes/tables-freshness`;
+    const r = await fetch(url, { cache: "no-store" });
+    if (!r.ok) return [];
+    const j = await r.json();
+    return j.tables || [];
+  } catch {
+    return [];
+  }
+}
+
+function formatDate(iso: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return d.toLocaleString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "America/Sao_Paulo",
+    hour12: false,
+  }) + " BRT";
+}
+
+function freshnessBadge(iso: string | null): { label: string; color: string } {
+  if (!iso) return { label: "—", color: "var(--ink-muted)" };
+  const hours = (Date.now() - new Date(iso).getTime()) / 1000 / 3600;
+  if (hours < 24) return { label: "Fresh (<24h)", color: "var(--positive)" };
+  if (hours < 48) return { label: "1d old", color: "var(--warning)" };
+  if (hours < 24 * 7) return { label: `${Math.round(hours / 24)}d old`, color: "var(--warning)" };
+  return { label: `${Math.round(hours / 24)}d old`, color: "var(--negative)" };
+}
+
+export default async function FontesPage() {
+  const tables = await fetchTablesFreshness();
+
   const sections: Array<{ title: string; sources: Source[] }> = [
     {
       title: "Analytics (source of truth)",
       sources: [
         {
-          name: "BigQuery - larroude-data-platform",
+          name: "BigQuery - larroude-data-prod",
           status: check("GCP_SA_KEY_BASE64"),
-          desc: "Service Account JSON (base64) with BigQuery Data Viewer + Job User role",
+          desc: "Service Account JSON (base64) with BigQuery Data Viewer + Job User",
           envVars: ["GCP_PROJECT_ID", "GCP_SA_KEY_BASE64"],
           iconCategory: "bq",
-          notes: "Datasets: shopify_us.orders, shopify_br.orders, gold_marketing.fct_ads_spend_daily, gold.unite_economics_*",
+          notes: "Primary datasets: stg_shopify, stg_shopify_br, gold, gold_sales",
         },
       ],
     },
@@ -54,7 +107,7 @@ export default function FontesPage() {
           desc: "Long-lived access token + App ID + App Secret",
           envVars: ["META_ACCESS_TOKEN", "META_APP_ID", "META_APP_SECRET"],
           iconCategory: "meta",
-          notes: "Token expires in 60 days - refresh via API",
+          notes: "Token expires in 60 days - currently using Supermetrics fallback",
         },
         {
           name: "Meta US - Larroude",
@@ -68,6 +121,13 @@ export default function FontesPage() {
           status: "ok",
           desc: "act_929449929417505 - pre-sale US campaigns",
           envVars: ["META_US_PREORDER_ACCOUNT_ID"],
+          iconCategory: "meta",
+        },
+        {
+          name: "Meta US - Larroude New",
+          status: "ok",
+          desc: "act_312869193575906 - new US ad account",
+          envVars: ["META_US_NEW_ACCOUNT_ID"],
           iconCategory: "meta",
         },
         {
@@ -89,13 +149,20 @@ export default function FontesPage() {
           desc: "Developer Token + OAuth (client_id, secret, refresh)",
           envVars: ["GADS_DEVELOPER_TOKEN", "GADS_CLIENT_ID", "GADS_CLIENT_SECRET", "GADS_REFRESH_TOKEN", "GADS_CUSTOMER_ID"],
           iconCategory: "google",
-          notes: "GADS_REFRESH_TOKEN still pending - using BQ fallback until OAuth flow resolved",
+          notes: "Using Supermetrics fallback - direct API integration pending OAuth flow",
         },
         {
           name: "Google Merchant Center US",
           status: check("GMC_ID_US"),
           desc: "ID 5747976495 - US product catalog",
           envVars: ["GMC_ID_US"],
+          iconCategory: "google",
+        },
+        {
+          name: "Google PageSpeed Insights",
+          status: check("PAGESPEED_API_KEY"),
+          desc: "Lighthouse scores + Core Web Vitals - used in Site Performance",
+          envVars: ["PAGESPEED_API_KEY"],
           iconCategory: "google",
         },
       ],
@@ -109,7 +176,7 @@ export default function FontesPage() {
           desc: "larroude-com.myshopify.com",
           envVars: ["SHOPIFY_US_STORE_DOMAIN", "SHOPIFY_US_ADMIN_API_TOKEN"],
           iconCategory: "shopify",
-          notes: "Admin API Token covers orders, customers, products, abandoned checkouts",
+          notes: "Orders, customers, products, abandoned checkouts, inventory",
         },
         {
           name: "Shopify BR - Admin API",
@@ -129,6 +196,7 @@ export default function FontesPage() {
           desc: "pk_QY3GmW_... - flows, campaigns, segments US",
           envVars: ["KLAVIYO_PRIVATE_API_KEY_US"],
           iconCategory: "klaviyo",
+          notes: "Powers Klaviyo Journey + Klaviyo CRM",
         },
         {
           name: "Klaviyo BR",
@@ -136,7 +204,6 @@ export default function FontesPage() {
           desc: "pk_U6TmNp_... - flows, campaigns, segments BR",
           envVars: ["KLAVIYO_PRIVATE_API_KEY_BR"],
           iconCategory: "klaviyo",
-          notes: "Welcome Series BR outperforming fashion benchmark (CVR 4.2%)",
         },
       ],
     },
@@ -146,23 +213,22 @@ export default function FontesPage() {
         {
           name: "Supermetrics",
           status: check("SUPERMETRICS_API_KEY"),
-          desc: "Fallback for Meta + Google + Shopify when direct API unavailable",
+          desc: "Fallback for Meta + Google when direct API unavailable",
           envVars: ["SUPERMETRICS_API_KEY", "SUPERMETRICS_KEY_AD"],
           iconCategory: "tool",
-          notes: "Per CLAUDE.md: prioritize direct APIs, Supermetrics fallback only",
+          notes: "Per CLAUDE.md: direct APIs first, Supermetrics as fallback",
         },
       ],
     },
     {
-      title: "AI - Ask Claude + narrative",
+      title: "AI",
       sources: [
         {
           name: "Anthropic API",
           status: check("ANTHROPIC_API_KEY"),
-          desc: "Claude Opus 4.6 for Ask Claude chat + daily narrative",
+          desc: "Claude Opus/Sonnet for diagnostics + narrative + Ask Claude",
           envVars: ["ANTHROPIC_API_KEY"],
           iconCategory: "ai",
-          notes: "Create key at console.anthropic.com/settings/keys",
         },
       ],
     },
@@ -190,6 +256,75 @@ export default function FontesPage() {
           </span>
         </div>
       </div>
+
+      {/* === NEW: BigQuery tables freshness table === */}
+      {tables.length > 0 && (
+        <section className="mb-10">
+          <div className="section-marker mb-3">
+            <span
+              className="text-[11px] font-semibold uppercase tracking-wider"
+              style={{ color: "var(--ink-muted)", letterSpacing: "0.06em" }}
+            >
+              BigQuery tables &amp; freshness
+            </span>
+          </div>
+          <div className="card overflow-x-auto" style={{ padding: 0 }}>
+            <table className="w-full text-[12px]" style={{ borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ background: "var(--paper)", borderBottom: "1px solid var(--border-soft)" }}>
+                  <th className="text-left px-4 py-3" style={{ color: "var(--ink-muted)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em" }}>Table</th>
+                  <th className="text-left px-3 py-3" style={{ color: "var(--ink-muted)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em" }}>Region</th>
+                  <th className="text-left px-3 py-3" style={{ color: "var(--ink-muted)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em" }}>Last modified</th>
+                  <th className="text-left px-3 py-3" style={{ color: "var(--ink-muted)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em" }}>Last data</th>
+                  <th className="text-right px-3 py-3" style={{ color: "var(--ink-muted)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em" }}>Rows</th>
+                  <th className="text-right px-3 py-3" style={{ color: "var(--ink-muted)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em" }}>Size</th>
+                  <th className="text-left px-3 py-3" style={{ color: "var(--ink-muted)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em" }}>Status</th>
+                  <th className="text-left px-3 py-3" style={{ color: "var(--ink-muted)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em" }}>Used in</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tables.map((t) => {
+                  const fresh = freshnessBadge(t.lastModifiedIso);
+                  return (
+                    <tr key={`${t.project}.${t.dataset}.${t.table}`} style={{ borderBottom: "1px solid var(--border-soft)" }}>
+                      <td className="px-4 py-3" style={{ color: "var(--ink)" }}>
+                        <div style={{ fontWeight: 600 }}>{t.dataset}.{t.table}</div>
+                        <div className="font-num" style={{ fontSize: 10, color: "var(--ink-muted)" }}>{t.project}</div>
+                      </td>
+                      <td className="px-3 py-3" style={{ color: "var(--ink-soft)" }}>{t.region}</td>
+                      <td className="px-3 py-3 font-num" style={{ color: "var(--ink-soft)" }}>{formatDate(t.lastModifiedIso)}</td>
+                      <td className="px-3 py-3 font-num" style={{ color: "var(--ink-soft)" }}>{t.lastDayData || "—"}</td>
+                      <td className="px-3 py-3 text-right font-num" style={{ color: "var(--ink-soft)" }}>
+                        {t.rowCount != null ? t.rowCount.toLocaleString("en-US") : "—"}
+                      </td>
+                      <td className="px-3 py-3 text-right font-num" style={{ color: "var(--ink-soft)" }}>
+                        {t.sizeMb != null ? (t.sizeMb >= 1000 ? `${(t.sizeMb / 1024).toFixed(1)} GB` : `${t.sizeMb.toFixed(1)} MB`) : "—"}
+                      </td>
+                      <td className="px-3 py-3">
+                        <span style={{
+                          fontSize: 10,
+                          padding: "2px 8px",
+                          borderRadius: 100,
+                          background: "var(--paper)",
+                          color: fresh.color,
+                          border: `1px solid ${fresh.color}`,
+                          fontWeight: 600,
+                        }}>
+                          {fresh.label}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3" style={{ color: "var(--ink-muted)", fontSize: 11, maxWidth: 280 }}>{t.usedIn}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-[10px] mt-2" style={{ color: "var(--ink-muted)" }}>
+            Live from BigQuery <code>INFORMATION_SCHEMA</code> on each page load. Times in São Paulo timezone.
+          </p>
+        </section>
+      )}
 
       <div className="space-y-8">
         {sections
