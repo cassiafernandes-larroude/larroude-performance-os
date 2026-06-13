@@ -26,11 +26,26 @@ export default function KlaviyoJourneyEmbed() {
         <div className="flex items-center gap-2 flex-shrink-0">
           <button
             onClick={() => setIframeKey((k) => k + 1)}
-            className="pill pill-ghost px-3 py-1.5 text-[12px] flex items-center gap-1.5"
+            className="flex items-center gap-1.5"
             title="Reload"
+            style={{
+              padding: "8px 16px",
+              borderRadius: 999,
+              background: "#FF3D8B",
+              color: "#FFFFFF",
+              border: "none",
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: "pointer",
+              boxShadow: "0 2px 8px rgba(255, 61, 139, 0.3)",
+              letterSpacing: "0.01em",
+              transition: "background 0.15s",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "#E91E63"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "#FF3D8B"; }}
           >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Reload</span>
+            <RefreshCw style={{ width: 14, height: 14, color: "#FFFFFF" }} />
+            <span className="hidden sm:inline" style={{ color: "#FFFFFF" }}>Refresh</span>
           </button>
         </div>
       </div>
