@@ -1,9 +1,11 @@
 import { getExecutiveConsolidated, type ExecutivePeriod } from "@/lib/data/executive";
+import { computeExecutiveDiagnostics } from "@/lib/data/executive-diagnostics";
 import { formatCurrency, formatMultiplier, formatNumber, formatPercent } from "@/lib/utils/format";
 import { TrendingDown, TrendingUp, DollarSign, Target } from "lucide-react";
 import { DashboardActions } from "@/components/shared/DashboardActions";
 import DailyBarChart from "@/components/main-dashboard/DailyBarChart";
 import ExecutiveFilterBar from "@/components/executive/ExecutiveFilterBar";
+import DiagnosticsPanel from "@/components/executive/DiagnosticsPanel";
 import { yesterdayInMarket } from "@/lib/utils/market-tz";
 
 // Cassia 2026-06-12: dynamic p/ filtro de periodo reagir imediatamente (sem ISR stale).
@@ -23,6 +25,7 @@ export default async function ExecutivePage({
     ? { from: searchParams.from, to: searchParams.to }
     : undefined;
   const c = await getExecutiveConsolidated(period, customRange);
+  const diagnostics = computeExecutiveDiagnostics(c);
   // maxDate p/ date picker = ontem em NY (US é o market âncora)
   const maxDate = yesterdayInMarket("US");
 
@@ -116,6 +119,9 @@ export default async function ExecutivePage({
             hint="What's left after paying ads"
           />
         </div>
+
+        {/* ===== Cause & Effect Diagnostics ===== */}
+        <DiagnosticsPanel diagnostics={diagnostics} />
 
         {/* ===== Daily charts (mesmo formato Main Dashboard) ===== */}
         <div className="section-marker mb-3">
