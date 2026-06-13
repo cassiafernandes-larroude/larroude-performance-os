@@ -64,9 +64,7 @@ const navSections: NavSection[] = [
   {
     title: "CONFIG",
     items: [
-      { href: "/glossario", label: "KPI Glossary", icon: BookOpen },
       { href: "/fontes", label: "Data Sources", icon: Database },
-      { href: "/alertas", label: "Alerts", icon: Bell },
     ],
   },
 ];
