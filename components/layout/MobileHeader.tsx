@@ -18,7 +18,7 @@ const titleMap: Record<string, string> = {
   "/inventory": "Inventory Intelligence",
   "/site-performance": "Site Performance",
   "/diagnostics": "Diagnostics",
-  "/fontes": "Data Sources",
+  "/fontes": "Data Sources & Rules",
 };
 
 export function MobileHeader({ onOpenSidebar }: { onOpenSidebar: () => void }) {

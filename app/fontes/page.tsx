@@ -1,4 +1,4 @@
-import { Database, CheckCircle2, XCircle, Clock, Megaphone, ShoppingBag, Mail, Search, Cpu, Sparkles } from "lucide-react";
+import { Database, CheckCircle2, XCircle, Clock, Megaphone, ShoppingBag, Mail, Search, Cpu, Sparkles, ShieldCheck, Globe, Calculator, Filter, DollarSign, AlertTriangle } from "lucide-react";
 import { headers } from "next/headers";
 
 export const revalidate = 300;
@@ -245,10 +245,10 @@ export default async function FontesPage() {
     <div className="px-4 lg:px-8 py-5 lg:py-8 max-w-[1500px] mx-auto">
       <div className="mb-6">
         <h1 className="font-display text-[26px] lg:text-[36px]" style={{ color: "var(--ink)" }}>
-          Data Sources
+          Data Sources &amp; Rules
         </h1>
         <p className="text-[12px] lg:text-[14px] mt-1" style={{ color: "var(--ink-soft)" }}>
-          {counts.ok} of {allSources.length} integrations connected · BigQuery is the primary source
+          {counts.ok} of {allSources.length} integrations connected · BigQuery is the primary source · business rules below
         </p>
         <div className="flex items-center gap-3 mt-3">
           <span className="badge" style={{ background: "var(--positive-soft)", color: "var(--positive)" }}>
@@ -257,7 +257,27 @@ export default async function FontesPage() {
         </div>
       </div>
 
-      {/* === NEW: BigQuery tables freshness table === */}
+      {/* === Business Rules === */}
+      <section className="mb-10">
+        <div className="section-marker mb-3">
+          <span
+            className="text-[11px] font-semibold uppercase tracking-wider"
+            style={{ color: "var(--ink-muted)", letterSpacing: "0.06em" }}
+          >
+            Business rules applied across all dashboards
+          </span>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          {BUSINESS_RULES.map((rule) => (
+            <RuleCard key={rule.title} rule={rule} />
+          ))}
+        </div>
+        <p className="text-[10px] mt-3" style={{ color: "var(--ink-muted)" }}>
+          Last audit: 2026-06-13 · Source: Obsidian REGRAS-LARROUDE-OS.md + code grep in <code>lib/</code>
+        </p>
+      </section>
+
+      {/* === BigQuery tables freshness table === */}
       {tables.length > 0 && (
         <section className="mb-10">
           <div className="section-marker mb-3">
@@ -354,6 +374,262 @@ export default async function FontesPage() {
         )}
       </div>
 
+    </div>
+  );
+}
+
+// =====================================================================
+// Business Rules — Performance OS
+// Source: Obsidian REGRAS-LARROUDE-OS.md + auditoria do código em lib/
+// =====================================================================
+
+type Rule = {
+  title: string;
+  category: "filters" | "timezone" | "fx" | "ads" | "channels" | "metrics" | "data";
+  desc: string;
+  details: string[];
+  appliesTo?: string;
+};
+
+const RULE_ICONS: Record<Rule["category"], React.ReactNode> = {
+  filters: <Filter className="w-4 h-4" />,
+  timezone: <Globe className="w-4 h-4" />,
+  fx: <DollarSign className="w-4 h-4" />,
+  ads: <Megaphone className="w-4 h-4" />,
+  channels: <ShieldCheck className="w-4 h-4" />,
+  metrics: <Calculator className="w-4 h-4" />,
+  data: <Database className="w-4 h-4" />,
+};
+
+const BUSINESS_RULES: Rule[] = [
+  {
+    title: "B2B / wholesale exclusion",
+    category: "filters",
+    desc: "All orders tagged as B2B, wholesale, marketplace, redo or influencer are excluded from every metric.",
+    details: [
+      "Tested in BOTH order.tags AND customer.tags (JSON)",
+      "Regex: b2b | wholesale | marketplace | redo | influencer",
+      "Coverage validated 2026-06-13: US 51 orders / 90d, BR 6 orders / 90d",
+    ],
+    appliesTo: "Main, Overview, CAC, LTV, Channel Share, Executive, Apostar, UE, Klaviyo CRM, Shopify",
+  },
+  {
+    title: "Order value cap (atacado outliers)",
+    category: "filters",
+    desc: "Orders above the cap are treated as wholesale and excluded from DTC metrics.",
+    details: [
+      "US: total_price > $30,000",
+      "BR: total_price > R$25,000",
+    ],
+    appliesTo: "Main, CAC, LTV, Channel Share",
+  },
+  {
+    title: "PIX (BR) - exclude pending",
+    category: "filters",
+    desc: "Brazilian PIX orders that were never paid are excluded from gross sales.",
+    details: [
+      "Filter: financial_status NOT IN ('voided','refunded','pending')",
+      "Reason: Shopify creates the order on intent, status only flips after the customer pays",
+    ],
+    appliesTo: "Main (BR), Overview (BR), Channel Share (BR)",
+  },
+  {
+    title: "Market timezone",
+    category: "timezone",
+    desc: "Each market computes 'today/yesterday' in its own timezone.",
+    details: [
+      "US → America/New_York",
+      "BR → America/Sao_Paulo",
+      "All DATE(created_at, tz) casts respect the market",
+    ],
+    appliesTo: "Every dashboard with date filters",
+  },
+  {
+    title: "FX BRL → USD conversion",
+    category: "fx",
+    desc: "BR values converted to USD using monthly average exchange rate from BigQuery.",
+    details: [
+      "Source: larroude-data-prod.gold.fx_rates_monthly",
+      "Updated monthly · current month always in the table",
+      "Used in: Executive (Consolidated USD+BR), LTV global, CAC global",
+    ],
+  },
+  {
+    title: "Meta Ads — US (3 accounts)",
+    category: "ads",
+    desc: "Three ad accounts combined for US, all reported in USD.",
+    details: [
+      "act_2047856822417350 — Larroude principal",
+      "act_929449929417505 — Pre-Order campaigns",
+      "act_312869193575906 — Larroude New",
+      "Manual adjustment: +$400k in September/2025 (gap fill)",
+    ],
+    appliesTo: "Main, Overview, CAC, Channel Share",
+  },
+  {
+    title: "Meta Ads — BR (USD reporting)",
+    category: "ads",
+    desc: "Single account act_1735567560524487, reports in USD, converted to BRL via FX.",
+    details: [
+      "META_USD_TO_BRL multiplier applied in code (lib/main-dashboard/meta-ads.ts)",
+    ],
+    appliesTo: "Main BR, Channel Share BR",
+  },
+  {
+    title: "Meta access token fallback",
+    category: "ads",
+    desc: "When META_ACCESS_TOKEN expires (currently expired), system auto-falls back to Supermetrics.",
+    details: [
+      "Detection: Meta Graph API returns 401 OR query path errors",
+      "Fallback: queryMetaAdsTotalViaSupermetrics() in lib/data/metrics.ts",
+      "Renewal needed every ~60 days",
+    ],
+  },
+  {
+    title: "Google Ads — via Supermetrics",
+    category: "ads",
+    desc: "Direct Google Ads API integration pending OAuth refresh. Currently uses Supermetrics fallback ALWAYS.",
+    details: [
+      "queryGoogleAdsTotalViaSupermetrics() in lib/main-dashboard/queries.ts",
+      "GADS_REFRESH_TOKEN still empty in .env",
+    ],
+    appliesTo: "Main, CAC, Channel Share",
+  },
+  {
+    title: "Channel classification — DTC organic",
+    category: "channels",
+    desc: "Klaviyo/SMS/Awin/ShopMy are NOT paid channels.",
+    details: [
+      "Klaviyo (email) → owned media (tracked in tools cost only)",
+      "SMS/Attentive → owned media",
+      "Awin/ShopMy → affiliate (not paid ads)",
+      "Organic Search + Organic Social consolidated as 'Orgânico'",
+    ],
+    appliesTo: "Main, Channel Share, Executive",
+  },
+  {
+    title: "Tools cost (monthly fixed)",
+    category: "channels",
+    desc: "Added to AMOUNT SPENT in Overview + Main Dashboard.",
+    details: [
+      "US: Klaviyo $11,323/mo, Attentive (variable), Criteo (variable)",
+      "BR: Klaviyo R$13,000/mo, Agent.shop = 10% of BR revenue",
+      "Source: lib/channel-costs.ts",
+    ],
+  },
+  {
+    title: "ROAS calculation",
+    category: "metrics",
+    desc: "ROAS = Total Sales / Total Spend (not Order Sales).",
+    details: [
+      "Total Sales includes tax+shipping (gross_sales after discounts)",
+      "Total Spend = Meta + Google + Klaviyo + Attentive + Criteo + Agent.shop",
+    ],
+    appliesTo: "Overview, Main, Channel Share, Consolidated",
+  },
+  {
+    title: "Net Sales = Gross - Returns",
+    category: "metrics",
+    desc: "Returns are subtracted at the gold_sales layer.",
+    details: [
+      "Source: larroude-data-prod.gold_sales.returns_daily",
+      "Lag: D-2 (returns processed with delay)",
+    ],
+    appliesTo: "Main (Net Sales card)",
+  },
+  {
+    title: "Today (D0) — Shopify Admin direct",
+    category: "data",
+    desc: "BigQuery pipeline has D-1 lag. Today's data fetched directly from Shopify Admin GraphQL.",
+    details: [
+      "Overview Today button → lib/shopify-today.ts",
+      "Meta D0 → Graph API live (fallback Supermetrics)",
+      "Google D0 → Supermetrics live",
+    ],
+    appliesTo: "Overview, UE Today, Apostar Today",
+  },
+  {
+    title: "Chart-KPI parity",
+    category: "metrics",
+    desc: "Daily chart must always sum to the aggregated KPI for the same period.",
+    details: [
+      "Manual adjustments (Meta +$400k Set/25) applied in BOTH daily and aggregated queries",
+      "Enforced via REGRAS-LARROUDE-OS.md §3",
+    ],
+    appliesTo: "Main Dashboard, CAC, LTV",
+  },
+  {
+    title: "BigQuery source of truth",
+    category: "data",
+    desc: "All historical metrics use larroude-data-prod (not legacy data-platform).",
+    details: [
+      "Primary datasets: stg_shopify, stg_shopify_br, gold, gold_sales",
+      "Legacy data-platform: still used only for unite_economics_* (CAC legacy) and gold_marketing.fct_ads_spend_daily (Google spend)",
+    ],
+  },
+  {
+    title: "Cache strategy",
+    category: "data",
+    desc: "In-memory cache to avoid hammering BigQuery on every page load.",
+    details: [
+      "30 min: common queries (lib/cache.ts)",
+      "6 h: rolling historical aggregations",
+      "12 h: Klaviyo reports (warmed via /api/klaviyo/cron/warm at 11h UTC)",
+    ],
+  },
+  {
+    title: "Klaviyo Placed Order metric",
+    category: "metrics",
+    desc: "Revenue attribution to email uses the Klaviyo 'Placed Order' metric, dynamically resolved.",
+    details: [
+      "Each account (US/BR) has its own metric ID",
+      "Resolution cached per session in lib/klaviyo/queries.ts",
+    ],
+    appliesTo: "Klaviyo Journey, Klaviyo CRM",
+  },
+  {
+    title: "Apostar score formula",
+    category: "metrics",
+    desc: "Score based on 28d performance minus exchanges, no longer counting Exchange-Only orders.",
+    details: [
+      "score = (gross_sales_28d - exchange_volume_28d) × margin × velocity",
+      "Exchange-Only orders excluded entirely from volume base",
+      "Cassia 2026-06-12: removed Exchange rule from score formula",
+    ],
+    appliesTo: "Products to Bet On",
+  },
+];
+
+function RuleCard({ rule }: { rule: Rule }) {
+  return (
+    <div className="card flex items-start gap-3">
+      <div
+        className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+        style={{ background: "var(--paper)", color: "var(--ink-muted)" }}
+      >
+        {RULE_ICONS[rule.category]}
+      </div>
+      <div className="flex-1 min-w-0">
+        <h3 className="text-[14px] font-semibold mb-1" style={{ color: "var(--ink)" }}>
+          {rule.title}
+        </h3>
+        <p className="text-[12px] mb-2" style={{ color: "var(--ink-soft)" }}>
+          {rule.desc}
+        </p>
+        <ul className="space-y-1 mb-2">
+          {rule.details.map((d, i) => (
+            <li key={i} className="text-[11px] flex items-start gap-1.5" style={{ color: "var(--ink-muted)" }}>
+              <span style={{ color: "var(--positive, #16a34a)" }}>•</span>
+              <span>{d}</span>
+            </li>
+          ))}
+        </ul>
+        {rule.appliesTo && (
+          <p className="text-[10px] italic" style={{ color: "var(--ink-muted)" }}>
+            Applies to: {rule.appliesTo}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
