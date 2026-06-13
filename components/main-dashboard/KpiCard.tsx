@@ -15,21 +15,34 @@ export default function KpiCard({ kpi }: Props) {
   const deltaColor = positive ? '#10b981' : negative ? '#ef4444' : '#9ca3af';
 
   return (
-    <div className="card p-2.5 flex flex-col">
-      <div className="text-[8.5px] font-bold tracking-wider text-steel uppercase leading-tight min-h-[20px]">
+    <div className="card p-2.5 flex flex-col" style={{ minHeight: 96 }}>
+      {/* Label: 2 linhas garantidas - valores ficam alinhados horizontalmente
+          independente do label ter 1 ou 2 linhas (Cassia 2026-06-13: "alinhe os kpis") */}
+      <div
+        className="text-[8.5px] font-bold tracking-wider text-steel uppercase leading-tight"
+        style={{
+          minHeight: 28,
+          display: "-webkit-box",
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: "vertical",
+          overflow: "hidden",
+        }}
+      >
         {kpi.label}
       </div>
       <div className="text-xl font-bold text-ink leading-tight mt-0.5">{kpi.value}</div>
-      {kpi.delta != null ? (
-        <div className="text-[9px] font-medium mt-0.5" style={{ color: deltaColor }}>
-          <span className="mr-1">{arrow}</span>
-          <span>{d.text} vs prior</span>
-        </div>
-      ) : kpi.hint ? (
-        <div className="text-[9px] text-steel mt-0.5 leading-tight">{kpi.hint}</div>
-      ) : (
-        <div className="text-[9px] text-transparent mt-0.5">·</div>
-      )}
+      <div className="mt-auto pt-1">
+        {kpi.delta != null ? (
+          <div className="text-[9px] font-medium leading-tight" style={{ color: deltaColor, minHeight: 14 }}>
+            <span className="mr-1">{arrow}</span>
+            <span>{d.text} vs prior</span>
+          </div>
+        ) : kpi.hint ? (
+          <div className="text-[9px] text-steel leading-tight" style={{ minHeight: 14 }}>{kpi.hint}</div>
+        ) : (
+          <div className="text-[9px] text-transparent" style={{ minHeight: 14 }}>·</div>
+        )}
+      </div>
     </div>
   );
 }
