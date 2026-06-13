@@ -477,6 +477,7 @@ export async function getDashboardPayload(
     roas_gross: [], roas_order: [], roas_total: [],
     aov: [], cpo: [], cpa: [], cac: [], cvr: [],
     orders: [], pixel_purchases: [],
+    units: [], // Cassia 2026-06-13: gráfico de unidades vendidas
     sessions: [], sessions_prev: [], direct_sessions: [], organic_sessions: [], referral_sessions: [],
   };
 
@@ -590,6 +591,8 @@ export async function getDashboardPayload(
     daily.cvr.push({ date: d, value: dCvr });
     daily.orders.push({ date: d, value: dOrders });
     daily.pixel_purchases.push({ date: d, value: dPixel });
+    // Cassia 2026-06-13: unidades vendidas (line_items.quantity) do queryDailySales
+    daily.units.push({ date: d, value: num(s.units) });
   }
 
   // ----- Marca cada DailyPoint com inPeriod (false = barra de contexto fora do período) -----

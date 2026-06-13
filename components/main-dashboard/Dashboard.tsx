@@ -78,6 +78,8 @@ export default function Dashboard({ data, dimmed }: Props) {
       <SectionHeader>📦 VOLUME E FUNIL — {market}</SectionHeader>
       <div className={gridCls}>
         <DailyBarChart title="Orders — Shopify" data={daily.orders ?? []} color="#1f2d44" unit="number" market={market} />
+        {/* Cassia 2026-06-13: gráfico de unidades vendidas */}
+        <DailyBarChart title="Units Sold — Shopify" data={daily.units ?? []} color="#FF3D8B" unit="number" market={market} />
         <DailyMultiBarChart
           title="Funil Diário: Pixel Purchases vs Orders"
           market={market}
