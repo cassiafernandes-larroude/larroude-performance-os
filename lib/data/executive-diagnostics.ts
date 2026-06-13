@@ -245,6 +245,228 @@ export function computeExecutiveDiagnostics(c: ExecutiveConsolidated): Diagnosti
     });
   }
 
+  // --- 10) Spend ↔ Sales daily correlation (Pearson) ----------------------
+  if (spendSeries.length >= 7 && salesSeries.length === spendSeries.length) {
+    const ms = avg(spendSeries);
+    const mr = avg(salesSeries);
+    let num = 0, denS = 0, denR = 0;
+    for (let i = 0; i < spendSeries.length; i++) {
+      const ds = spendSeries[i] - ms;
+      const dr = salesSeries[i] - mr;
+      num += ds * dr;
+      denS += ds * ds;
+      denR += dr * dr;
+    }
+    const r = denS > 0 && denR > 0 ? num / Math.sqrt(denS * denR) : 0;
+    if (Math.abs(r) >= 0.3) {
+      const strength =
+        Math.abs(r) >= 0.75 ? "strong" : Math.abs(r) >= 0.5 ? "moderate" : "weak";
+      const direction = r > 0 ? "positive" : "negative";
+      out.push({
+        id: "spend-sales-correlation",
+        severity: r > 0.5 ? "positive" : "info",
+        cause: `Daily spend ↔ daily sales correlation = ${r.toFixed(2)} (${strength} ${direction})`,
+        effect:
+          r > 0.5
+            ? "When spend goes up, sales follow on the same day. Spend is acting as a direct revenue lever."
+            : r > 0
+            ? "Sales partially follow spend but other factors (organic, owned, seasonality) drive most of the variance."
+            : "Sales tend to move opposite to spend — investment is not driving same-day demand. Likely organic/seasonal noise dominates.",
+        evidence: [
+          `Pearson r: ${r.toFixed(3)} (n=${spendSeries.length} days)`,
+          `Spend avg: ${fmtMoney(ms)} · Sales avg: ${fmtMoney(mr)}`,
+          `Interpretation: r²=${(r * r).toFixed(2)} → ${Math.round(r * r * 100)}% of daily sales variance explained by spend`,
+        ],
+        recommendation:
+          Math.abs(r) >= 0.5
+            ? "Lever is live: budget changes should produce predictable revenue swings within the day."
+            : "Don't expect immediate revenue lift from spend pushes — track 2-3 day lag and consider attribution drift.",
+      });
+    }
+  }
+
+  // --- 11) Lag-1 correlation: spend yesterday → sales today ---------------
+  if (spendSeries.length >= 8 && salesSeries.length === spendSeries.length) {
+    const sp = spendSeries.slice(0, -1); // spend on day d
+    const sa = salesSeries.slice(1);     // sales on day d+1
+    const ms = avg(sp);
+    const mr = avg(sa);
+    let num = 0, denS = 0, denR = 0;
+    for (let i = 0; i < sp.length; i++) {
+      const ds = sp[i] - ms;
+      const dr = sa[i] - mr;
+      num += ds * dr;
+      denS += ds * ds;
+      denR += dr * dr;
+    }
+    const rLag = denS > 0 && denR > 0 ? num / Math.sqrt(denS * denR) : 0;
+    if (Math.abs(rLag) >= 0.35) {
+      out.push({
+        id: "lag-correlation",
+        severity: "info",
+        cause: `Spend (day D) ↔ Sales (day D+1) correlation = ${rLag.toFixed(2)} — there's a 1-day lag effect`,
+        effect:
+          rLag > 0
+            ? "Today's investment shows up in tomorrow's sales. Plan campaign pushes the day before promo dates."
+            : "Counter-intuitive negative lag — likely seasonality (e.g., week-end vs week-start cycles).",
+        evidence: [
+          `Lag-1 Pearson r: ${rLag.toFixed(3)}`,
+          `Use this to time campaign launches: spend on D-1 to lift D`,
+        ],
+        recommendation: "If you need a sales spike on date X, push spend on date X−1.",
+      });
+    }
+  }
+
+  // --- 12) Best vs Worst ROAS day — what changed ---------------------------
+  const roasDaily = c.daily.roas_total
+    .map((d) => ({ date: d.date, roas: d.value, spend: 0, sales: 0 }))
+    .filter((d) => d.roas > 0);
+  // join with spend/sales by date
+  const spendMap = new Map(c.daily.spend.map((d) => [d.date, d.value]));
+  const salesMap = new Map(c.daily.total_sales.map((d) => [d.date, d.value]));
+  for (const r of roasDaily) {
+    r.spend = spendMap.get(r.date) ?? 0;
+    r.sales = salesMap.get(r.date) ?? 0;
+  }
+  if (roasDaily.length >= 5) {
+    const best = roasDaily.reduce((a, b) => (b.roas > a.roas ? b : a));
+    const worst = roasDaily.reduce((a, b) => (b.roas < a.roas ? b : a));
+    if (best.roas / Math.max(0.001, worst.roas) >= 2) {
+      const spendDelta = pctChange(worst.spend, best.spend);
+      const salesDelta = pctChange(worst.sales, best.sales);
+      const driver =
+        Math.abs(spendDelta) > Math.abs(salesDelta) ? "spend" : "sales";
+      out.push({
+        id: "roas-best-vs-worst",
+        severity: "info",
+        cause: `Best ROAS day was ${best.date} (${best.roas.toFixed(2)}×) and worst was ${worst.date} (${worst.roas.toFixed(2)}×)`,
+        effect: `The ${best.roas.toFixed(1)}× spread means ${driver} swings are dominating efficiency. Same dollar bought ${(best.roas / worst.roas).toFixed(1)}× more on the best day.`,
+        evidence: [
+          `Best ${best.date}: spend ${fmtMoney(best.spend)} · sales ${fmtMoney(best.sales)} → ROAS ${best.roas.toFixed(2)}×`,
+          `Worst ${worst.date}: spend ${fmtMoney(worst.spend)} · sales ${fmtMoney(worst.sales)} → ROAS ${worst.roas.toFixed(2)}×`,
+          `Δ spend: ${fmtPct(spendDelta)} · Δ sales: ${fmtPct(salesDelta)}`,
+        ],
+        recommendation:
+          driver === "spend"
+            ? "Pacing is the lever. Match spend levels to the high-ROAS day's pattern (intraday distribution, audiences, creatives)."
+            : "Sales-driven swing. Audit what was happening on the best day — promo, organic spike, hero product launch?",
+      });
+    }
+  }
+
+  // --- 13) Sharpest daily spend drop and its same-day sales impact ---------
+  if (spendSeries.length >= 3) {
+    let worstDay = -1;
+    let worstDrop = 0;
+    for (let i = 1; i < spendSeries.length; i++) {
+      const drop = pctChange(spendSeries[i], spendSeries[i - 1]);
+      if (drop < worstDrop) {
+        worstDrop = drop;
+        worstDay = i;
+      }
+    }
+    if (worstDay > 0 && worstDrop < -30) {
+      const date = c.daily.spend[worstDay]?.date;
+      const prevDate = c.daily.spend[worstDay - 1]?.date;
+      const salesDrop = pctChange(salesSeries[worstDay], salesSeries[worstDay - 1]);
+      out.push({
+        id: "spend-cut-impact",
+        severity: "info",
+        cause: `Spend dropped ${fmtPct(worstDrop)} from ${prevDate} to ${date}`,
+        effect:
+          salesDrop < -5
+            ? `Same-day sales fell ${fmtPct(salesDrop)} — investment cut had immediate revenue impact.`
+            : salesDrop > 5
+            ? `Sales actually went UP ${fmtPct(salesDrop)} despite the spend cut — suggests inefficient spend on the previous day.`
+            : `Sales stayed roughly flat (${fmtPct(salesDrop)}) — spend was over-investing relative to demand.`,
+        evidence: [
+          `${prevDate}: spend ${fmtMoney(spendSeries[worstDay - 1])} · sales ${fmtMoney(salesSeries[worstDay - 1])}`,
+          `${date}: spend ${fmtMoney(spendSeries[worstDay])} · sales ${fmtMoney(salesSeries[worstDay])}`,
+          `Δ spend: ${fmtPct(worstDrop)} · Δ sales: ${fmtPct(salesDrop)}`,
+        ],
+        recommendation:
+          salesDrop > 5
+            ? "Take the hint: cuts that don't hurt sales are pure margin. Sustain the lower spend level."
+            : "Watch the lag — if the cut sticks, monitor next 2-3 days for compounding effect.",
+      });
+    }
+  }
+
+  // --- 14) Sharpest daily spend surge and its return ----------------------
+  if (spendSeries.length >= 3) {
+    let bestDay = -1;
+    let bestSurge = 0;
+    for (let i = 1; i < spendSeries.length; i++) {
+      const surge = pctChange(spendSeries[i], spendSeries[i - 1]);
+      if (surge > bestSurge) {
+        bestSurge = surge;
+        bestDay = i;
+      }
+    }
+    if (bestDay > 0 && bestSurge > 30) {
+      const date = c.daily.spend[bestDay]?.date;
+      const prevDate = c.daily.spend[bestDay - 1]?.date;
+      const salesDelta = pctChange(salesSeries[bestDay], salesSeries[bestDay - 1]);
+      const efficient = salesDelta >= bestSurge * 0.5;
+      out.push({
+        id: "spend-push-impact",
+        severity: efficient ? "positive" : "warning",
+        cause: `Spend surged ${fmtPct(bestSurge)} from ${prevDate} to ${date}`,
+        effect: efficient
+          ? `Sales responded with +${fmtPct(salesDelta)} — the push paid off (efficiency ratio ${(salesDelta / bestSurge).toFixed(2)}).`
+          : `Sales only moved ${fmtPct(salesDelta)} — the surge was inefficient (efficiency ratio ${(salesDelta / bestSurge).toFixed(2)}).`,
+        evidence: [
+          `${prevDate}: spend ${fmtMoney(spendSeries[bestDay - 1])} · sales ${fmtMoney(salesSeries[bestDay - 1])}`,
+          `${date}: spend ${fmtMoney(spendSeries[bestDay])} · sales ${fmtMoney(salesSeries[bestDay])}`,
+          `Δ spend: ${fmtPct(bestSurge)} · Δ sales: ${fmtPct(salesDelta)}`,
+        ],
+        recommendation: efficient
+          ? "Replicate the pattern — what was different that day (creative, audience, promo)?"
+          : "Avoid blanket budget surges. The marginal return is below 50% of the marginal spend.",
+      });
+    }
+  }
+
+  // --- 15) ROAS sensitivity to spend ---------------------------------------
+  // Beta from linear regression: Δsales / Δspend
+  if (spendSeries.length >= 5) {
+    const ms = avg(spendSeries);
+    const mr = avg(salesSeries);
+    let num = 0, den = 0;
+    for (let i = 0; i < spendSeries.length; i++) {
+      const ds = spendSeries[i] - ms;
+      const dr = salesSeries[i] - mr;
+      num += ds * dr;
+      den += ds * ds;
+    }
+    const beta = den > 0 ? num / den : 0;
+    if (beta > 0) {
+      out.push({
+        id: "spend-sensitivity",
+        severity: beta > 3 ? "positive" : beta > 1 ? "info" : "warning",
+        cause: `Marginal ROAS (β) = ${beta.toFixed(2)} — each $1 of extra spend brings about ${fmtMoney(beta)} in sales`,
+        effect:
+          beta > 3
+            ? "Strong leverage: budgets are still in the productive zone. Room to scale."
+            : beta > 1
+            ? "Healthy leverage — adding budget recovers itself with margin."
+            : "Spend at the saturation zone — extra dollars barely cover themselves.",
+        evidence: [
+          `Linear regression β across ${spendSeries.length} days`,
+          `Avg ROAS: ${c.roas.toFixed(2)}× · Marginal ROAS β: ${beta.toFixed(2)}×`,
+          beta < c.roas
+            ? `β < avg ROAS → diminishing returns active`
+            : `β ≥ avg ROAS → still scaling productively`,
+        ],
+        recommendation:
+          beta > 2
+            ? "Increase budget incrementally and re-measure β after 2 weeks."
+            : "Don't push budget up; first optimize creative/audience to lift the β.",
+      });
+    }
+  }
+
   // Order by severity (critical → warning → info → positive)
   const sevOrder: Record<DiagnosticSeverity, number> = { critical: 0, warning: 1, info: 2, positive: 3 };
   out.sort((a, b) => sevOrder[a.severity] - sevOrder[b.severity]);
