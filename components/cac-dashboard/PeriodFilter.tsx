@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
-export type Preset = '7d' | '14d' | '28d' | '3M' | '6M' | '12M' | 'custom';
+export type Preset = '1d' | '7d' | '14d' | '28d' | '3M' | '6M' | '12M' | 'custom';
 
 export interface PeriodState {
   preset: Preset;
@@ -18,6 +18,7 @@ function isoDaysAgo(days: number, ref: Date = new Date()): string {
 
 function daysFor(preset: Exclude<Preset, 'custom'>): number {
   switch (preset) {
+    case '1d': return 1;
     case '7d': return 7;
     case '14d': return 14;
     case '28d': return 28;
@@ -40,6 +41,7 @@ function presetLabel(state: PeriodState): string {
     return `Last ${days} day${days === 1 ? '' : 's'}`;
   }
   const map: Record<Exclude<Preset, 'custom'>, string> = {
+    '1d': 'Yesterday',
     '7d': 'Last 7 days',
     '14d': 'Last 14 days',
     '28d': 'Last 28 days',
@@ -59,7 +61,8 @@ export function presetRange(preset: Exclude<Preset, 'custom'>, refDate: string):
   };
 }
 
-const PRESETS: Exclude<Preset, 'custom'>[] = ['7d', '14d', '28d', '3M', '6M', '12M'];
+// Cassia 2026-06-13: adicionado preset D-1 (Yesterday) no inicio
+const PRESETS: Exclude<Preset, 'custom'>[] = ['1d', '7d', '14d', '28d', '3M', '6M', '12M'];
 
 // Pill styles — EXACTLY MATCH Main Dashboard Header
 const PILL_BASE = 'inline-flex items-center justify-center rounded-full text-[12px] sm:text-[13px] font-semibold transition-all duration-150 select-none';
@@ -124,7 +127,7 @@ export default function PeriodFilter({
               onClick={() => setPreset(p)}
               className={active ? PILL_ACTIVE_DARK : PILL_INACTIVE}
             >
-              {p.toUpperCase()}
+              {p === '1d' ? 'D-1' : p.toUpperCase()}
             </button>
           );
         })}

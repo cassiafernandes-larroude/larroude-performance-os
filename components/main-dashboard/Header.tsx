@@ -25,10 +25,12 @@ interface Props {
   lang?: Lang;
 }
 
-// Presets per design spec: 7D / 14D / 28D / 3M / 6M / 12M
-const PERIODS: PeriodKey[] = ['7d', '14d', '28d', '3M', '6M', '12M'];
+// Presets per design spec: Yesterday / 7D / 14D / 28D / 3M / 6M / 12M
+// Cassia 2026-06-13: adicionado botao "Ontem (D-1)" no inicio
+const PERIODS: PeriodKey[] = ['1d', '7d', '14d', '28d', '3M', '6M', '12M'];
 
 function periodLabel(p: PeriodKey): string {
+  if (p === '1d') return 'D-1';
   return p.toUpperCase();
 }
 
