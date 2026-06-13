@@ -286,6 +286,194 @@ export const EN_TO_PT: Record<string, string> = {
   "BigQuery Larroude OS": "BigQuery Larroude OS",
   "preset": "preset",
   "Active range": "Período ativo",
+
+  // ===========================================================================
+  // === DIAGNOSTIC RECOMMENDATIONS (Consolidated View Cause & Effect) ========
+  // ===========================================================================
+  "Pause underperforming campaigns or reduce spend on low-ROAS channels until the curve recovers.":
+    "Pause campanhas com baixa performance ou reduza investimento em canais de baixo ROAS até a curva recuperar.",
+  "Consider increasing budget on the top-performing channels (see Channel Share below).":
+    "Considere aumentar o orçamento nos canais de melhor performance (veja Share por Canal abaixo).",
+  "Pull back on the channels that grew spend but not sales. Check Channel Share for the laggard.":
+    "Reduza nos canais onde o investimento cresceu mas as vendas não. Veja Share por Canal para identificar o canal atrasado.",
+  "Sustain or marginally increase spend — the curve is still bending up.":
+    "Mantenha ou aumente marginalmente o investimento — a curva ainda está subindo.",
+  "Build a secondary channel to >20% share. Diversify acquisition risk.":
+    "Construa um canal secundário acima de 20% de share. Diversifique o risco de aquisição.",
+  "Test scaling Google Ads to 20-30% of total spend as a hedge.":
+    "Teste escalar Google Ads para 20-30% do investimento total como hedge.",
+  "Focus optimization on the lowest-CPO channels. Cut spend that doesn't beat the marginal threshold.":
+    "Foque otimização nos canais de menor CPO. Corte investimento que não bate o limite marginal.",
+  "Cross-check Site Performance, inventory levels, and campaign delivery for that date.":
+    "Verifique cruzando Performance do Site, níveis de estoque e entrega de campanhas naquela data.",
+  "Smooth pacing through Meta automated rules or daily budget caps closer to the average.":
+    "Suavize o pacing via regras automáticas do Meta ou tetos de orçamento diário próximos da média.",
+  "Check Unit Economics for the SKUs with highest Return Rate and consider size-guide / quality fixes.":
+    "Verifique o Unit Economics dos SKUs com maior Taxa de Retorno e considere ajustes no guia de tamanhos / qualidade.",
+  "Lever is live: budget changes should produce predictable revenue swings within the day.":
+    "A alavanca está ativa: mudanças no orçamento devem produzir variações previsíveis de receita no mesmo dia.",
+  "Don't expect immediate revenue lift from spend pushes — track 2-3 day lag and consider attribution drift.":
+    "Não espere lift imediato de receita ao aumentar investimento — acompanhe o lag de 2-3 dias e considere drift de atribuição.",
+  "If you need a sales spike on date X, push spend on date X−1.":
+    "Se precisa de pico de vendas na data X, invista mais na data X−1.",
+  "If you need a sales spike on date X, push spend on date X-1.":
+    "Se precisa de pico de vendas na data X, invista mais na data X-1.",
+  "Pacing is the lever. Match spend levels to the high-ROAS day's pattern (intraday distribution, audiences, creatives).":
+    "O pacing é a alavanca. Replique o padrão de investimento do dia de alto ROAS (distribuição intraday, audiências, criativos).",
+  "Sales-driven swing. Audit what was happening on the best day — promo, organic spike, hero product launch?":
+    "Variação puxada por vendas. Audite o que aconteceu no melhor dia — promo, pico orgânico, lançamento de produto-âncora?",
+  "Take the hint: cuts that don't hurt sales are pure margin. Sustain the lower spend level.":
+    "Atente ao sinal: cortes que não impactam vendas são pura margem. Mantenha o investimento menor.",
+  "Watch the lag — if the cut sticks, monitor next 2-3 days for compounding effect.":
+    "Atenção ao lag — se o corte ficar, monitore os próximos 2-3 dias para efeito cumulativo.",
+  "Replicate the pattern — what was different that day (creative, audience, promo)?":
+    "Replique o padrão — o que foi diferente naquele dia (criativo, audiência, promo)?",
+  "Avoid blanket budget surges. The marginal return is below 50% of the marginal spend.":
+    "Evite aumentos generalizados de orçamento. O retorno marginal está abaixo de 50% do investimento marginal.",
+  "Increase budget incrementally and re-measure β after 2 weeks.":
+    "Aumente o orçamento incrementalmente e remeça β após 2 semanas.",
+  "Don't push budget up; first optimize creative/audience to lift the β.":
+    "Não aumente o orçamento; primeiro otimize criativo/audiência para elevar o β.",
+
+  // === Diagnostic effects (frases completas) ===
+  "Each $1 invested returns only": "Cada $1 investido retorna apenas",
+  "Each $1 invested generates": "Cada $1 investido gera",
+  "Profit is negative or near zero.": "Lucro está negativo ou próximo de zero.",
+  "in sales. Room to scale spend.": "em vendas. Espaço para escalar investimento.",
+  "Marginal ROAS is decreasing — extra dollars are buying less revenue.":
+    "ROAS marginal está caindo — dólares extras estão comprando menos receita.",
+  "Marginal ROAS is improving — the campaigns are scaling efficiently.":
+    "ROAS marginal está melhorando — as campanhas estão escalando com eficiência.",
+  "Capital is locked in the lower-ROAS market.": "Capital está preso no mercado de menor ROAS.",
+  "Each $1 reallocated from": "Cada $1 realocado de",
+  "could yield": "poderia gerar",
+  "extra.": "extra.",
+  "High dependence on a single channel.": "Alta dependência de um único canal.",
+  "would erase": "apagaria",
+  "from the period.": "do período.",
+  "If Meta CPMs spike or accounts get restricted, the entire acquisition motor stalls.":
+    "Se os CPMs do Meta dispararem ou as contas forem restringidas, todo o motor de aquisição trava.",
+  "Every additional dollar in spend reduces profit nearly proportionally. Limited room for inefficient tests.":
+    "Cada dólar adicional em investimento reduz o lucro quase proporcionalmente. Pouco espaço para testes ineficientes.",
+  "Single-day shocks compound — investigate whether site outage, stock-out, or campaign pause caused it.":
+    "Choques de um único dia se acumulam — investigue se queda no site, ruptura de estoque ou pausa de campanha causaram.",
+  "Inconsistent pacing makes ROAS curve harder to read and can starve campaigns of learning data.":
+    "Pacing inconsistente dificulta a leitura da curva de ROAS e pode privar as campanhas de dados de aprendizado.",
+  "Net Sales is": "Vendas Líquidas estão",
+  "lower than Gross. ROAS based on Net is much lower than apparent.":
+    "abaixo do Bruto. ROAS baseado em Líquido é muito menor que o aparente.",
+  "When spend goes up, sales follow on the same day. Spend is acting as a direct revenue lever.":
+    "Quando o investimento sobe, as vendas seguem no mesmo dia. Investimento age como alavanca direta de receita.",
+  "Sales partially follow spend but other factors (organic, owned, seasonality) drive most of the variance.":
+    "Vendas seguem parcialmente o investimento, mas outros fatores (orgânico, owned, sazonalidade) explicam a maior parte.",
+  "Sales tend to move opposite to spend — investment is not driving same-day demand. Likely organic/seasonal noise dominates.":
+    "Vendas tendem a se mover ao contrário do investimento — investimento não está dirigindo demanda no mesmo dia. Provavelmente ruído orgânico/sazonal domina.",
+  "Today's investment shows up in tomorrow's sales. Plan campaign pushes the day before promo dates.":
+    "O investimento de hoje aparece nas vendas de amanhã. Planeje aumentos de campanha um dia antes das datas de promo.",
+  "Counter-intuitive negative lag — likely seasonality (e.g., week-end vs week-start cycles).":
+    "Lag negativo contra-intuitivo — provavelmente sazonalidade (ex: fim de semana vs início de semana).",
+  "spread means": "spread significa",
+  "swings are dominating efficiency.": "variações estão dominando a eficiência.",
+  "Same dollar bought": "Mesmo dólar comprou",
+  "more on the best day.": "a mais no melhor dia.",
+  "had immediate revenue impact.": "teve impacto imediato na receita.",
+  "Sales actually went UP": "Vendas na verdade SUBIRAM",
+  "despite the spend cut — suggests inefficient spend on the previous day.":
+    "apesar do corte de investimento — sugere investimento ineficiente no dia anterior.",
+  "Sales stayed roughly flat": "Vendas ficaram praticamente estáveis",
+  "spend was over-investing relative to demand.":
+    "investimento estava acima da demanda.",
+  "the push paid off": "o aumento valeu a pena",
+  "the surge was inefficient": "o aumento foi ineficiente",
+  "Strong leverage: budgets are still in the productive zone. Room to scale.":
+    "Alavancagem forte: orçamentos ainda estão na zona produtiva. Espaço para escalar.",
+  "Healthy leverage — adding budget recovers itself with margin.":
+    "Alavancagem saudável — adicionar orçamento se paga com margem.",
+  "Spend at the saturation zone — extra dollars barely cover themselves.":
+    "Investimento na zona de saturação — dólares extras mal cobrem a si mesmos.",
+
+  // === Diagnostic causes (templates) ===
+  "below the 1.5× critical threshold": "abaixo do limite crítico de 1,5×",
+  "above the 3× healthy threshold": "acima do limite saudável de 3×",
+  "Spend grew": "Investimento cresceu",
+  "but sales only": "mas vendas apenas",
+  "second half vs first half": "segunda metade vs primeira metade",
+  "Sales accelerated faster than spend": "Vendas aceleraram mais que investimento",
+  "ROAS gap": "Gap de ROAS",
+  "is": "é",
+  "higher than": "maior que",
+  "concentrates": "concentra",
+  "of consolidated revenue": "da receita consolidada",
+  "accounts for": "responde por",
+  "of paid spend": "do investimento pago",
+  "Profit margin at": "Margem de lucro em",
+  "On": "Em",
+  "sales were": "vendas estavam",
+  "below the window average": "abaixo da média do período",
+  "Spend volatility": "Volatilidade de investimento",
+  "large gaps between peak and valley days": "grandes diferenças entre dias de pico e vale",
+  "of gross revenue is being lost to returns/refunds": "da receita bruta está sendo perdida para devoluções/reembolsos",
+  "Daily spend": "Investimento diário",
+  "daily sales correlation": "correlação com vendas diárias",
+  "strong positive": "forte positiva",
+  "moderate positive": "moderada positiva",
+  "weak positive": "fraca positiva",
+  "strong negative": "forte negativa",
+  "moderate negative": "moderada negativa",
+  "weak negative": "fraca negativa",
+  "Sales (day D+1) correlation": "correlação com Vendas (dia D+1)",
+  "there's a 1-day lag effect": "existe um efeito de lag de 1 dia",
+  "Best ROAS day was": "Melhor dia de ROAS foi",
+  "and worst was": "e o pior foi",
+  "Spend dropped": "Investimento caiu",
+  "Spend surged": "Investimento disparou",
+  "from": "de",
+  "to": "para",
+  "Marginal ROAS": "ROAS Marginal",
+  "each $1 of extra spend brings about": "cada $1 de investimento extra traz cerca de",
+  "in sales": "em vendas",
+  "Same-day sales fell": "Vendas no mesmo dia caíram",
+  "investment cut had immediate revenue impact.":
+    "corte de investimento teve impacto imediato na receita.",
+
+  // === Diagnostic section labels ===
+  "Cause": "Causa",
+  "Effect": "Efeito",
+  "Evidence": "Evidência",
+  "Recommendation": "Recomendação",
+  "CAUSE": "CAUSA",
+  "EFFECT": "EFEITO",
+  "EVIDENCE": "EVIDÊNCIA",
+  "RECOMMENDATION": "RECOMENDAÇÃO",
+  "CRITICAL": "CRÍTICO",
+  "WARNING": "ALERTA",
+  "INFO": "INFO",
+  "HEALTHY": "SAUDÁVEL",
+
+  // === Unit Economics recommendations ===
+  "Recommendations": "Recomendações",
+  "Scenarios": "Cenários",
+  "Discount scenarios": "Cenários de desconto",
+  "Marketing assumptions": "Premissas de marketing",
+  "Goal": "Meta",
+  "Current": "Atual",
+  "Projected": "Projetado",
+  "Variance": "Variação",
+  "vs goal": "vs meta",
+  "vs previous": "vs anterior",
+  "with current discount": "com desconto atual",
+  "without discount": "sem desconto",
+  "Apply 30% discount": "Aplicar 30% de desconto",
+  "Apply 40% discount": "Aplicar 40% de desconto",
+  "Apply 50% discount": "Aplicar 50% de desconto",
+  "Apply 60% discount": "Aplicar 60% de desconto",
+  "Full price": "Preço cheio",
+  "After discount": "Após desconto",
+  "After returns": "Após devoluções",
+  "After exchanges": "Após trocas",
+  "After marketing": "Após marketing",
+  "Contribution margin": "Margem de contribuição",
+  "Operating margin": "Margem operacional",
 };
 
 // Reverse map for PT → EN (used when toggling back).

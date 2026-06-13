@@ -54,14 +54,52 @@ function translateNode(node: Text, toPT: boolean) {
   if (out !== raw) node.nodeValue = out;
 }
 
+// Seletores que indicam "nome próprio" — campanhas, produtos, flows, segmentos.
+// Cassia 2026-06-13: "os nomes das campanhas / produtos / flows não devem ser traduzidos".
+// Cobre: Klaviyo CRM, Klaviyo Journey, Channel Share campaigns, Main Dashboard
+// Performance by Campaign, Products to Bet On, Unit Economics product cards,
+// Inventory, Shopify product lists.
+const PROPER_NAME_SELECTORS = [
+  // Nomes de campanhas / flows / segmentos (Klaviyo CRM, Klaviyo Journey)
+  ".campaign-name",
+  ".flow-name",
+  ".segment-name",
+  ".product-name",
+  ".sku",
+  ".product .name",       // Klaviyo CRM table cell <td.product .name>
+  ".product .sku",
+  "[data-row-type='campaign']",
+  "[data-row-type='flow']",
+  "[data-row-type='segment']",
+  "[data-row-type='product']",
+  // Heuristica generica: qualquer celula <td> com class "name" dentro de listas
+  ".list-table td.name",
+  ".list-table .product .name",
+  ".list-table .product .sku",
+  // Headers de tabelas que contem nomes
+  ".product-cell",
+  ".flow-cell",
+  ".campaign-cell",
+];
+
+// Padrões de texto que indicam ID/SKU/código — nunca traduzir.
+// (e.g. "LAR123-RED-37", "Welcome_Flow_v3", "abc-12345")
+const ID_LIKE = /^[A-Z]{2,}\d|^\w+_\w+_|^[A-Za-z0-9]{2,}-[A-Za-z0-9]{2,}-/;
+
 function walk(root: Node, toPT: boolean) {
-  // Skip script, style and editable inputs.
-  const skip = (el: Element) =>
-    el.tagName === "SCRIPT" ||
-    el.tagName === "STYLE" ||
-    el.tagName === "TEXTAREA" ||
-    el.tagName === "INPUT" ||
-    el.closest('[data-no-translate="true"]') !== null;
+  // Skip script, style, editable inputs e proper-name selectors.
+  const skip = (el: Element) => {
+    if (el.tagName === "SCRIPT" || el.tagName === "STYLE" ||
+        el.tagName === "TEXTAREA" || el.tagName === "INPUT") return true;
+    if (el.closest('[data-no-translate="true"]')) return true;
+    // Pula se está dentro de seletor de "proper name"
+    for (const sel of PROPER_NAME_SELECTORS) {
+      try {
+        if (el.closest(sel)) return true;
+      } catch { /* selector pode ser invalido em alguns browsers, ignora */ }
+    }
+    return false;
+  };
 
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
@@ -70,6 +108,8 @@ function walk(root: Node, toPT: boolean) {
       if (skip(parent)) return NodeFilter.FILTER_REJECT;
       const v = node.nodeValue;
       if (!v || !v.trim()) return NodeFilter.FILTER_REJECT;
+      // Skip text que parece ID/SKU/código
+      if (ID_LIKE.test(v.trim())) return NodeFilter.FILTER_REJECT;
       return NodeFilter.FILTER_ACCEPT;
     },
   });
