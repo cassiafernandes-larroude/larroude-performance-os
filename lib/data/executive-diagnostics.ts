@@ -453,22 +453,125 @@ export function computeExecutiveDiagnostics(c: ExecutiveConsolidated): Diagnosti
       const prevDate = c.daily.spend[bestDay - 1]?.date;
       const salesDelta = pctChange(salesSeries[bestDay], salesSeries[bestDay - 1]);
       const efficient = salesDelta >= bestSurge * 0.5;
+
+      // Breakdown por country — Cassia 2026-06-13: "diga em qual pais"
+      const byM = c.daily_by_market;
+      const usSpendPrev = byM?.US.spend.find((p) => p.date === prevDate)?.value ?? 0;
+      const usSpendCurr = byM?.US.spend.find((p) => p.date === date)?.value ?? 0;
+      const brSpendPrev = byM?.BR.spend.find((p) => p.date === prevDate)?.value ?? 0;
+      const brSpendCurr = byM?.BR.spend.find((p) => p.date === date)?.value ?? 0;
+      const usDelta = pctChange(usSpendCurr, usSpendPrev);
+      const brDelta = pctChange(brSpendCurr, brSpendPrev);
+      const usAbsDelta = usSpendCurr - usSpendPrev;
+      const brAbsDelta = brSpendCurr - brSpendPrev;
+      const driver = Math.abs(brAbsDelta) > Math.abs(usAbsDelta) ? "BR" : "US";
+      const driverPct = driver === "BR"
+        ? safeDiv(brAbsDelta, (usAbsDelta + brAbsDelta)) * 100
+        : safeDiv(usAbsDelta, (usAbsDelta + brAbsDelta)) * 100;
+
+      const evidence = [
+        `${prevDate}: spend ${fmtMoney(spendSeries[bestDay - 1])} · sales ${fmtMoney(salesSeries[bestDay - 1])}`,
+        `${date}: spend ${fmtMoney(spendSeries[bestDay])} · sales ${fmtMoney(salesSeries[bestDay])}`,
+        `Δ spend: ${fmtPct(bestSurge)} · Δ sales: ${fmtPct(salesDelta)}`,
+      ];
+      if (byM) {
+        evidence.push(`Breakdown: US ${fmtMoney(usSpendPrev)} → ${fmtMoney(usSpendCurr)} (${fmtPct(usDelta)}) · BR ${fmtMoney(brSpendPrev)} → ${fmtMoney(brSpendCurr)} (${fmtPct(brDelta)})`);
+        evidence.push(`Driver: ${driver} responded for ${driverPct.toFixed(0)}% of the surge (${fmtMoney(driver === "BR" ? brAbsDelta : usAbsDelta)} of ${fmtMoney(usAbsDelta + brAbsDelta)})`);
+      }
+
+      // Contexto BR ramp-up: BR esta escalando desde Nov/2024 (R$21k → R$291k em Set/25).
+      const brIsScaling = brContext !== "mature";
+      const brExplain = driver === "BR" && brAbsDelta > 0 && brIsScaling;
+
+      let recommendation = efficient
+        ? "Replicate the pattern — what was different that day (creative, audience, promo)?"
+        : "Avoid blanket budget surges. The marginal return is below 50% of the marginal spend.";
+
+      if (brExplain) {
+        recommendation =
+          `BR accounted for ${driverPct.toFixed(0)}% of this surge — and the BR operation is still scaling gradually since launch (Nov/2024: R$21k → Sep/2025: R$291k). ` +
+          `Part of this jump is the planned ramp-up, NOT inefficiency. ` +
+          `Before pausing budget: 1) confirm BR weekly trajectory matches the scale plan; 2) compute BR-only ROAS for ${date} (BR sales ${fmtMoney(byM?.BR.total_sales.find((p) => p.date === date)?.value ?? 0)} / BR spend ${fmtMoney(brSpendCurr)}); 3) only flag as inefficient if BR-only ROAS dropped vs the previous BR baseline.`;
+      }
+
       out.push({
         id: "spend-push-impact",
-        severity: efficient ? "positive" : "warning",
-        cause: `Spend surged ${fmtPct(bestSurge)} from ${prevDate} to ${date}`,
+        severity: efficient ? "positive" : (brExplain ? "info" : "warning"),
+        cause: `Spend surged ${fmtPct(bestSurge)} from ${prevDate} to ${date}${byM ? ` (driver: ${driver} ${fmtPct(driver === "BR" ? brDelta : usDelta)})` : ""}`,
         effect: efficient
-          ? `Sales responded with +${fmtPct(salesDelta)} — the push paid off (efficiency ratio ${(salesDelta / bestSurge).toFixed(2)}).`
-          : `Sales only moved ${fmtPct(salesDelta)} — the surge was inefficient (efficiency ratio ${(salesDelta / bestSurge).toFixed(2)}).`,
-        evidence: [
-          `${prevDate}: spend ${fmtMoney(spendSeries[bestDay - 1])} · sales ${fmtMoney(salesSeries[bestDay - 1])}`,
-          `${date}: spend ${fmtMoney(spendSeries[bestDay])} · sales ${fmtMoney(salesSeries[bestDay])}`,
-          `Δ spend: ${fmtPct(bestSurge)} · Δ sales: ${fmtPct(salesDelta)}`,
-        ],
-        recommendation: efficient
-          ? "Replicate the pattern — what was different that day (creative, audience, promo)?"
-          : "Avoid blanket budget surges. The marginal return is below 50% of the marginal spend.",
+          ? `Sales responded with +${fmtPct(salesDelta)} — the push paid off (efficiency ratio ${(salesDelta / bestSurge).toFixed(2)}).${brExplain ? ` Note: BR drove ${driverPct.toFixed(0)}% of the surge — partially explained by the gradual BR ramp-up since Nov/2024.` : ""}`
+          : `Sales only moved ${fmtPct(salesDelta)} — the surge was inefficient (efficiency ratio ${(salesDelta / bestSurge).toFixed(2)}).${brExplain ? ` BUT: BR drove ${driverPct.toFixed(0)}% of the surge, and BR is in planned ramp-up since Nov/2024 — this may be expected scaling, not waste.` : ""}`,
+        evidence,
+        recommendation,
       });
+    }
+  }
+
+  // --- 14b) ROAS drop root cause — was it spend up or sales down? ----------
+  // Cassia 2026-06-13: "veja se a queda de ROAS é resultado de aumento ou
+  // redução de investimento no período anterior"
+  if (roasDaily.length >= 5) {
+    // Detecta sequência: ROAS atual vs ROAS dos últimos 3-7 dias anteriores
+    const recent = roasDaily.slice(-3);
+    const baseline = roasDaily.slice(-Math.min(10, roasDaily.length), -3);
+    if (recent.length >= 2 && baseline.length >= 2) {
+      const recentRoas = avg(recent.map((d) => d.roas));
+      const baselineRoas = avg(baseline.map((d) => d.roas));
+      const roasDrop = pctChange(recentRoas, baselineRoas);
+      if (roasDrop < -10) {
+        // Olha o que mudou: spend up ou sales down?
+        const recentSpend = avg(recent.map((d) => d.spend));
+        const baselineSpend = avg(baseline.map((d) => d.spend));
+        const recentSales = avg(recent.map((d) => d.sales));
+        const baselineSales = avg(baseline.map((d) => d.sales));
+        const spendDelta = pctChange(recentSpend, baselineSpend);
+        const salesDelta = pctChange(recentSales, baselineSales);
+
+        let rootCause = "";
+        let recoText = "";
+        if (spendDelta > 5 && salesDelta < spendDelta) {
+          rootCause = `spend UP (${fmtPct(spendDelta)}) faster than sales (${fmtPct(salesDelta)})`;
+          recoText = "Spend increase is not paying off. Audit the channels that grew most and re-test creatives/audiences before keeping the higher budget.";
+        } else if (spendDelta < -5 && salesDelta < spendDelta) {
+          rootCause = `spend DOWN (${fmtPct(spendDelta)}) but sales fell even faster (${fmtPct(salesDelta)})`;
+          recoText = "Cutting spend is hurting sales more than expected. The previous budget level was actually productive — consider partial reinstatement.";
+        } else if (salesDelta < -5 && Math.abs(spendDelta) < 5) {
+          rootCause = `sales DOWN (${fmtPct(salesDelta)}) while spend stayed flat (${fmtPct(spendDelta)})`;
+          recoText = "Demand softened independently from ad spend. Check seasonality, organic traffic, site issues or competition.";
+        } else if (spendDelta > 5 && salesDelta > 0) {
+          rootCause = `spend UP (${fmtPct(spendDelta)}) and sales also up (${fmtPct(salesDelta)}) but not proportionally`;
+          recoText = "Diminishing returns kicking in. Marginal ROAS is below average — expect plateau if budget keeps climbing.";
+        } else {
+          rootCause = `spend ${fmtPct(spendDelta)} · sales ${fmtPct(salesDelta)}`;
+          recoText = "Mixed signal — check Channel Share to isolate which channel/market is dragging.";
+        }
+
+        // Breakdown por market
+        const byM = c.daily_by_market;
+        const extraEvidence: string[] = [];
+        if (byM) {
+          const usSpendRecent = avg(byM.US.spend.slice(-3).map((p) => p.value));
+          const usSpendBase = avg(byM.US.spend.slice(-Math.min(10, byM.US.spend.length), -3).map((p) => p.value));
+          const brSpendRecent = avg(byM.BR.spend.slice(-3).map((p) => p.value));
+          const brSpendBase = avg(byM.BR.spend.slice(-Math.min(10, byM.BR.spend.length), -3).map((p) => p.value));
+          extraEvidence.push(`US spend: ${fmtMoney(usSpendBase)} → ${fmtMoney(usSpendRecent)} (${fmtPct(pctChange(usSpendRecent, usSpendBase))})`);
+          extraEvidence.push(`BR spend: ${fmtMoney(brSpendBase)} → ${fmtMoney(brSpendRecent)} (${fmtPct(pctChange(brSpendRecent, brSpendBase))})`);
+        }
+
+        out.push({
+          id: "roas-drop-root-cause",
+          severity: roasDrop < -25 ? "critical" : "warning",
+          cause: `ROAS dropped ${fmtPct(roasDrop)} in the last 3 days vs prior baseline — root cause: ${rootCause}`,
+          effect: `Recent ROAS ${recentRoas.toFixed(2)}× vs baseline ${baselineRoas.toFixed(2)}×. The ${spendDelta > 0 ? "additional" : "remaining"} dollars are converting at a lower rate.`,
+          evidence: [
+            `Recent (last 3d): ROAS ${recentRoas.toFixed(2)}× · spend avg ${fmtMoney(recentSpend)} · sales avg ${fmtMoney(recentSales)}`,
+            `Baseline (prior ${baseline.length}d): ROAS ${baselineRoas.toFixed(2)}× · spend avg ${fmtMoney(baselineSpend)} · sales avg ${fmtMoney(baselineSales)}`,
+            `Δ spend: ${fmtPct(spendDelta)} · Δ sales: ${fmtPct(salesDelta)} · Δ ROAS: ${fmtPct(roasDrop)}`,
+            ...extraEvidence,
+          ],
+          recommendation: recoText,
+        });
+      }
     }
   }
 

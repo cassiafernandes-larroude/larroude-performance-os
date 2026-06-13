@@ -69,6 +69,11 @@ export type ExecutiveConsolidated = {
     margin_total_sales: DailyPoint[]; // revenue - spend por dia
     roas_total: DailyPoint[];          // safeDiv por dia
   };
+  // Daily series POR MARKET (em USD). Cassia 2026-06-13: "diga em qual país".
+  daily_by_market?: {
+    US: { spend: DailyPoint[]; total_sales: DailyPoint[] };
+    BR: { spend: DailyPoint[]; total_sales: DailyPoint[] }; // já convertido p/ USD
+  };
   // Channel share consolidado em USD.
   channels: ChannelRow[];
   // Por market (referência rápida).
@@ -304,6 +309,17 @@ export async function getExecutiveConsolidated(
       const dailySpend = mergeDailyAdd(us.daily.spend ?? [], br.daily.spend ?? [], fxRate);
       const dailyRev = mergeDailyAdd(us.daily.total_sales ?? [], br.daily.total_sales ?? [], fxRate);
       const dailyGross = mergeDailyAdd(us.daily.gross_sales ?? [], br.daily.gross_sales ?? [], fxRate);
+      // Daily POR MARKET (em USD) — Cassia 2026-06-13: detalhar disclaimers em qual país aconteceu.
+      const dailyByMarket = {
+        US: {
+          spend: us.daily.spend ?? [],
+          total_sales: us.daily.total_sales ?? [],
+        },
+        BR: {
+          spend: (br.daily.spend ?? []).map((p: any) => ({ date: p.date, value: p.value * fxRate })),
+          total_sales: (br.daily.total_sales ?? []).map((p: any) => ({ date: p.date, value: p.value * fxRate })),
+        },
+      };
       const dailyMargin = dailyRev.map((p) => {
         const sp = dailySpend.find((s) => s.date === p.date)?.value ?? 0;
         return { date: p.date, value: p.value - sp };
@@ -356,6 +372,7 @@ export async function getExecutiveConsolidated(
           margin_total_sales: dailyMargin,
           roas_total: dailyRoas,
         },
+        daily_by_market: dailyByMarket,
         channels,
         by_market: {
           US: { revenue: usRev, spend: usSpend, meta: usMeta, google: usGoogle },
