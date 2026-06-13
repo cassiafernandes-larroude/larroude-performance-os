@@ -7,10 +7,10 @@ export const metadata = {
 export default function KlaviyoJourneyPage() {
   return (
     <DashboardEmbed
-      src="https://larroude-klaviyo-dashboard.vercel.app/"
+      src="/klaviyo-journey/index.html"
       title="Klaviyo Journey"
       subtitle="Flows, campaigns, segmentation and attributed revenue"
-      externalUrl="https://larroude-klaviyo-dashboard.vercel.app/"
+      externalUrl="/klaviyo-journey/index.html"
     />
   );
 }

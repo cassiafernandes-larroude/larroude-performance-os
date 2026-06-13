@@ -1,0 +1,141 @@
+﻿// Vercel Edge Function — busca performance de UM flow específico (current + previous period).
+// Suporta ?account=us|br&id=FLOW_ID&days=7|14|28.
+
+export const runtime = 'edge';
+
+const KLAVIYO_BASE = "https://a.klaviyo.com/api";
+const REVISION = "2024-10-15";
+const MAX_ATTEMPTS = 6;
+
+function getApiKey(account) {
+  if (account === "br") return process.env.KLAVIYO_API_KEY_BR;
+  return process.env.KLAVIYO_API_KEY_US || process.env.KLAVIYO_API_KEY;
+}
+
+async function findPlacedOrderMetricId(apiKey) {
+  try {
+    const r = await fetch(KLAVIYO_BASE + "/metrics?fields[metric]=name", {
+      headers: { "Authorization": "Klaviyo-API-Key " + apiKey, "accept": "application/json", "revision": REVISION }
+    });
+    if (!r.ok) return null;
+    const j = await r.json();
+    const placed = (j.data || []).find(m => m.attributes && m.attributes.name === "Placed Order");
+    return placed ? placed.id : null;
+  } catch (_) { return null; }
+}
+
+async function klaviyoFetchWithRetry(apiKey, path, opts = {}) {
+  let last = null;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const res = await fetch(KLAVIYO_BASE + path, {
+      ...opts,
+      headers: {
+        "Authorization": "Klaviyo-API-Key " + apiKey,
+        "accept": "application/json",
+        "revision": REVISION,
+        ...(opts.headers || {})
+      }
+    });
+    if (res.ok) return await res.json();
+    if (res.status !== 429) {
+      const text = await res.text();
+      throw new Error("Klaviyo " + res.status + ": " + text.slice(0, 200));
+    }
+    const retryAfter = parseInt(res.headers.get("Retry-After") || "0", 10);
+    const waitMs = retryAfter > 0 ? Math.min(retryAfter * 1000, 8000) : Math.min(1000 * Math.pow(2, attempt - 1), 8000);
+    last = res;
+    if (attempt < MAX_ATTEMPTS) await new Promise(r => setTimeout(r, waitMs));
+  }
+  if (last) {
+    const text = await last.text();
+    throw new Error("Klaviyo 429 after retries: " + text.slice(0, 200));
+  }
+  throw new Error("unreachable");
+}
+
+function periodRange(days, offset) {
+  const end = new Date(Date.now() - offset * 86400000);
+  const start = new Date(end.getTime() - days * 86400000);
+  const fmt = d => d.toISOString().slice(0, 19) + "Z";
+  return { start: fmt(start), end: fmt(end) };
+}
+
+async function fetchFlowReport(apiKey, metricId, timeframe, flowId) {
+  const body = {
+    data: {
+      type: "flow-values-report",
+      attributes: {
+        statistics: ["recipients", "delivered", "opens_unique", "clicks_unique", "conversion_uniques", "open_rate", "click_rate", "conversion_rate", "conversion_value"],
+        timeframe: { start: timeframe.start, end: timeframe.end },
+        conversion_metric_id: metricId,
+        filter: "and(equals(send_channel,\"email\"),equals(flow_id,\"" + flowId + "\"))"
+      }
+    }
+  };
+  const j = await klaviyoFetchWithRetry(apiKey, "/flow-values-reports", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  const results = j && j.data && j.data.attributes && j.data.attributes.results || [];
+  if (results.length === 0) return null;
+  const s = results[0].statistics || {};
+  return {
+    recipients: s.recipients || 0, delivered: s.delivered || 0,
+    opens: s.opens_unique || 0, clicks: s.clicks_unique || 0,
+    conversions: s.conversion_uniques || 0, revenue: s.conversion_value || 0,
+    openRate: s.open_rate || 0, clickRate: s.click_rate || 0, conversionRate: s.conversion_rate || 0
+  };
+}
+
+export async function GET(req: Request) {
+  const url = new URL(req.url);
+  const id = url.searchParams.get("id");
+  const days = parseInt(url.searchParams.get("days") || "28", 10);
+  const account = (url.searchParams.get("account") || "us").toLowerCase();
+
+  if (!id || !/^[A-Za-z0-9]+$/.test(id)) {
+    return new Response(JSON.stringify({ error: "missing or invalid id" }), { status: 400, headers: { "content-type": "application/json" } });
+  }
+  if (![7, 14, 28].includes(days)) {
+    return new Response(JSON.stringify({ error: "days deve ser 7, 14 ou 28" }), { status: 400, headers: { "content-type": "application/json" } });
+  }
+  if (account !== "us" && account !== "br") {
+    return new Response(JSON.stringify({ error: "account inválida" }), { status: 400, headers: { "content-type": "application/json" } });
+  }
+  const apiKey = getApiKey(account);
+  if (!apiKey) {
+    return new Response(JSON.stringify({ error: "KLAVIYO_API_KEY_" + account.toUpperCase() + " não configurada" }), { status: 500, headers: { "content-type": "application/json" } });
+  }
+
+  try {
+    const metricId = await findPlacedOrderMetricId(apiKey);
+    if (!metricId) {
+      return new Response(JSON.stringify({ flow_id: id, account, current: null, previous: null, error: "Placed Order metric não encontrado", fetchedAt: new Date().toISOString() }), {
+        status: 200, headers: { "content-type": "application/json", "cache-control": "public, s-maxage=300" }
+      });
+    }
+    const cur = periodRange(days, 0);
+    const prev = periodRange(days, days);
+    const [current, previous] = await Promise.all([
+      fetchFlowReport(apiKey, metricId, cur, id),
+      fetchFlowReport(apiKey, metricId, prev, id)
+    ]);
+    return new Response(JSON.stringify({
+      flow_id: id, account, days,
+      currentPeriod: cur, previousPeriod: prev,
+      current, previous,
+      fetchedAt: new Date().toISOString()
+    }), {
+      status: 200,
+      headers: {
+        "content-type": "application/json",
+        "cache-control": (current || previous) ? "public, s-maxage=604800, stale-while-revalidate=86400" : "public, s-maxage=300"
+      }
+    });
+  } catch (e) {
+    return new Response(JSON.stringify({ flow_id: id, account, days, current: null, previous: null, error: e.message, fetchedAt: new Date().toISOString() }), {
+      status: 200, headers: { "content-type": "application/json", "cache-control": "public, s-maxage=60" }
+    });
+  }
+}
