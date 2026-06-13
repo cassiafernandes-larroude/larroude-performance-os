@@ -8,6 +8,8 @@ import DailyMultiBarChart from './DailyMultiBarChart';
 import ChannelBreakdown from './ChannelBreakdown';
 import CampaignTable from './CampaignTable';
 import AlertsPanel from './AlertsPanel';
+import GenericDiagnosticsPanel from '@/components/shared/GenericDiagnosticsPanel';
+import { computeGenericDiagnostics } from '@/lib/data/generic-diagnostics';
 
 interface Props { data: DashboardPayload; dimmed?: boolean; }
 
@@ -32,10 +34,37 @@ export default function Dashboard({ data, dimmed }: Props) {
   const isCompact = bucketCount > 0 && bucketCount <= 14;
   const gridCls = isCompact ? 'grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4' : 'space-y-4 mt-4';
 
+  // Cassia 2026-06-13: diagnósticos de Causa & Efeito (mesmo do Consolidated View).
+  const totalSpend = (kpis.find((k) => k.label === 'AMOUNT SPENT')?.raw as number) ?? 0;
+  const totalSales = (kpis.find((k) => k.label === 'TOTAL SALES')?.raw as number) ?? 0;
+  const roas = (kpis.find((k) => k.label === 'ROAS TOTAL SALES')?.raw as number) ?? 0;
+  const diagnostics = computeGenericDiagnostics({
+    domain: 'ads',
+    invName: 'spend',
+    outName: 'sales',
+    efficiencyName: 'ROAS',
+    efficiencyUnit: '×',
+    invSeries: daily.spend ?? [],
+    outSeries: daily.total_sales ?? [],
+    totalInv: totalSpend,
+    totalOut: totalSales,
+    efficiency: roas,
+    efficiencyHealthyAt: 3.0,
+    efficiencyCriticalAt: 1.5,
+    fmt: market === 'BR'
+      ? (v: number) => `R$${(v / 1000).toFixed(1)}k`
+      : (v: number) => `$${(v / 1000).toFixed(1)}k`,
+  });
+
   return (
     <div className={`transition-opacity ${dimmed ? 'opacity-60' : 'opacity-100'}`}>
       {/* KPIs */}
       <KpiGrid kpis={kpis} market={market} />
+
+      {/* Cause & Effect Diagnostics (Cassia 2026-06-13) */}
+      <div className="mt-8">
+        <GenericDiagnosticsPanel diagnostics={diagnostics} />
+      </div>
 
       {/* Funil — passa Order Revenue total pro card CVR FINAL */}
       <FunnelChart

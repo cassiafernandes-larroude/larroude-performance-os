@@ -17,6 +17,8 @@ import type {
   ProductDailyPoint,
 } from '@/lib/cac-dashboard/queries';
 import { formatMoney, formatNumber } from '@/lib/cac-dashboard/format';
+import GenericDiagnosticsPanel from '@/components/shared/GenericDiagnosticsPanel';
+import { computeGenericDiagnostics } from '@/lib/data/generic-diagnostics';
 
 interface ApiResponse {
   summary: KpiSummary;
@@ -144,6 +146,31 @@ export default function Dashboard({ freshness }: { freshness: string }) {
             <strong>Error:</strong> {error}
           </div>
         )}
+
+        {/* Cassia 2026-06-13: Cause & Effect Diagnostics (período selecionado) */}
+        {data?.daily && data.daily.length > 0 && (() => {
+          const invSeries = data.daily.map((d) => ({ date: d.date, value: Number(d.spend) || 0 }));
+          const outSeries = data.daily.map((d) => ({ date: d.date, value: Number(d.new_customers) || 0 }));
+          const diag = computeGenericDiagnostics({
+            domain: 'customer-acquisition',
+            invName: 'spend',
+            outName: 'new customers',
+            efficiencyName: 'CAC',
+            efficiencyUnit: '$',
+            invSeries,
+            outSeries,
+            totalInv: summary?.spend,
+            totalOut: summary?.new_customers,
+            efficiency: summary?.cac,
+            // CAC: quanto MENOR melhor — inverte healthy/critical
+            efficiencyHealthyAt: -1, // não aplicável da mesma forma
+            efficiencyCriticalAt: -1,
+            fmt: market === 'BR'
+              ? (v: number) => `R$${(v / 1000).toFixed(1)}k`
+              : (v: number) => `$${(v / 1000).toFixed(1)}k`,
+          });
+          return <GenericDiagnosticsPanel diagnostics={diag} title={`CAUSE & EFFECT · ${periodLabel}`} />;
+        })()}
 
         <div className="section-label">
           <span>📊</span>

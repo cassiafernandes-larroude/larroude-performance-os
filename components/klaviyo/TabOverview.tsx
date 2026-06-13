@@ -4,6 +4,8 @@ import { api } from './fetcher';
 import { Kpi, SectionHead, HBar, fmtMoney, fmtInt, fmtPct, fmtMoneyCents } from './ui';
 import DailyBarChart from './DailyBarChart';
 import type { Market, Period, CustomRange } from '@/types/klaviyo/models';
+import GenericDiagnosticsPanel from '@/components/shared/GenericDiagnosticsPanel';
+import { computeGenericDiagnostics } from '@/lib/data/generic-diagnostics';
 
 const PINK = '#E91E78';
 const NAVY = '#1e3a8a';
@@ -69,9 +71,33 @@ export default function TabOverview({ market, period, custom }: { market: Market
   const maxDayOR = Math.max(...byDay.map(d => d.avgOpenRate || 0), 1);
   const maxDayCTR = Math.max(...byDay.map(d => d.avgCtr || 0), 1);
 
+  // Cassia 2026-06-13: Cause & Effect diagnostics referente ao período selecionado
+  const diagnostics = computeGenericDiagnostics({
+    domain: 'email',
+    invName: 'send volume',
+    outName: 'email revenue',
+    efficiencyName: 'RPR',
+    efficiencyUnit: '$',
+    invSeries: sendPts.map(p => ({ date: p.date, value: p.value })),
+    outSeries: revPts.map(p => ({ date: p.date, value: p.value })),
+    totalInv: c.recipients + (f.recipients || 0),
+    totalOut: data.totalEmailRevenue,
+    efficiency: c.rpr,
+    efficiencyHealthyAt: 0.5,
+    efficiencyCriticalAt: 0.05,
+    fmt: market === 'BR'
+      ? (v: number) => v >= 1000 ? `R$${(v / 1000).toFixed(1)}k` : `R$${v.toFixed(0)}`
+      : (v: number) => v >= 1000 ? `$${(v / 1000).toFixed(1)}k` : `$${v.toFixed(0)}`,
+  });
+
   return (
     <>
       <SectionHead pill="Overview" pillVariant="blue" title={<><b>Consolidated performance</b> &middot; campaigns + flows &middot; {period} &middot; market {market} &middot; {data.granularity || 'daily'}</>} right={`Generated ${new Date(data.generatedAt).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})}`} />
+      {diagnostics.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <GenericDiagnosticsPanel diagnostics={diagnostics} title={`CAUSE & EFFECT · ${period}`} />
+        </div>
+      )}
       <div className="kpi-grid kpi-grid-8">
         <Kpi color="pink" label="Email Revenue" value={fmtMoney(data.totalEmailRevenue, market)} sub={<>Camps + Flows</>} />
         <Kpi color="teal" label="Campaigns" value={c.count} sub={<><b>{fmtMoney(c.revenue, market)}</b> revenue</>} />
