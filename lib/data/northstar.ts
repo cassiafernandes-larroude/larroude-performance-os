@@ -114,78 +114,22 @@ export async function getNorthStarBundle(market: Market): Promise<NorthStarBundl
     const table = ORDERS_TABLE[market];
 
     try {
-      // Query principal — fórmula oficial Cassia (LTV Dashboard)
-      // Note: simplificada (sem validOrdersCte para evitar 2 levels de complexidade)
-      const sql = `
-        WITH base AS (
-          SELECT
-            JSON_VALUE(customer, '$.id') AS customer_id,
-            DATE(created_at) AS order_date,
-            id AS order_id,
-            ${NET_SALES_EXPR} AS net_sales
-          FROM \`${table}\`
-          WHERE ${commonFilters(market)}
-            AND DATE(created_at) BETWEEN @start AND @end
-        ),
-        period_customers AS (
-          SELECT
-            customer_id,
-            COUNT(*) AS orders_in_period,
-            SUM(net_sales) AS net_sales_in_period
-          FROM base
-          GROUP BY customer_id
-        )
-        SELECT
-          (SELECT COUNT(*) FROM period_customers) AS total_customers,
-          (SELECT COUNT(*) FROM period_customers WHERE net_sales_in_period > 0) AS predictive_customers,
-          (SELECT SUM(orders_in_period) FROM period_customers WHERE net_sales_in_period > 0) AS predictive_orders,
-          (SELECT SUM(net_sales_in_period) FROM period_customers WHERE net_sales_in_period > 0) AS predictive_net_sales,
-          (SELECT COUNTIF(orders_in_period >= 2) FROM period_customers WHERE net_sales_in_period > 0) AS returning_customers,
-          (SELECT SUM(net_sales_in_period) FROM period_customers) AS historic_net_sales
-      `;
+      // Cassia 2026-06-14: REGRA — North Star reusa EXATAMENTE getLtvKpiSummary do LTV Dashboard.
+      // Garante paridade 100% entre os dois painéis (mesma SQL, mesmos filtros, mesmo BigQuery).
+      const { getLtvKpiSummary } = await import('@/lib/ltv-dashboard/queries');
+      const ltv = await getLtvKpiSummary(market, fromStr, toStr);
 
-      const rows = await runQuery<{
-        total_customers: number; predictive_customers: number;
-        predictive_orders: number; predictive_net_sales: number | string;
-        returning_customers: number; historic_net_sales: number | string;
-      }>(sql, { start: fromStr, end: toStr });
-
-      const s = rows[0];
-      if (!s) throw new Error("no rows");
-
-      const totalCustomers = Number(s.total_customers) || 0;
-      const predictiveCustomers = Number(s.predictive_customers) || 0;
-      const predictiveOrders = Number(s.predictive_orders) || 0;
-      const predictiveNetSales = Number(s.predictive_net_sales) || 0;
-      const returningCustomers = Number(s.returning_customers) || 0;
-      const historicNetSales = Number(s.historic_net_sales) || 0;
-
-      const aov = predictiveOrders > 0 ? predictiveNetSales / predictiveOrders : 0;
-      const purchaseFrequency = predictiveCustomers > 0 ? predictiveOrders / predictiveCustomers : 0;
-      const returningCustomerRate = predictiveCustomers > 0 ? returningCustomers / predictiveCustomers : 0;
-      const customerLifetime = returningCustomerRate < 1 ? 1 / (1 - returningCustomerRate) : 0;
-      const ltvPredictive = aov * purchaseFrequency * customerLifetime;
-      const ltvHistorical = totalCustomers > 0 ? historicNetSales / totalCustomers : 0;
-
-      // New customers (igual ao LTV Dashboard)
-      const newCustomersRows = await runQuery<{ new_customers: number }>(
-        `WITH first_order AS (
-          SELECT customer_id, MIN(order_date) AS first_order_date
-          FROM (
-            SELECT
-              JSON_VALUE(customer, '$.id') AS customer_id,
-              DATE(created_at) AS order_date
-            FROM \`${table}\`
-            WHERE ${commonFilters(market)}
-          )
-          GROUP BY customer_id
-        )
-        SELECT COUNT(*) AS new_customers
-        FROM first_order
-        WHERE first_order_date BETWEEN @start AND @end`,
-        { start: fromStr, end: toStr }
-      );
-      const newCustomers = Number(newCustomersRows[0]?.new_customers) || 0;
+      const totalCustomers = ltv.totalCustomers;
+      const predictiveCustomers = ltv.predictiveCustomers;
+      const returningCustomers = ltv.returningCustomers;
+      const historicNetSales = ltv.totalRevenue;
+      const aov = ltv.aov;
+      const purchaseFrequency = ltv.purchaseFrequency;
+      const returningCustomerRate = ltv.returningCustomerRate / 100; // 0..1
+      const customerLifetime = ltv.customerLifetime;
+      const ltvPredictive = ltv.ltvPredictive;
+      const ltvHistorical = ltv.ltvHistorical;
+      const newCustomers = ltv.newCustomers;
 
       // Spend total via Meta API (mesma fórmula do dashboard principal)
       let metaSpend = 0, googleSpend = 0;
