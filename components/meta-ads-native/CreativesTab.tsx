@@ -166,16 +166,16 @@ function SkuQuadro({
           <h3 className="text-[15px] font-semibold" style={{ color: 'var(--ink)' }}>{title}</h3>
           <p className="text-[11px]" style={{ color: 'var(--ink-soft)' }}>{subtitle}</p>
         </div>
-        <div className="flex items-center gap-3 text-[11px]">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:flex lg:items-center gap-2 lg:gap-3 text-[11px] w-full lg:w-auto">
           <Stat label="Faturamento" value={formatCurrency(totals.revenue, currency, true)} color="#10b981" />
           <Stat label="Investimento" value={formatCurrency(totals.spend, currency, true)} color="var(--ink)" />
           <Stat label="ROAS" value={totals.roas > 0 ? `${formatDecimal(totals.roas)}×` : '—'} color={totals.roas >= 1 ? '#10b981' : totals.roas > 0 ? '#f59e0b' : 'var(--ink-muted)'} />
           <Stat label="Units" value={formatNumber(totals.units)} color="var(--ink-soft)" />
-          <Stat label="Purchases Meta" value={formatNumber(totals.purchases)} color="var(--ink-soft)" />
+          <Stat label="Purchases" value={formatNumber(totals.purchases)} color="var(--ink-soft)" />
         </div>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-[12px]">
+      <div className="overflow-x-auto -mx-3 sm:mx-0">
+        <table className="w-full text-[11px] sm:text-[12px] min-w-[800px]">
           <thead style={{ background: 'var(--paper)', color: 'var(--ink-soft)' }}>
             <tr>
               <th className="text-left px-2 py-1.5" style={{ width: 40 }}>#</th>
@@ -284,7 +284,7 @@ function SkuQuadro({
                     <tr key={`${r.sku}-detail`} style={{ background: 'var(--paper)' }}>
                       <td colSpan={9} className="px-3 py-2">
                         <div className="text-[10px] uppercase tracking-wider font-semibold mb-2" style={{ color: 'var(--ink-muted)' }}>Criativos deste SKU</div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
                           {r.ads.map(ad => {
                             const effStatus = (ad.effectiveStatus || ad.status || 'UNKNOWN').toUpperCase();
                             const isAct = ad.isActive || effStatus === 'ACTIVE';
@@ -340,7 +340,7 @@ function SkuQuadro({
 
 function Stat({ label, value, color }: { label: string; value: string; color: string }) {
   return (
-    <div className="text-right">
+    <div className="text-left lg:text-right p-1.5 lg:p-0 rounded lg:rounded-none" style={{ background: 'var(--paper)' }}>
       <div className="text-[9px] uppercase tracking-wider" style={{ color: 'var(--ink-muted)' }}>{label}</div>
       <div className="font-num font-bold text-[13px]" style={{ color }}>{value}</div>
     </div>
