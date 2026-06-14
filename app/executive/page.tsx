@@ -255,57 +255,23 @@ export default async function ExecutivePage({
           )}
         </div>
 
-        {/* Cassia 2026-06-14: ===== PROFIT POR PAÍS — destaque ===== */}
+        {/* Cassia 2026-06-14: ===== BY MARKET — uma única seção (PROFIT + BREAKDOWN unificados) =====
+            Investment Total = TODOS os canais (Meta+Google+Tools+%rev) — alinhado com Main Dashboard.
+            Profit Op = Revenue − Investment Total.
+            Profit UE = aproximação operacional (regras Unit Economics): Revenue − COGS − Tax − Card/PIX − Investment − Frete×units. */}
         <div className="section-marker mb-3">
           <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--ink-muted)" }}>
-            💰 PROFIT BY COUNTRY (USD)
-          </span>
-        </div>
-        {(() => {
-          const usProfit = c.by_market.US.profit;
-          const brProfit = c.by_market.BR.profit;
-          const totalProfit = usProfit + brProfit;
-          const usShare = totalProfit !== 0 ? (usProfit / totalProfit) * 100 : 0;
-          const brShare = totalProfit !== 0 ? (brProfit / totalProfit) * 100 : 0;
-          return (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-6">
-              <ProfitCountryCard
-                flag="🇺🇸"
-                label="United States"
-                revenue={c.by_market.US.revenue}
-                spend={c.by_market.US.spend}
-                profit={usProfit}
-                profitMarginPct={c.by_market.US.profit_margin_pct}
-                profitShare={usShare}
-                native="USD"
-                profitNative={usProfit}
-              />
-              <ProfitCountryCard
-                flag="🇧🇷"
-                label="Brazil"
-                revenue={c.by_market.BR.revenue}
-                spend={c.by_market.BR.spend}
-                profit={brProfit}
-                profitMarginPct={c.by_market.BR.profit_margin_pct}
-                profitShare={brShare}
-                native="BRL"
-                profitNative={c.by_market.BR.profit_brl ?? brProfit}
-                revenueNative={c.by_market.BR.revenue_brl}
-                spendNative={c.by_market.BR.spend_brl}
-              />
-            </div>
-          );
-        })()}
-
-        {/* ===== Breakdown por market (referência) ===== */}
-        <div className="section-marker mb-3">
-          <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--ink-muted)" }}>
-            BREAKDOWN BY MARKET (USD)
+            💰 BY MARKET (USD)
           </span>
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-6">
           <MarketCard flag="🇺🇸" label="United States" data={c.by_market.US} native="USD" totalRev={c.total_revenue} totalSpend={c.total_ad_spend} />
           <MarketCard flag="🇧🇷" label="Brazil" data={c.by_market.BR} native="BRL" totalRev={c.total_revenue} totalSpend={c.total_ad_spend} brData={c.by_market.BR} />
+        </div>
+        <div className="text-[10px] mb-6 px-3 py-2 rounded" style={{ background: "var(--paper)", color: "var(--ink-muted)" }}>
+          <strong style={{ color: "var(--ink-soft)" }}>How to read:</strong> Investment Total inclui TODOS os canais (Meta + Google + Klaviyo + Attentive + Criteo + Agent.shop + Awin + ShopMy), igual ao Dashboard Principal.
+          {" "}<strong style={{ color: "var(--ink-soft)" }}>Profit Op</strong> = Revenue − Investment Total.
+          {" "}<strong style={{ color: "var(--ink-soft)" }}>Profit UE</strong> ≈ aplicação das regras do Unit Economics no agregado (COGS 30%, Tax 8% US / 12% BR, Card 3.5%, PIX 5%, Frete/unit). Veja UE para análise por produto.
         </div>
       </div>
     </>
@@ -343,10 +309,29 @@ function HealthCard({ icon, tag, value, sub, color, bg, hint }: {
   );
 }
 
-function MarketCard({ flag, label, data, native, totalRev, totalSpend, brData }: {
+// Cassia 2026-06-14: card unificado por mercado.
+// Investment Total = TODOS canais (Meta + Google + Tools + %rev), igual ao Main Dashboard.
+// Profit Op = Receita − Investimento Total.
+// Profit UE ≈ regras Unit Economics aplicadas no agregado (COGS+Tax+Card+PIX+Frete).
+function MarketCard({ flag, label, data, native, totalRev, totalSpend }: {
   flag: string;
   label: string;
-  data: { revenue: number; spend: number; meta: number; google: number };
+  data: {
+    revenue: number;
+    spend: number;
+    meta: number;
+    google: number;
+    tools: number;
+    percent_rev: number;
+    units: number;
+    profit: number;
+    profit_margin_pct: number;
+    ue_profit: number;
+    ue_margin_pct: number;
+    revenue_brl?: number;
+    spend_brl?: number;
+    profit_brl?: number;
+  };
   native: "USD" | "BRL";
   totalRev: number;
   totalSpend: number;
@@ -355,35 +340,78 @@ function MarketCard({ flag, label, data, native, totalRev, totalSpend, brData }:
   const revShare = totalRev > 0 ? (data.revenue / totalRev) * 100 : 0;
   const spendShare = totalSpend > 0 ? (data.spend / totalSpend) * 100 : 0;
   const roas = data.spend > 0 ? data.revenue / data.spend : 0;
-  const profit = data.revenue - data.spend;
+  const profitOp = data.profit;
+  const profitUe = data.ue_profit;
+  const profitColor = profitOp >= 0 ? "var(--positive)" : "var(--negative)";
+  const profitBg = profitOp >= 0 ? "rgba(13, 148, 136, 0.08)" : "rgba(220, 38, 38, 0.08)";
+  const ueColor = profitUe >= 0 ? "var(--positive)" : "var(--negative)";
+
   return (
-    <div className="card">
+    <div className="card" style={{ borderTop: `3px solid ${profitColor}` }}>
       <div className="flex items-center gap-2 mb-3">
-        <span className="text-[18px]">{flag}</span>
+        <span className="text-[22px]">{flag}</span>
         <span className="font-semibold text-[14px]" style={{ color: "var(--ink)" }}>{label}</span>
         <span className="badge ml-auto" style={{ background: "var(--pink-soft)", color: "var(--pink-deep)" }}>USD</span>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+
+      {/* PROFIT OP destaque */}
+      <div style={{ background: profitBg, borderRadius: 12, padding: "10px 12px", marginBottom: 10 }}>
+        <div className="label-meta" style={{ color: profitColor }}>PROFIT OP (Revenue − Investment Total)</div>
+        <div className="font-num text-[24px] lg:text-[26px] font-bold mt-1" style={{ color: profitColor, lineHeight: 1.0 }}>
+          {formatCurrency(profitOp, "USD")}
+        </div>
+        {native === "BRL" && data.profit_brl != null && (
+          <div className="text-[10px] mt-1" style={{ color: "var(--ink-muted)" }}>
+            native: R$ {Math.round(data.profit_brl).toLocaleString("pt-BR")}
+          </div>
+        )}
+        <div className="text-[11px] mt-1" style={{ color: "var(--ink-soft)" }}>
+          <b style={{ color: profitColor }}>{data.profit_margin_pct.toFixed(1)}%</b> margin
+        </div>
+      </div>
+
+      {/* PROFIT UE (Unit Economics rules) */}
+      <div className="flex items-center justify-between mb-3 px-3 py-2 rounded-md" style={{ background: "var(--paper)", border: `1px solid ${ueColor === 'var(--positive)' ? 'rgba(13,148,136,0.2)' : 'rgba(220,38,38,0.2)'}` }}>
+        <div>
+          <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--ink-soft)" }}>Profit UE (estimate)</div>
+          <div className="text-[9px]" style={{ color: "var(--ink-muted)" }}>− COGS 30% − Tax − Card/PIX − Frete</div>
+        </div>
+        <div className="text-right">
+          <div className="font-num text-[15px] font-bold" style={{ color: ueColor }}>{formatCurrency(profitUe, "USD")}</div>
+          <div className="text-[10px]" style={{ color: ueColor }}>{data.ue_margin_pct.toFixed(1)}% margin</div>
+        </div>
+      </div>
+
+      {/* Revenue + Investment Total */}
+      <div className="grid grid-cols-2 gap-3 mb-3">
         <div>
           <div className="label-meta">Revenue</div>
-          <div className="font-num text-[16px] font-bold" style={{ color: "var(--positive)" }}>{formatCurrency(data.revenue, "USD")}</div>
+          <div className="font-num text-[15px] font-bold" style={{ color: "var(--positive)" }}>{formatCurrency(data.revenue, "USD")}</div>
           <div className="text-[10px]" style={{ color: "var(--ink-muted)" }}>{revShare.toFixed(1)}% of total</div>
+          {native === "BRL" && data.revenue_brl != null && (
+            <div className="text-[10px]" style={{ color: "var(--ink-muted)" }}>R$ {Math.round(data.revenue_brl).toLocaleString("pt-BR")}</div>
+          )}
         </div>
         <div>
-          <div className="label-meta">Investment</div>
-          <div className="font-num text-[16px] font-bold" style={{ color: "var(--ink)" }}>{formatCurrency(data.spend, "USD")}</div>
-          <div className="text-[10px]" style={{ color: "var(--ink-muted)" }}>{spendShare.toFixed(1)}% of total</div>
+          <div className="label-meta">Investment Total (all channels)</div>
+          <div className="font-num text-[15px] font-bold" style={{ color: "var(--ink)" }}>{formatCurrency(data.spend, "USD")}</div>
+          <div className="text-[10px]" style={{ color: "var(--ink-muted)" }}>{spendShare.toFixed(1)}% of total · ROAS {roas.toFixed(2)}x</div>
+          {native === "BRL" && data.spend_brl != null && (
+            <div className="text-[10px]" style={{ color: "var(--ink-muted)" }}>R$ {Math.round(data.spend_brl).toLocaleString("pt-BR")}</div>
+          )}
         </div>
-        <div>
-          <div className="label-meta">ROAS</div>
-          <div className="font-num text-[16px] font-bold" style={{ color: "var(--ink)" }}>{roas.toFixed(2)}x</div>
-        </div>
-        <div>
-          <div className="label-meta">Revenue − Investment</div>
-          <div className="font-num text-[16px] font-bold" style={{ color: profit >= 0 ? "var(--positive)" : "var(--negative)" }}>
-            {formatCurrency(profit, "USD")}
-          </div>
-        </div>
+      </div>
+
+      {/* Investment breakdown por canal */}
+      <div className="text-[10px] uppercase tracking-wider font-semibold mb-1.5" style={{ color: "var(--ink-muted)" }}>Investment breakdown</div>
+      <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]" style={{ color: "var(--ink-soft)" }}>
+        <div className="flex justify-between"><span>Meta Ads</span><span className="font-num font-semibold" style={{ color: "var(--ink)" }}>{formatCurrency(data.meta, "USD", false)}</span></div>
+        <div className="flex justify-between"><span>Google Ads</span><span className="font-num font-semibold" style={{ color: "var(--ink)" }}>{formatCurrency(data.google, "USD", false)}</span></div>
+        <div className="flex justify-between"><span>Fixed tools</span><span className="font-num font-semibold" style={{ color: "var(--ink)" }}>{formatCurrency(data.tools, "USD", false)}</span></div>
+        <div className="flex justify-between"><span>% revenue affiliates</span><span className="font-num font-semibold" style={{ color: "var(--ink)" }}>{formatCurrency(data.percent_rev, "USD", false)}</span></div>
+      </div>
+      <div className="text-[9px] italic mt-2" style={{ color: "var(--ink-muted)" }}>
+        Tools: Klaviyo · Attentive · Criteo · Agent.shop  ·  % rev: Awin · ShopMy
       </div>
     </div>
   );

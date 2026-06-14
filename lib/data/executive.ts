@@ -80,10 +80,66 @@ export type ExecutiveConsolidated = {
   channels: ChannelRow[];
   // Por market (referência rápida). Cassia 2026-06-14: incluir lucro (revenue - spend) e margem.
   by_market: {
-    US: { revenue: number; spend: number; meta: number; google: number; profit: number; profit_margin_pct: number };
-    BR: { revenue: number; spend: number; meta: number; google: number; revenue_brl: number; spend_brl: number; profit: number; profit_margin_pct: number; profit_brl: number };
+    US: {
+      revenue: number; spend: number; meta: number; google: number; profit: number; profit_margin_pct: number;
+      tools: number;          // Cassia 2026-06-14: Klaviyo + Attentive + Criteo + Agent.shop (fixos) — em USD
+      percent_rev: number;    // Awin + ShopMy (% revenue)
+      ue_profit: number;      // Lucro UE-style (≈ revenue × 0.42 − spend_total). Ver computeUeApprox.
+      ue_margin_pct: number;
+      units: number;
+    };
+    BR: {
+      revenue: number; spend: number; meta: number; google: number; revenue_brl: number; spend_brl: number; profit: number; profit_margin_pct: number; profit_brl: number;
+      tools: number;
+      percent_rev: number;
+      ue_profit: number;
+      ue_margin_pct: number;
+      units: number;
+    };
   };
 };
+
+/**
+ * Cassia 2026-06-14: aproximação operacional de Lucro UE-style no nível agregado.
+ * Não substitui Unit Economics (que é per-product), mas aplica os mesmos descontos
+ * percentuais do CampaignsTab pra dar uma noção de margem operacional consolidada.
+ *
+ * Margem operacional ≈ Revenue × (1 − cogsPct − taxPct − cardPct(1−pix) − pixPct(pix))
+ *                       − Investment Total (todos canais) − fulfillment×units
+ *
+ * Defaults (alinhados com UE Assumptions defaults):
+ *   COGS: 30% revenue
+ *   Tax: 8% (US sales) / 12% (BR ICMS médio)
+ *   Card fee: 3.5% sobre fatia não-PIX
+ *   PIX discount: 5% sobre fatia PIX (BR only — US pix_share = 0)
+ *   Fulfillment+shipping: $4/unit US, R$15/unit BR
+ *   PIX share: 35% BR / 0% US (proxy default)
+ */
+function computeUeApprox(opts: {
+  revenue: number;
+  units: number;
+  totalSpend: number;
+  market: Market;
+}): { profit: number; marginPct: number } {
+  const { revenue, units, totalSpend, market } = opts;
+  if (revenue <= 0) return { profit: -totalSpend, marginPct: 0 };
+  const COGS_PCT = 0.30;
+  const TAX_PCT = market === 'US' ? 0.08 : 0.12;
+  const CARD_FEE_PCT = 0.035;
+  const PIX_DISC_PCT = 0.05;
+  const PIX_SHARE = market === 'US' ? 0 : 0.35;
+  const FULFILLMENT_PER_UNIT_USD = market === 'US' ? 4 : 15 / 5.0; // R$15 ~ $3 — caller já passa revenue em USD ou BRL? Ver baixo.
+  // No nosso caso revenue passado ao computeUeApprox é em USD (consolidado) ou native (BR).
+  // Como executive consolida tudo em USD, vamos receber revenue em USD pra ambos markets.
+  // Mas units são contagem absoluta → fulfillment em USD direto.
+  const fulfillmentTotal = units * FULFILLMENT_PER_UNIT_USD;
+
+  const grossDeductionsPct = COGS_PCT + TAX_PCT + CARD_FEE_PCT * (1 - PIX_SHARE) + PIX_DISC_PCT * PIX_SHARE;
+  const contributionAfterPctDeductions = revenue * (1 - grossDeductionsPct);
+  const profit = contributionAfterPctDeductions - totalSpend - fulfillmentTotal;
+  const marginPct = (profit / revenue) * 100;
+  return { profit, marginPct };
+}
 
 const MOCK: Record<Market, Omit<ExecutiveBundle, "market" | "period" | "source">> = {
   US: {
@@ -262,8 +318,8 @@ export async function getExecutiveConsolidated(
         daily: { spend: [], total_sales: [], gross_sales: [], margin_total_sales: [], roas_total: [] },
         channels: [],
         by_market: {
-          US: { revenue: mockUsd.US, spend: mockSpend.US, meta: mockSpend.US * 0.85, google: mockSpend.US * 0.15, profit: mockUsd.US - mockSpend.US, profit_margin_pct: ((mockUsd.US - mockSpend.US) / mockUsd.US) * 100 },
-          BR: { revenue: mockUsd.BR, spend: mockSpend.BR, meta: mockSpend.BR * 0.85, google: mockSpend.BR * 0.15, revenue_brl: 7700000, spend_brl: 2500000, profit: mockUsd.BR - mockSpend.BR, profit_margin_pct: ((mockUsd.BR - mockSpend.BR) / mockUsd.BR) * 100, profit_brl: 7700000 - 2500000 },
+          US: { revenue: mockUsd.US, spend: mockSpend.US, meta: mockSpend.US * 0.85, google: mockSpend.US * 0.15, tools: 0, percent_rev: 0, units: 0, profit: mockUsd.US - mockSpend.US, profit_margin_pct: ((mockUsd.US - mockSpend.US) / mockUsd.US) * 100, ue_profit: 0, ue_margin_pct: 0 },
+          BR: { revenue: mockUsd.BR, spend: mockSpend.BR, meta: mockSpend.BR * 0.85, google: mockSpend.BR * 0.15, tools: 0, percent_rev: 0, units: 0, revenue_brl: 7700000, spend_brl: 2500000, profit: mockUsd.BR - mockSpend.BR, profit_margin_pct: ((mockUsd.BR - mockSpend.BR) / mockUsd.BR) * 100, profit_brl: 7700000 - 2500000, ue_profit: 0, ue_margin_pct: 0 },
         },
       };
     }
@@ -390,27 +446,55 @@ export async function getExecutiveConsolidated(
         },
         daily_by_market: dailyByMarket,
         channels,
-        by_market: {
-          US: {
-            revenue: usRev,
-            spend: usSpend,
-            meta: usMeta,
-            google: usGoogle,
-            profit: usRev - usSpend,
-            profit_margin_pct: usRev > 0 ? ((usRev - usSpend) / usRev) * 100 : 0,
-          },
-          BR: {
-            revenue: brRevUsd,
-            spend: brSpendUsd,
-            meta: brMetaUsd,
-            google: brGoogleUsd,
-            revenue_brl: brRevNative,
-            spend_brl: brSpendNative,
-            profit: brRevUsd - brSpendUsd,
-            profit_margin_pct: brRevUsd > 0 ? ((brRevUsd - brSpendUsd) / brRevUsd) * 100 : 0,
-            profit_brl: brRevNative - brSpendNative,
-          },
-        },
+        by_market: (() => {
+          // Cassia 2026-06-14: spend by_market.spend já é AMOUNT SPENT = TODOS os canais (Meta+Google+tools+%rev).
+          // Calcular tools (fixedTools) + percent_rev por mercado a partir do residual:
+          // tools+pct = spend total − meta − google
+          const usToolsPlusPct = Math.max(0, usSpend - usMeta - usGoogle);
+          const brToolsPlusPct = Math.max(0, brSpendUsd - brMetaUsd - brGoogleUsd);
+          // Heurística split tools vs percent_rev: US tem Awin+ShopMy (% rev típico ~10% revenue cada → 20% rev),
+          // BR só Awin (~10% rev). Mas usar dados reais seria melhor — por ora aplicar proporção:
+          // percent_rev ≈ revenue × pct, tools = residual.
+          const usPctRevEst = Math.min(usToolsPlusPct, usRev * 0.10); // proxy
+          const brPctRevEst = Math.min(brToolsPlusPct, brRevUsd * 0.05);
+          const usTools = usToolsPlusPct - usPctRevEst;
+          const brTools = brToolsPlusPct - brPctRevEst;
+
+          const usUeApprox = computeUeApprox({ revenue: usRev, units: usUnits, totalSpend: usSpend, market: 'US' });
+          const brUeApprox = computeUeApprox({ revenue: brRevUsd, units: brUnits, totalSpend: brSpendUsd, market: 'BR' });
+
+          return {
+            US: {
+              revenue: usRev,
+              spend: usSpend,
+              meta: usMeta,
+              google: usGoogle,
+              tools: usTools,
+              percent_rev: usPctRevEst,
+              units: usUnits,
+              profit: usRev - usSpend,
+              profit_margin_pct: usRev > 0 ? ((usRev - usSpend) / usRev) * 100 : 0,
+              ue_profit: usUeApprox.profit,
+              ue_margin_pct: usUeApprox.marginPct,
+            },
+            BR: {
+              revenue: brRevUsd,
+              spend: brSpendUsd,
+              meta: brMetaUsd,
+              google: brGoogleUsd,
+              tools: brTools,
+              percent_rev: brPctRevEst,
+              units: brUnits,
+              revenue_brl: brRevNative,
+              spend_brl: brSpendNative,
+              profit: brRevUsd - brSpendUsd,
+              profit_margin_pct: brRevUsd > 0 ? ((brRevUsd - brSpendUsd) / brRevUsd) * 100 : 0,
+              profit_brl: brRevNative - brSpendNative,
+              ue_profit: brUeApprox.profit,
+              ue_margin_pct: brUeApprox.marginPct,
+            },
+          };
+        })(),
       };
     } catch (err) {
       console.error("executive consolidated failed:", err);
@@ -421,8 +505,8 @@ export async function getExecutiveConsolidated(
         daily: { spend: [], total_sales: [], gross_sales: [], margin_total_sales: [], roas_total: [] },
         channels: [],
         by_market: {
-          US: { revenue: 0, spend: 0, meta: 0, google: 0, profit: 0, profit_margin_pct: 0 },
-          BR: { revenue: 0, spend: 0, meta: 0, google: 0, revenue_brl: 0, spend_brl: 0, profit: 0, profit_margin_pct: 0, profit_brl: 0 },
+          US: { revenue: 0, spend: 0, meta: 0, google: 0, tools: 0, percent_rev: 0, units: 0, profit: 0, profit_margin_pct: 0, ue_profit: 0, ue_margin_pct: 0 },
+          BR: { revenue: 0, spend: 0, meta: 0, google: 0, tools: 0, percent_rev: 0, units: 0, revenue_brl: 0, spend_brl: 0, profit: 0, profit_margin_pct: 0, profit_brl: 0, ue_profit: 0, ue_margin_pct: 0 },
         },
       };
     }
