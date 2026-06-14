@@ -177,3 +177,49 @@ export function getPercentRevenueCosts(
   }
   return result;
 }
+
+// Cassia 2026-06-14: REGRA CANONICA — todo "spend total" em qualquer dashboard
+// DEVE incluir: Meta + Google + fixed tools (Klaviyo, Attentive, Criteo)
+// + % revenue affiliates (Agent.shop BR, Awin US+BR, ShopMy US).
+// Esta funcao computa fixed tools + % revenue dados o channelMix. Use:
+//   const extra = getAllChannelExtraCosts(market, range, channelMix);
+//   const totalSpend = metaSpend + googleSpend + extra.total;
+export type AllChannelExtraCosts = {
+  fixedTools: number;
+  percentRevenue: number;
+  total: number;
+  byChannel: Record<string, number>;
+};
+
+export function getAllChannelExtraCosts(
+  market: Market,
+  start: string,
+  end: string,
+  channelMix?: ChannelRevRow[],
+): AllChannelExtraCosts {
+  const fixedTools = getFixedToolsCostInRange(market, start, end);
+  const pctMap = channelMix ? getPercentRevenueCosts(market, channelMix) : {};
+  const percentRevenue = Object.values(pctMap).reduce((s, v) => s + v, 0);
+  const byChannel: Record<string, number> = { ...pctMap };
+  // adiciona fixed tools por canal pra Cost-by-Channel cards
+  for (const entry of CHANNEL_COSTS[market] || []) {
+    if (entry.percentOfRevenue != null) continue;
+    const monthlyMap = entry.costsByMonth || {};
+    let cost = 0;
+    const sd = new Date(start + "T00:00:00Z");
+    const ed = new Date(end + "T00:00:00Z");
+    for (const [yyyymm, monthlyCost] of Object.entries(monthlyMap)) {
+      const [y, m] = yyyymm.split("-").map(Number);
+      const monthStart = new Date(Date.UTC(y, m - 1, 1));
+      const monthEnd = new Date(Date.UTC(y, m, 0));
+      const totalDaysInMonth = monthEnd.getUTCDate();
+      const iStart = sd > monthStart ? sd : monthStart;
+      const iEnd = ed < monthEnd ? ed : monthEnd;
+      if (iStart > iEnd) continue;
+      const days = Math.round((iEnd.getTime() - iStart.getTime()) / 86400000) + 1;
+      cost += (monthlyCost / totalDaysInMonth) * days;
+    }
+    if (cost > 0) byChannel[entry.channel] = cost;
+  }
+  return { fixedTools, percentRevenue, total: fixedTools + percentRevenue, byChannel };
+}

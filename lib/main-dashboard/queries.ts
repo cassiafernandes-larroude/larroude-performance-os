@@ -543,12 +543,13 @@ export async function queryChannelMix(market: Market, start: string, end: string
           WHEN REGEXP_CONTAINS(landing, r'utm_source=attentive|utm_medium=sms') THEN 'SMS Attentive'
 
           -- ============= AFFILIATE / CREATOR CHANNELS =============
-          -- Awin Affiliate
-          WHEN REGEXP_CONTAINS(landing, r'utm_source=awin|utm_medium=affiliate') THEN 'Awin Affiliate'
-          -- ShopMy (creator)
-          WHEN REGEXP_CONTAINS(landing, r'utm_source=shopmy') THEN 'ShopMy'
-          -- Agent.shop
-          WHEN REGEXP_CONTAINS(landing, r'agent[._-]?shop|utm_source=agent') OR REGEXP_CONTAINS(referrer, r'agent[._-]?shop') THEN 'Agent.shop'
+          -- Affiliates/Creators (UTMs reais descobertos via BQ — REGRAS-LARROUDE-OS sec.4):
+          -- Awin: APENAS utm_source=awin (utm_medium=affiliate pode pegar ShopMy)
+          WHEN REGEXP_CONTAINS(landing, r'utm_source=awin') OR REGEXP_CONTAINS(referrer, r'utm_source=awin') THEN 'Awin Affiliate'
+          -- ShopMy: utm_source=shopmy (case-insensitive já garantido por LOWER)
+          WHEN REGEXP_CONTAINS(landing, r'utm_source=shopmy') OR REGEXP_CONTAINS(referrer, r'utm_source=shopmy') THEN 'ShopMy'
+          -- Agent.shop: utm_source=agent-shop (com hifen — BR apenas)
+          WHEN REGEXP_CONTAINS(landing, r'utm_source=agent-shop') OR REGEXP_CONTAINS(referrer, r'utm_source=agent-shop') THEN 'Agent.shop'
 
           -- ============= PAID ADS =============
           -- Meta Ads paid (UTMs explicitos OU referrer social + landing com fbclid/paid medium)

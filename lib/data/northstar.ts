@@ -205,7 +205,15 @@ export async function getNorthStarBundle(market: Market): Promise<NorthStarBundl
         googleSpend = Number(googleRows[0]?.google_spend) || 0;
       } catch {}
 
-      const totalAdSpend = metaSpend + googleSpend;
+      // Cassia 2026-06-14: REGRA CANONICA — spend inclui TODOS canais (Meta+Google+tools+%revenue)
+      let totalAdSpend = metaSpend + googleSpend;
+      try {
+        const { computeTotalSpend } = await import('@/lib/channel-costs-bq');
+        const breakdown = await computeTotalSpend(market as any, fromStr, toStr, metaSpend, googleSpend);
+        totalAdSpend = breakdown.total;
+      } catch (e) {
+        console.warn('[northstar] computeTotalSpend failed, fallback Meta+Google:', e);
+      }
       const cac = newCustomers > 0 ? totalAdSpend / newCustomers : 0;
       const ltvCac = cac > 0 ? ltvPredictive / cac : 0;
 

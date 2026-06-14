@@ -19,6 +19,8 @@ import {
 import { queryMetaAdsDaily } from '@/lib/main-dashboard/meta-ads';
 import type { Market as MainMarket } from '@/lib/main-dashboard/types';
 import { getMetaSpendAdjustmentByDay } from '@/lib/shared/meta-adjustments';
+// Cassia 2026-06-14: REGRA — spend total = Meta+Google+Klaviyo+Attentive+Criteo+Agent.shop+Awin+ShopMy
+import { computeTotalSpend } from '@/lib/channel-costs-bq';
 import type {
   DailyPoint,
   DataSourceMeta,
@@ -126,6 +128,21 @@ async function getSpendByDay(
 }
 
 /**
+ * Cassia 2026-06-14: REGRA — pra qualquer KPI total (não daily), use computeTotalSpend
+ * que adiciona Klaviyo/Attentive/Criteo (fixed) + Agent.shop/Awin/ShopMy (% revenue).
+ * Daily series mantém só Meta+Google (não dá pra distribuir tools no dia sem fonte).
+ */
+export async function getTotalSpendWithAllChannels(
+  market: Market,
+  startDate: string,
+  endDate: string,
+): Promise<number> {
+  const sp = await getSpendByDay(market, startDate, endDate);
+  const breakdown = await computeTotalSpend(market as MainMarket, startDate, endDate, sp.meta, sp.google);
+  return breakdown.total;
+}
+
+/**
  * Daily series — new_customers via queryDailyCac (Main Dashboard) + spend mesclado.
  */
 export async function getDailySeries(
@@ -166,7 +183,10 @@ export async function getKpiSummary(
     getSpendByDay(market, startDate, endDate),
   ]);
 
-  const totalSpend = spend.google + spend.meta;
+  // Cassia 2026-06-14: REGRA CANÔNICA — spend total inclui TODOS canais
+  // (Meta + Google + Klaviyo + Attentive + Criteo + Agent.shop + Awin + ShopMy)
+  const breakdown = await computeTotalSpend(market as MainMarket, startDate, endDate, spend.meta, spend.google);
+  const totalSpend = breakdown.total;
   const orders = bqDaily.reduce((s: number, r: any) => s + (Number(r.orders) || 0), 0);
   const newCustomers = bqDaily.reduce((s: number, r: any) => s + (Number(r.new_customers) || 0), 0);
   // Revenue nao vem do queryDailyCac — calculamos do total spend pra agora

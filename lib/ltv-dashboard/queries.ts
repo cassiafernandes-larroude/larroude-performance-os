@@ -492,7 +492,15 @@ export async function getLtvKpiSummary(
   // AJUSTE MANUAL: Meta US +$400k Setembro/2025 (regra Cassia, REGRAS-LARROUDE-OS.md secao 3.3)
   metaSpend += getMetaSpendAdjustment(market as 'US' | 'BR', startDate, endDate);
 
-  const totalAdSpend = metaSpend + googleSpend;
+  // Cassia 2026-06-14: REGRA CANONICA — spend total = Meta+Google + Klaviyo+Attentive+Criteo + Agent.shop+Awin+ShopMy
+  let totalAdSpend = metaSpend + googleSpend;
+  try {
+    const { computeTotalSpend } = await import('@/lib/channel-costs-bq');
+    const breakdown = await computeTotalSpend(market as any, startDate, endDate, metaSpend, googleSpend);
+    totalAdSpend = breakdown.total;
+  } catch (e) {
+    console.warn('[ltv] computeTotalSpend failed, falling back to Meta+Google only:', e);
+  }
   const cac = newCustomers > 0 ? totalAdSpend / newCustomers : 0;
   const ltvCacRatio = cac > 0 ? ltvPredictive / cac : 0;
 
