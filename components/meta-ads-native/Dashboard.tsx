@@ -24,6 +24,7 @@ import DailyMultiBarChart from '@/components/main-dashboard/DailyMultiBarChart';
 import DuplicatePurchasesDisclaimer from '@/components/shared/DuplicatePurchasesDisclaimer';
 import CreativesTab from './CreativesTab';
 import RoasByDimension from './RoasByDimension';
+import TopCreativesByRoas from './TopCreativesByRoas';
 import { aggregateRoasByDimension } from '@/lib/meta-ads-native/ad-dimensions';
 
 // Converte TimeSeriesPoint {date, value} -> DailyPoint {date, value, inPeriod}
@@ -296,6 +297,8 @@ export default function MetaAdsDashboard() {
                   <div className="text-[11px] uppercase tracking-wider font-semibold" style={{ color: 'var(--ink-muted)' }}>
                     🎯 TOP PERFORMANCE BY ROAS (ads com spend ≥ $1.000)
                   </div>
+                  {/* Cassia 2026-06-14: Top 10 criativos por ROAS com imagem */}
+                  <TopCreativesByRoas ads={data.ads} currency={currency} top={10} minSpend={1000} />
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <RoasByDimension title="ROAS by asset format" icon="🎬" rows={byFormat} currency={currency} tip="Tip: prioritize o formato com maior ROAS." />
                     <RoasByDimension title="ROAS by destination" icon="📍" rows={byDestination} currency={currency} tip="Tip: o destino com maior ROAS converte mais." />
