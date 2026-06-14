@@ -227,7 +227,7 @@ function SkuQuadro({
                           return (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: 'rgba(13,148,136,0.12)', color: '#0d9488' }}>
                               <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981' }} />
-                              Ativo ({active}{inactive > 0 ? ` + ${inactive} off` : ''})
+                              Com ads ({active}{inactive > 0 ? ` + ${inactive} off` : ''})
                             </span>
                           );
                         }
@@ -235,7 +235,7 @@ function SkuQuadro({
                           return (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: 'rgba(156,163,175,0.18)', color: '#6b7280' }}>
                               <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#9ca3af' }} />
-                              Pausado ({total})
+                              Sem ads ativos ({total} off)
                             </span>
                           );
                         }
