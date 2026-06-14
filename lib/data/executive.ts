@@ -55,10 +55,12 @@ export type ExecutiveConsolidated = {
   fxBrlUsd: number;          // taxa usada para converter BR
   total_revenue: number;     // net (total_sales) US + BR em USD
   total_gross_revenue: number;
+  total_units: number;       // unidades vendidas consolidadas (DTC only — já exclui B2B/PIX não-pago)
   total_ad_spend: number;
   total_meta_spend: number;
   total_google_spend: number;
   roas: number;              // total_revenue / total_ad_spend
+  roas_gross: number;        // total_gross_revenue / total_ad_spend
   profit: number;            // total_revenue - total_ad_spend
   profit_margin_pct: number; // profit / total_revenue
   // Daily series consolidados (US + BR convertido p/ USD).
@@ -253,9 +255,9 @@ export async function getExecutiveConsolidated(
       const totalSpend = mockSpend.US + mockSpend.BR;
       return {
         period: range, source: "Mock", currency: "USD", fxBrlUsd: fxRate,
-        total_revenue: totalRev, total_gross_revenue: totalRev * 1.1,
+        total_revenue: totalRev, total_gross_revenue: totalRev * 1.1, total_units: 0,
         total_ad_spend: totalSpend, total_meta_spend: totalSpend * 0.85, total_google_spend: totalSpend * 0.15,
-        roas: totalRev / totalSpend, profit: totalRev - totalSpend,
+        roas: totalRev / totalSpend, roas_gross: (totalRev * 1.1) / totalSpend, profit: totalRev - totalSpend,
         profit_margin_pct: ((totalRev - totalSpend) / totalRev) * 100,
         daily: { spend: [], total_sales: [], gross_sales: [], margin_total_sales: [], roas_total: [] },
         channels: [],
@@ -303,6 +305,12 @@ export async function getExecutiveConsolidated(
       const usGoogle = kpiVal(us.kpis, "GOOGLE SPEND");
       const brGoogleNative = kpiVal(br.kpis, "GOOGLE SPEND");
       const brGoogleUsd = brGoogleNative * fxRate;
+
+      // Cassia 2026-06-14: incluir UNITS SOLD (DTC, já filtra B2B/PIX não-pago via getDashboardPayload).
+      // Units é contagem absoluta — soma direta US + BR (sem conversão FX).
+      const usUnits = kpiVal(us.kpis, "UNITS SOLD");
+      const brUnits = kpiVal(br.kpis, "UNITS SOLD");
+      const totalUnits = usUnits + brUnits;
 
       const totalRev = usRev + brRevUsd;
       const totalGross = usGross + brGrossUsd;
@@ -365,10 +373,12 @@ export async function getExecutiveConsolidated(
         fxBrlUsd: fxRate,
         total_revenue: totalRev,
         total_gross_revenue: totalGross,
+        total_units: totalUnits,
         total_ad_spend: totalSpend,
         total_meta_spend: totalMeta,
         total_google_spend: totalGoogle,
         roas: safeDiv(totalRev, totalSpend),
+        roas_gross: safeDiv(totalGross, totalSpend),
         profit,
         profit_margin_pct: totalRev > 0 ? (profit / totalRev) * 100 : 0,
         daily: {
@@ -406,8 +416,8 @@ export async function getExecutiveConsolidated(
       console.error("executive consolidated failed:", err);
       return {
         period: range, source: "Mock", currency: "USD", fxBrlUsd: fxRate,
-        total_revenue: 0, total_gross_revenue: 0, total_ad_spend: 0, total_meta_spend: 0, total_google_spend: 0,
-        roas: 0, profit: 0, profit_margin_pct: 0,
+        total_revenue: 0, total_gross_revenue: 0, total_units: 0, total_ad_spend: 0, total_meta_spend: 0, total_google_spend: 0,
+        roas: 0, roas_gross: 0, profit: 0, profit_margin_pct: 0,
         daily: { spend: [], total_sales: [], gross_sales: [], margin_total_sales: [], roas_total: [] },
         channels: [],
         by_market: {

@@ -120,6 +120,34 @@ export default async function ExecutivePage({
           />
         </div>
 
+        {/* ===== Cassia 2026-06-14: 3 KPIs DTC complementares (Gross / ROAS Gross / Units) ===== */}
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
+          <HealthCard
+            icon={<DollarSign className="w-5 h-5" />}
+            tag="GROSS SALES (DTC)"
+            value={formatCurrency(c.total_gross_revenue, "USD")}
+            sub={`Net ${formatCurrency(c.total_revenue, "USD", false)}`}
+            color="var(--ink)" bg="var(--paper)"
+            hint="Gross Sales US + BR (exclui B2B e PIX não-pago)"
+          />
+          <HealthCard
+            icon={<Target className="w-5 h-5" />}
+            tag="ROAS (GROSS SALES)"
+            value={`${c.roas_gross.toFixed(2)}x`}
+            sub="Gross Sales / Investment"
+            color="var(--ink)" bg="var(--paper)"
+            hint="ROAS sobre Gross Sales (DTC)"
+          />
+          <HealthCard
+            icon={<TrendingUp className="w-5 h-5" />}
+            tag="UNITS SOLD (DTC)"
+            value={formatNumber(c.total_units)}
+            sub={`US + BR · ${c.total_revenue > 0 ? formatCurrency(c.total_revenue / Math.max(1, c.total_units), "USD", false) : "—"} / unit`}
+            color="var(--ink)" bg="var(--paper)"
+            hint="Total de unidades vendidas (exclui B2B)"
+          />
+        </div>
+
         {/* ===== Cause & Effect Diagnostics ===== */}
         <DiagnosticsPanel diagnostics={diagnostics} />
 
