@@ -14,7 +14,7 @@
 // na shopify orders matching UTM/landing_site/referring_site patterns.
 // =====================================================================
 
-import { runQuery, hasBigQueryCredentials } from "@/lib/bigquery";
+import { runQuery, hasBigQueryCredentials } from "@/lib/bigquery/client";
 import { CHANNEL_COSTS, getFixedToolsCostInRange, type Market } from "@/lib/channel-costs";
 
 // Patterns vindos do helper central lib/shared/channel-utms.ts (UTMs reais do Shopify)
