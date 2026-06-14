@@ -99,13 +99,11 @@ export async function POST(req: NextRequest) {
       if (!ref || ref.type !== 'sku') continue; // só processa SKUs (collections ficam de fora aqui)
       const sku = ref.value;
       if (!adsBySku[sku]) adsBySku[sku] = [];
-      // Cassia 2026-06-14: se Meta metadata não veio (limite de paginação, etc),
-      // usar spend>0 como proxy de "ativo" — se gastou no período, estava rodando.
+      // Cassia 2026-06-14: status "ativo" só quando Meta retorna effective_status === ACTIVE.
+      // Ads que gastaram no período mas foram pausados depois NÃO são "ativos" agora.
+      // Se metadata não veio (limite de paginação, etc) → trata como OFF (não inflar tag).
       const knownStatus = (ad.effectiveStatus ?? ad.status ?? '').toUpperCase();
-      const explicitlyPaused = knownStatus === 'PAUSED' || knownStatus === 'DELETED' || knownStatus === 'ARCHIVED';
-      const explicitlyActive = knownStatus === 'ACTIVE';
-      const isActive = explicitlyActive
-        || (!explicitlyPaused && Number(ad.spend) > 0); // fallback: gastou = ativo
+      const isActive = knownStatus === 'ACTIVE';
       adsBySku[sku].push({
         id: ad.id,
         name: ad.name,
