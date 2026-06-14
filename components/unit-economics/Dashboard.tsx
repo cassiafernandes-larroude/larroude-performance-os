@@ -233,6 +233,69 @@ export default function Dashboard({ freshness }: { freshness: string }) {
         endDate={data?.endDate}
       />
 
+      {/* Cassia 2026-06-13: TAB NAV — visualizar Per Product OU por Campaign */}
+      <div
+        className="no-print"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 4,
+          marginTop: 12,
+          marginBottom: 18,
+          borderBottom: '1.5px solid #E5E0D6',
+          flexWrap: 'wrap',
+        }}
+      >
+        <button
+          style={{
+            padding: '10px 20px',
+            border: 'none',
+            background: 'transparent',
+            color: '#1A1A1A',
+            fontSize: 13,
+            fontWeight: 700,
+            borderBottom: '3px solid #FF3D8B',
+            marginBottom: -1.5,
+            cursor: 'default',
+          }}
+        >
+          Per Product
+        </button>
+        <a
+          href="/unit-economics/campaigns"
+          style={{
+            padding: '10px 20px',
+            border: 'none',
+            background: 'transparent',
+            color: '#6b7280',
+            fontSize: 13,
+            fontWeight: 700,
+            borderBottom: '3px solid transparent',
+            marginBottom: -1.5,
+            cursor: 'pointer',
+            textDecoration: 'none',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+          }}
+        >
+          By Campaign
+          <span
+            style={{
+              fontSize: 9,
+              padding: '2px 6px',
+              background: '#FF3D8B',
+              color: 'white',
+              borderRadius: 999,
+              fontWeight: 700,
+              letterSpacing: '0.04em',
+            }}
+          >
+            NEW
+          </span>
+        </a>
+      </div>
+
       {error && (
         <div
           className="card mt-4 p-4"
