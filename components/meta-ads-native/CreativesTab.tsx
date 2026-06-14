@@ -288,9 +288,15 @@ function SkuQuadro({
                           {r.ads.map(ad => {
                             const effStatus = (ad.effectiveStatus || ad.status || 'UNKNOWN').toUpperCase();
                             const isAct = ad.isActive || effStatus === 'ACTIVE';
-                            const statusColor = isAct ? '#10b981' : effStatus.includes('PAUSED') ? '#9ca3af' : effStatus.includes('DISAPPROVED') || effStatus.includes('DELETED') ? '#ef4444' : '#f59e0b';
-                            const statusBg = isAct ? 'rgba(13,148,136,0.12)' : effStatus.includes('PAUSED') ? 'rgba(156,163,175,0.15)' : 'rgba(245,158,11,0.12)';
-                            const statusLabel = isAct ? 'Ativo' : effStatus.replace('_', ' ').toLowerCase().replace(/^./, c => c.toUpperCase());
+                            // Cassia 2026-06-14: se não é ATIVO (incluindo UNKNOWN/PAUSED/etc), trata como "Off"
+                            const isDisapproved = effStatus.includes('DISAPPROVED') || effStatus.includes('DELETED') || effStatus.includes('ARCHIVED');
+                            const statusColor = isAct ? '#10b981' : isDisapproved ? '#ef4444' : '#9ca3af';
+                            const statusBg = isAct ? 'rgba(13,148,136,0.12)' : isDisapproved ? 'rgba(239,68,68,0.12)' : 'rgba(156,163,175,0.18)';
+                            const statusLabel = isAct
+                              ? 'Com ads'
+                              : isDisapproved
+                                ? (effStatus.includes('DISAPPROVED') ? 'Reprovado' : effStatus.includes('ARCHIVED') ? 'Arquivado' : 'Excluído')
+                                : 'Off';
                             return (
                               <div key={ad.id} className="flex items-start gap-2 p-2 rounded" style={{ background: 'white', border: '1px solid var(--border)' }}>
                                 <img src={ad.thumbnail || FALLBACK_IMG} alt="" width={56} height={56} style={{ borderRadius: 6, objectFit: 'cover', background: '#eee', flexShrink: 0 }} onError={(e) => { (e.currentTarget as HTMLImageElement).src = FALLBACK_IMG; }} />
