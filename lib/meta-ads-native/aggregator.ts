@@ -117,7 +117,7 @@ export async function buildDashboard(
   const dailyFields = ['spend', 'impressions', 'clicks', 'ctr', 'cpc',
     'reach', 'frequency', 'actions', 'action_values'];
   const campaignFields = ['campaign_id', 'campaign_name', 'spend', 'clicks', 'actions', 'action_values'];
-  const adFields = ['ad_id', 'ad_name', 'spend', 'ctr', 'clicks', 'actions', 'action_values'];
+  const adFields = ['ad_id', 'ad_name', 'campaign_id', 'campaign_name', 'adset_id', 'adset_name', 'spend', 'ctr', 'clicks', 'actions', 'action_values'];
   const monthlyRange = { since: periodToRange('12M').since, until: range.until };
 
   // Helper to flatten array of arrays from each account fetch
@@ -332,6 +332,8 @@ export async function buildDashboard(
         id: r.ad_id,
         name: r.ad_name,
         account: r._account,
+        campaignName: r.campaign_name,
+        adsetName: r.adset_name,
         spend: sSpend,
         revenue: sRev,
         purchases: sPur,

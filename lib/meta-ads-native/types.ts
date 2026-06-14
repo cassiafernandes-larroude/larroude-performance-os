@@ -61,6 +61,8 @@ export interface AdRow extends CampaignRow {
   thumbnail?: string;
   ctr?: number;
   addsToCart?: number;
+  campaignName?: string;
+  adsetName?: string;
 }
 
 export interface AgePerformanceRow {

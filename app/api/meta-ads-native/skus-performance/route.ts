@@ -1,0 +1,219 @@
+// Cassia 2026-06-14: Top SKUs por vendas no Shopify + cruzamento com criativos Meta.
+// POST { market, since, until, ads: { id, name, account, campaignName?, adsetName?, spend, purchases, thumbnail? }[], limit? }
+//
+// Response:
+//   {
+//     top: SkuRow[],            // top N SKUs por unidades vendidas no Shopify (default 30)
+//     otherWithAds: SkuRow[],   // SKUs FORA do top N mas que TÊM ads ativos (spend>0)
+//   }
+//
+// Cada SkuRow contém: sku, productName, productImage, unitsSold, shopifyRevenue, currency,
+//   hasAds, adsSpend, adsPurchases, roasReal, ads[].
+//
+// DTC only — usa os mesmos filtros do Main Dashboard.
+
+import { NextRequest, NextResponse } from 'next/server';
+import { hasBigQueryCredentials } from '@/lib/bigquery/client';
+import { shopifyGraphQL, hasShopifyCredentials } from '@/lib/shopify/admin';
+import { extractAdRefFromName } from '@/lib/meta-ads-native/sku-extractor';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 600;
+export const maxDuration = 60;
+
+interface AdInput {
+  id: string;
+  name: string;
+  account: string;
+  campaignName?: string;
+  adsetName?: string;
+  spend: number;
+  purchases: number;
+  thumbnail?: string;
+}
+interface RequestBody {
+  market: 'US' | 'BR';
+  since: string;
+  until: string;
+  ads: AdInput[];
+  limit?: number;
+}
+
+interface AdDetail {
+  id: string;
+  name: string;
+  account: string;
+  campaignName: string | null;
+  adsetName: string | null;
+  thumbnail: string | null;
+  spend: number;
+  purchases: number;
+}
+interface SkuRow {
+  sku: string;
+  productName: string | null;
+  productImage: string | null;
+  unitsSold: number;
+  shopifyRevenue: number;
+  currency: 'USD' | 'BRL';
+  hasAds: boolean;
+  adsSpend: number;
+  adsPurchases: number;
+  roasReal: number;       // shopifyRevenue / adsSpend
+  ads: AdDetail[];
+}
+
+const MAX_ORDER_VALUE = { US: 30000, BR: 25000 } as const;
+const TZ = { US: 'America/New_York', BR: 'America/Sao_Paulo' } as const;
+const EXCLUDED_TAGS = 'b2b|wholesale|marketplace|redo';
+
+export async function POST(req: NextRequest) {
+  try {
+    const body: RequestBody = await req.json();
+    const { market, since, until, ads = [], limit = 30 } = body;
+
+    if (!market || !since || !until) {
+      return NextResponse.json({ error: 'Invalid body' }, { status: 400 });
+    }
+    if (!hasBigQueryCredentials()) {
+      return NextResponse.json({ error: 'BigQuery not configured' }, { status: 503 });
+    }
+
+    const currency: 'USD' | 'BRL' = market === 'US' ? 'USD' : 'BRL';
+    const { runQuery } = await import('@/lib/bigquery/client');
+    const dataset = market === 'US' ? 'stg_shopify' : 'stg_shopify_br';
+
+    // 1) Agrega ads por SKU mãe (regex L\d{3,5})
+    const adsBySku: Record<string, AdDetail[]> = {};
+    for (const ad of ads) {
+      const ref = extractAdRefFromName(ad.name);
+      if (!ref || ref.type !== 'sku') continue; // só processa SKUs (collections ficam de fora aqui)
+      const sku = ref.value;
+      if (!adsBySku[sku]) adsBySku[sku] = [];
+      adsBySku[sku].push({
+        id: ad.id,
+        name: ad.name,
+        account: ad.account,
+        campaignName: ad.campaignName ?? null,
+        adsetName: ad.adsetName ?? null,
+        thumbnail: ad.thumbnail ?? null,
+        spend: Number(ad.spend) || 0,
+        purchases: Number(ad.purchases) || 0,
+      });
+    }
+    const skusFromAds = Object.keys(adsBySku);
+
+    // 2) Top N SKUs por unidades vendidas no Shopify (DTC)
+    const pixFilter = market === 'BR'
+      ? `AND o.financial_status NOT IN ('voided','refunded','pending','expired','authorized')`
+      : `AND o.financial_status NOT IN ('voided','refunded')`;
+
+    const topSql = `
+      WITH line_items_unnested AS (
+        SELECT
+          UPPER(JSON_VALUE(li, '$.sku')) AS sku_raw,
+          JSON_VALUE(li, '$.title') AS title,
+          CAST(JSON_VALUE(li, '$.quantity') AS FLOAT64) AS qty,
+          CAST(JSON_VALUE(li, '$.price') AS FLOAT64) AS unit_price
+        FROM \`larroude-data-prod.${dataset}.orders\` o,
+          UNNEST(JSON_QUERY_ARRAY(o.line_items)) AS li
+        WHERE DATE(o.created_at, '${TZ[market]}') BETWEEN @since AND @until
+          AND o.cancelled_at IS NULL
+          AND o.test = FALSE
+          ${pixFilter}
+          AND NOT REGEXP_CONTAINS(LOWER(IFNULL(o.tags, '')), r'${EXCLUDED_TAGS}')
+          AND (JSON_VALUE(o.customer, '$.tags') IS NULL OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(o.customer, '$.tags')), r'${EXCLUDED_TAGS}'))
+          AND CAST(o.total_price AS NUMERIC) < ${MAX_ORDER_VALUE[market]}
+      ),
+      matched AS (
+        SELECT
+          REGEXP_EXTRACT(sku_raw, r'(L\\d{3,5})') AS mother_code,
+          title, qty, unit_price
+        FROM line_items_unnested
+        WHERE sku_raw IS NOT NULL AND REGEXP_CONTAINS(sku_raw, r'L\\d{3,5}')
+      )
+      SELECT
+        mother_code AS sku,
+        ANY_VALUE(title) AS product_name,
+        SUM(qty) AS units,
+        SUM(qty * unit_price) AS revenue
+      FROM matched
+      WHERE mother_code IS NOT NULL
+      GROUP BY mother_code
+      ORDER BY units DESC
+      LIMIT ${Math.max(1, Math.min(100, limit + 200))}
+    `;
+
+    const topRows = await runQuery<{
+      sku: string;
+      product_name: string | null;
+      units: number | string;
+      revenue: number | string;
+    }>(topSql, { since, until });
+
+    // 3) Decidir: top N + outros que têm ads
+    const topSkus = topRows.slice(0, limit).map(r => r.sku);
+    const topSkuSet = new Set(topSkus);
+    const otherActiveSkus = skusFromAds.filter(s => {
+      if (topSkuSet.has(s)) return false;
+      const totalSpend = adsBySku[s].reduce((acc, a) => acc + a.spend, 0);
+      return totalSpend > 0; // só inclui se tem spend ativo
+    });
+
+    // 4) Pra cada SKU (top + others), busca image+productName via Shopify GraphQL
+    const allSkus = [...topSkus, ...otherActiveSkus];
+    const imageCache: Record<string, { name: string | null; image: string | null }> = {};
+    if (hasShopifyCredentials(market)) {
+      await Promise.all(allSkus.map(async sku => {
+        try {
+          const query = `query($sku: String!) { productVariants(first: 1, query: $sku) { edges { node { product { title featuredImage { url } } } } } }`;
+          const data = await shopifyGraphQL<{ productVariants: { edges: { node: { product: { title: string; featuredImage?: { url: string } | null } } }[] } }>(market, query, { sku: `sku:${sku}*` });
+          const edge = data?.productVariants?.edges?.[0];
+          if (edge) {
+            imageCache[sku] = { name: edge.node.product.title, image: edge.node.product.featuredImage?.url ?? null };
+          } else {
+            imageCache[sku] = { name: null, image: null };
+          }
+        } catch { imageCache[sku] = { name: null, image: null }; }
+      }));
+    }
+
+    // 5) Build top rows
+    const topMap = new Map<string, { product_name: string | null; units: number; revenue: number }>();
+    for (const r of topRows) {
+      topMap.set(r.sku, { product_name: r.product_name, units: Number(r.units) || 0, revenue: Number(r.revenue) || 0 });
+    }
+
+    const buildRow = (sku: string): SkuRow => {
+      const sales = topMap.get(sku);
+      const adsForSku = adsBySku[sku] || [];
+      const adsSpend = adsForSku.reduce((a, b) => a + b.spend, 0);
+      const adsPurchases = adsForSku.reduce((a, b) => a + b.purchases, 0);
+      const shopifyRevenue = sales?.revenue ?? 0;
+      const unitsSold = sales?.units ?? 0;
+      return {
+        sku,
+        productName: imageCache[sku]?.name ?? sales?.product_name ?? null,
+        productImage: imageCache[sku]?.image ?? null,
+        unitsSold,
+        shopifyRevenue,
+        currency,
+        hasAds: adsForSku.length > 0 && adsSpend > 0,
+        adsSpend,
+        adsPurchases,
+        roasReal: adsSpend > 0 ? shopifyRevenue / adsSpend : 0,
+        ads: adsForSku.sort((a, b) => b.spend - a.spend),
+      };
+    };
+
+    const top = topSkus.map(buildRow);
+    const otherWithAds = otherActiveSkus.map(buildRow).sort((a, b) => b.adsSpend - a.adsSpend);
+
+    return NextResponse.json({ top, otherWithAds }, {
+      headers: { 'Cache-Control': 's-maxage=600, stale-while-revalidate=3600, public' },
+    });
+  } catch (e: any) {
+    console.error('[skus-performance] error:', e);
+    return NextResponse.json({ error: e?.message || 'Internal error' }, { status: 500 });
+  }
+}
