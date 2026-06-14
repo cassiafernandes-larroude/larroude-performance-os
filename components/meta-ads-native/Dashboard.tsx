@@ -63,7 +63,7 @@ export default function MetaAdsDashboard() {
   const currency = currencyFor(region);
 
   return (
-    <div className="meta-ads-root min-h-screen">
+    <div>
       <Header
         region={region}
         period={period}
@@ -76,7 +76,7 @@ export default function MetaAdsDashboard() {
         onExportPdf={handleExportPdf}
       />
 
-      <main className="max-w-[1480px] mx-auto px-6 py-5 space-y-5">
+      <div className="space-y-5">
         {error && (
           <div className="card border-rose-300 bg-rose-50 text-rose-700 text-sm">
             <strong>Error:</strong> {error}
@@ -197,7 +197,7 @@ export default function MetaAdsDashboard() {
             </footer>
           </>
         )}
-      </main>
+      </div>
     </div>
   );
 }

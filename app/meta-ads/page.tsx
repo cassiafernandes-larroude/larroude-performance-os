@@ -10,7 +10,7 @@ export const metadata = {
 
 export default function MetaAdsPage() {
   return (
-    <main className="print-container meta-ads-root">
+    <main className="mx-auto max-w-[1480px] px-4 py-6 lg:px-8 print-container main-dashboard-root">
       <MetaAdsDashboard />
     </main>
   );
