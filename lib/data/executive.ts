@@ -76,10 +76,10 @@ export type ExecutiveConsolidated = {
   };
   // Channel share consolidado em USD.
   channels: ChannelRow[];
-  // Por market (referência rápida).
+  // Por market (referência rápida). Cassia 2026-06-14: incluir lucro (revenue - spend) e margem.
   by_market: {
-    US: { revenue: number; spend: number; meta: number; google: number };
-    BR: { revenue: number; spend: number; meta: number; google: number; revenue_brl: number; spend_brl: number };
+    US: { revenue: number; spend: number; meta: number; google: number; profit: number; profit_margin_pct: number };
+    BR: { revenue: number; spend: number; meta: number; google: number; revenue_brl: number; spend_brl: number; profit: number; profit_margin_pct: number; profit_brl: number };
   };
 };
 
@@ -260,8 +260,8 @@ export async function getExecutiveConsolidated(
         daily: { spend: [], total_sales: [], gross_sales: [], margin_total_sales: [], roas_total: [] },
         channels: [],
         by_market: {
-          US: { revenue: mockUsd.US, spend: mockSpend.US, meta: mockSpend.US * 0.85, google: mockSpend.US * 0.15 },
-          BR: { revenue: mockUsd.BR, spend: mockSpend.BR, meta: mockSpend.BR * 0.85, google: mockSpend.BR * 0.15, revenue_brl: 7700000, spend_brl: 2500000 },
+          US: { revenue: mockUsd.US, spend: mockSpend.US, meta: mockSpend.US * 0.85, google: mockSpend.US * 0.15, profit: mockUsd.US - mockSpend.US, profit_margin_pct: ((mockUsd.US - mockSpend.US) / mockUsd.US) * 100 },
+          BR: { revenue: mockUsd.BR, spend: mockSpend.BR, meta: mockSpend.BR * 0.85, google: mockSpend.BR * 0.15, revenue_brl: 7700000, spend_brl: 2500000, profit: mockUsd.BR - mockSpend.BR, profit_margin_pct: ((mockUsd.BR - mockSpend.BR) / mockUsd.BR) * 100, profit_brl: 7700000 - 2500000 },
         },
       };
     }
@@ -381,8 +381,25 @@ export async function getExecutiveConsolidated(
         daily_by_market: dailyByMarket,
         channels,
         by_market: {
-          US: { revenue: usRev, spend: usSpend, meta: usMeta, google: usGoogle },
-          BR: { revenue: brRevUsd, spend: brSpendUsd, meta: brMetaUsd, google: brGoogleUsd, revenue_brl: brRevNative, spend_brl: brSpendNative },
+          US: {
+            revenue: usRev,
+            spend: usSpend,
+            meta: usMeta,
+            google: usGoogle,
+            profit: usRev - usSpend,
+            profit_margin_pct: usRev > 0 ? ((usRev - usSpend) / usRev) * 100 : 0,
+          },
+          BR: {
+            revenue: brRevUsd,
+            spend: brSpendUsd,
+            meta: brMetaUsd,
+            google: brGoogleUsd,
+            revenue_brl: brRevNative,
+            spend_brl: brSpendNative,
+            profit: brRevUsd - brSpendUsd,
+            profit_margin_pct: brRevUsd > 0 ? ((brRevUsd - brSpendUsd) / brRevUsd) * 100 : 0,
+            profit_brl: brRevNative - brSpendNative,
+          },
         },
       };
     } catch (err) {
@@ -394,8 +411,8 @@ export async function getExecutiveConsolidated(
         daily: { spend: [], total_sales: [], gross_sales: [], margin_total_sales: [], roas_total: [] },
         channels: [],
         by_market: {
-          US: { revenue: 0, spend: 0, meta: 0, google: 0 },
-          BR: { revenue: 0, spend: 0, meta: 0, google: 0, revenue_brl: 0, spend_brl: 0 },
+          US: { revenue: 0, spend: 0, meta: 0, google: 0, profit: 0, profit_margin_pct: 0 },
+          BR: { revenue: 0, spend: 0, meta: 0, google: 0, revenue_brl: 0, spend_brl: 0, profit: 0, profit_margin_pct: 0, profit_brl: 0 },
         },
       };
     }

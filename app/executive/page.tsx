@@ -227,6 +227,48 @@ export default async function ExecutivePage({
           )}
         </div>
 
+        {/* Cassia 2026-06-14: ===== PROFIT POR PAÍS — destaque ===== */}
+        <div className="section-marker mb-3">
+          <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--ink-muted)" }}>
+            💰 PROFIT BY COUNTRY (USD)
+          </span>
+        </div>
+        {(() => {
+          const usProfit = c.by_market.US.profit;
+          const brProfit = c.by_market.BR.profit;
+          const totalProfit = usProfit + brProfit;
+          const usShare = totalProfit !== 0 ? (usProfit / totalProfit) * 100 : 0;
+          const brShare = totalProfit !== 0 ? (brProfit / totalProfit) * 100 : 0;
+          return (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-6">
+              <ProfitCountryCard
+                flag="🇺🇸"
+                label="United States"
+                revenue={c.by_market.US.revenue}
+                spend={c.by_market.US.spend}
+                profit={usProfit}
+                profitMarginPct={c.by_market.US.profit_margin_pct}
+                profitShare={usShare}
+                native="USD"
+                profitNative={usProfit}
+              />
+              <ProfitCountryCard
+                flag="🇧🇷"
+                label="Brazil"
+                revenue={c.by_market.BR.revenue}
+                spend={c.by_market.BR.spend}
+                profit={brProfit}
+                profitMarginPct={c.by_market.BR.profit_margin_pct}
+                profitShare={brShare}
+                native="BRL"
+                profitNative={c.by_market.BR.profit_brl ?? brProfit}
+                revenueNative={c.by_market.BR.revenue_brl}
+                spendNative={c.by_market.BR.spend_brl}
+              />
+            </div>
+          );
+        })()}
+
         {/* ===== Breakdown por market (referência) ===== */}
         <div className="section-marker mb-3">
           <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--ink-muted)" }}>
@@ -313,6 +355,92 @@ function MarketCard({ flag, label, data, native, totalRev, totalSpend, brData }:
           <div className="font-num text-[16px] font-bold" style={{ color: profit >= 0 ? "var(--positive)" : "var(--negative)" }}>
             {formatCurrency(profit, "USD")}
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Cassia 2026-06-14: card grande de PROFIT por país com receita, investimento, lucro, margem e share do lucro total
+function ProfitCountryCard({
+  flag,
+  label,
+  revenue,
+  spend,
+  profit,
+  profitMarginPct,
+  profitShare,
+  native,
+  profitNative,
+  revenueNative,
+  spendNative,
+}: {
+  flag: string;
+  label: string;
+  revenue: number;
+  spend: number;
+  profit: number;
+  profitMarginPct: number;
+  profitShare: number;
+  native: "USD" | "BRL";
+  profitNative: number;
+  revenueNative?: number;
+  spendNative?: number;
+}) {
+  const profitColor = profit >= 0 ? "var(--positive)" : "var(--negative)";
+  const profitBg = profit >= 0 ? "rgba(13, 148, 136, 0.08)" : "rgba(220, 38, 38, 0.08)";
+  return (
+    <div className="card" style={{ borderTop: `3px solid ${profitColor}` }}>
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-[22px]">{flag}</span>
+        <div className="flex-1">
+          <div className="font-semibold text-[14px]" style={{ color: "var(--ink)" }}>{label}</div>
+          <div className="text-[10px]" style={{ color: "var(--ink-muted)" }}>Profit = Revenue − Total Spend</div>
+        </div>
+        <span className="badge" style={{ background: "var(--pink-soft)", color: "var(--pink-deep)" }}>USD</span>
+      </div>
+
+      {/* PROFIT em destaque */}
+      <div style={{ background: profitBg, borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
+        <div className="label-meta" style={{ color: profitColor }}>PROFIT</div>
+        <div className="font-num text-[28px] lg:text-[32px] font-bold mt-1" style={{ color: profitColor, lineHeight: 1.0 }}>
+          {formatCurrency(profit, "USD")}
+        </div>
+        {native === "BRL" && profitNative !== profit && (
+          <div className="text-[11px] mt-1" style={{ color: "var(--ink-muted)" }}>
+            native: R$ {Math.round(profitNative).toLocaleString("pt-BR")}
+          </div>
+        )}
+        <div className="flex items-center gap-3 mt-2 text-[11px]" style={{ color: "var(--ink-soft)" }}>
+          <span><b style={{ color: profitColor }}>{profitMarginPct.toFixed(1)}%</b> margin</span>
+          <span>·</span>
+          <span><b style={{ color: profitColor }}>{profitShare.toFixed(0)}%</b> of total profit</span>
+        </div>
+      </div>
+
+      {/* Revenue / Spend breakdown */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <div className="label-meta">Revenue</div>
+          <div className="font-num text-[15px] font-bold" style={{ color: "var(--positive)" }}>
+            {formatCurrency(revenue, "USD")}
+          </div>
+          {revenueNative != null && (
+            <div className="text-[10px]" style={{ color: "var(--ink-muted)" }}>
+              R$ {Math.round(revenueNative).toLocaleString("pt-BR")}
+            </div>
+          )}
+        </div>
+        <div>
+          <div className="label-meta">Total Spend</div>
+          <div className="font-num text-[15px] font-bold" style={{ color: "var(--ink)" }}>
+            {formatCurrency(spend, "USD")}
+          </div>
+          {spendNative != null && (
+            <div className="text-[10px]" style={{ color: "var(--ink-muted)" }}>
+              R$ {Math.round(spendNative).toLocaleString("pt-BR")}
+            </div>
+          )}
         </div>
       </div>
     </div>
