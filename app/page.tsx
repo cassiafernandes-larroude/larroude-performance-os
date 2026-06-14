@@ -111,39 +111,7 @@ export default async function DailyBriefingPage({
           ))}
         </div>
 
-        {/* ===== Diagnósticos ===== */}
-        <div className="section-marker mb-3">
-          <div className="flex items-baseline gap-2 lg:gap-3 flex-wrap">
-            <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--ink-muted)" }}>🔬 DIAGNOSTICS</span>
-            <span className="text-[11px]" style={{ color: "var(--ink-muted)" }}>
-              {diagnostics.length} insights - cross-source (4 sources)
-            </span>
-          </div>
-        </div>
-
-        {diagnostics.length > 0 ? (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-7">
-            {diagnostics.slice(0, 6).map((d) => (
-              <DiagnosticCard
-                key={d.id}
-                severity={d.severity}
-                meta={`${d.market} - ${d.category}`}
-                title={d.title}
-                body={<>{d.body}</>}
-                recommendation={d.recommendation}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="card mb-7 text-center py-8" style={{ color: "var(--ink-muted)" }}>
-            <p className="text-[13px]">No critical diagnostics in this period.</p>
-          </div>
-        )}
-
-        {/* ===== Narrative (Suspense - nao bloqueia render dos cards) ===== */}
-        <Suspense fallback={<NarrativeSkeleton />}>
-          <NarrativeSection us={us} br={br} diagnostics={diagnostics} period={period} />
-        </Suspense>
+        {/* Cassia 2026-06-14: removido bloco "DIAGNOSTICS · cross-source" e Narrative do Overview */}
       </div>
     </>
   );
