@@ -6,8 +6,6 @@ import Header from './Header';
 import KpiCard from './KpiCard';
 import Funnel from './Funnel';
 import GenderDonut from './GenderDonut';
-import TimeSeriesArea from './charts/TimeSeriesArea';
-import SpendVsRevenue from './charts/SpendVsRevenue';
 import BarRanking from './charts/BarRanking';
 import ScatterRoas from './charts/ScatterRoas';
 import AgeGroupBar from './charts/AgeGroupBar';
@@ -20,6 +18,13 @@ import CampaignsTable from './CampaignsTable';
 import AdsTable from './AdsTable';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/meta-ads-native/format';
 import type { DashboardData, DateRange, Period, Region } from '@/lib/meta-ads-native/types';
+// Cassia 2026-06-14: usar mesmos charts de barra do Main Dashboard pra padronizar visual
+import DailyBarChart from '@/components/main-dashboard/DailyBarChart';
+import DailyMultiBarChart from '@/components/main-dashboard/DailyMultiBarChart';
+
+// Converte TimeSeriesPoint {date, value} -> DailyPoint {date, value, inPeriod}
+const toDailyPoints = (pts: { date: string; value: number }[] = []) =>
+  pts.map(p => ({ date: p.date, value: p.value, inPeriod: true }));
 
 const currencyFor = (r: Region) => (r === 'BR' ? 'BRL' : 'USD');
 
@@ -154,31 +159,38 @@ export default function MetaAdsDashboard() {
             <PerformanceByAge data={data.agePerformance} currency={currency} />
 
             <ScatterRoas data={data.scatter} currency={currency} />
-            <SpendVsRevenue data={data.series.spendVsRevenue} currency={currency} />
+
+            {/* Cassia 2026-06-14: charts em barra usando DailyBarChart do Main Dashboard pra padronização */}
+            <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <DailyMultiBarChart
+                title="Spend × Revenue (daily)"
+                market={region}
+                series={[
+                  { key: 'spend', label: 'Spend', data: toDailyPoints(data.series.spendVsRevenue.map((p: any) => ({ date: p.date, value: p.spend || 0 }))), color: '#1f2d44' },
+                  { key: 'revenue', label: 'Revenue', data: toDailyPoints(data.series.spendVsRevenue.map((p: any) => ({ date: p.date, value: p.revenue || 0 }))), color: '#10b981' },
+                ]}
+              />
+              <DailyBarChart title="Amount Spent" data={toDailyPoints(data.series.spendByDay)} color="#1f2d44" unit="currency" market={region} />
+            </section>
 
             <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               <div className="lg:col-span-1"><ObjectiveSpend data={data.topCampaignsByObjective} currency={currency} /></div>
-              <div className="lg:col-span-2"><TimeSeriesArea
-                title="Amount spent"
-                data={data.series.spendByDay}
-                yFormat={(v) => formatCurrency(v, currency, true)}
-              /></div>
+              <div className="lg:col-span-2">
+                <DailyBarChart title="ROAS · Daily" data={toDailyPoints(data.series.roas)} color="#3b82f6" unit="multiple" market={region} />
+              </div>
             </section>
 
             <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <TimeSeriesArea title="Impressions" data={data.series.impressions} yFormat={(v) => formatNumber(v, true)} />
+              <DailyBarChart title="Impressions" data={toDailyPoints(data.series.impressions)} color="#8b5cf6" unit="number" market={region} />
               <ReachFrequency data={data.series.reachFrequency} />
             </section>
 
             <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <TimeSeriesArea title="Clicks (all)" data={data.series.clicks} yFormat={(v) => formatNumber(v, true)} />
-              <TimeSeriesArea title="CTR (all)" data={data.series.ctr} yFormat={(v) => formatPercent(v, 2)} />
+              <DailyBarChart title="Clicks (all)" data={toDailyPoints(data.series.clicks)} color="#0d9488" unit="number" market={region} />
+              <DailyBarChart title="CTR (all)" data={toDailyPoints(data.series.ctr)} color="#0891b2" unit="percent" market={region} />
             </section>
 
-            <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <TimeSeriesArea title="CPC (all)" data={data.series.cpc} yFormat={(v) => formatCurrency(v, currency, true)} />
-              <TimeSeriesArea title="ROAS · Daily" data={data.series.roas} yFormat={(v) => v.toFixed(2)} type="line" />
-            </section>
+            <DailyBarChart title="CPC (all)" data={toDailyPoints(data.series.cpc)} color="#c2410c" unit="currency" market={region} />
 
             <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <BarRanking
