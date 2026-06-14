@@ -292,8 +292,9 @@ function SkuQuadro({
                             const isDisapproved = effStatus.includes('DISAPPROVED') || effStatus.includes('DELETED') || effStatus.includes('ARCHIVED');
                             const statusColor = isAct ? '#10b981' : isDisapproved ? '#ef4444' : '#9ca3af';
                             const statusBg = isAct ? 'rgba(13,148,136,0.12)' : isDisapproved ? 'rgba(239,68,68,0.12)' : 'rgba(156,163,175,0.18)';
+                            // No card individual de cada criativo, mostra status REAL do ad.
                             const statusLabel = isAct
-                              ? 'Com ads'
+                              ? 'Ativo'
                               : isDisapproved
                                 ? (effStatus.includes('DISAPPROVED') ? 'Reprovado' : effStatus.includes('ARCHIVED') ? 'Arquivado' : 'Excluído')
                                 : 'Off';
