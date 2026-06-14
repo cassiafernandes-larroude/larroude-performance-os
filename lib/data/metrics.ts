@@ -5,7 +5,7 @@ import { hasBigQueryCredentials, runQuery } from "@/lib/bigquery/client";
 import { aggregatedKpisSQL } from "@/lib/bigquery/queries/metrics";
 import { getMetaSpendApi, hasMetaCredentials } from "@/lib/meta-api";
 import { cached } from "@/lib/cache";
-import { getFixedToolsCostInRange, getAgentShopCost } from "@/lib/channel-costs";
+import { getFixedToolsCostInRange, getAgentShopCost, CHANNEL_COSTS } from "@/lib/channel-costs";
 import { todayInMarket } from "@/lib/utils/market-tz";
 import { getTodaySales } from "@/lib/unit-economics/shopify-today";
 
@@ -205,37 +205,56 @@ export async function getMetricBundle(
     // para que ROAS / CAC / CPO reflitam o custo total (ads + ferramentas).
     const cFixedTools = getFixedToolsCostInRange(market, range.from, range.to);
     const pFixedTools = getFixedToolsCostInRange(market, prevRange.from, prevRange.to);
-    // Agent.shop BR = 10% da receita atribuida ao canal Agent.shop (via UTM landing_site).
+    // Cassia 2026-06-14: % revenue costs — Agent.shop (BR), Awin (US+BR), ShopMy (US)
+    // Query receita por canal via UTM/landing_site/referring_site e aplica % de comissão (10%).
     let cAgent = 0, pAgent = 0;
-    if (market === "BR" && hasBigQueryCredentials()) {
+    if (hasBigQueryCredentials()) {
       try {
-        const agentSQL = `
-          SELECT SUM(CAST(total_price AS NUMERIC)) AS rev
-          FROM \`larroude-data-prod.stg_shopify_br.orders\`
-          WHERE DATE(created_at, 'America/Sao_Paulo') BETWEEN @start AND @end
-            AND financial_status NOT IN ('voided','refunded')
-            AND LOWER(IFNULL(financial_status, '')) NOT IN ('pending', 'expired', 'authorized')
-            AND (
-              JSON_VALUE(customer, '$.tags') IS NULL
-              OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(customer, '$.tags')), r'b2b|wholesale|marketplace|redo')
-            )
-            AND NOT REGEXP_CONTAINS(LOWER(IFNULL(tags, '')), r'b2b|wholesale|marketplace|redo')
-            AND CAST(total_price AS NUMERIC) < 25000
-            AND (
-              REGEXP_CONTAINS(LOWER(IFNULL(landing_site, '')), r'agent[._-]?shop|utm_source=agent')
-              OR REGEXP_CONTAINS(LOWER(IFNULL(referring_site, '')), r'agent[._-]?shop')
-            )
-        `;
-        const [cAgentRows, pAgentRows] = await Promise.all([
-          runQuery<{ rev: number | string }>(agentSQL, { start: range.from, end: range.to }),
-          runQuery<{ rev: number | string }>(agentSQL, { start: prevRange.from, end: prevRange.to }),
-        ]);
-        const cAgentRev = num(cAgentRows[0]?.rev);
-        const pAgentRev = num(pAgentRows[0]?.rev);
-        cAgent = getAgentShopCost("BR", cAgentRev);
-        pAgent = getAgentShopCost("BR", pAgentRev);
+        const tbl = market === "BR" ? "larroude-data-prod.stg_shopify_br.orders" : "larroude-data-prod.stg_shopify_us.orders";
+        const tz = market === "BR" ? "America/Sao_Paulo" : "America/New_York";
+        const capVal = market === "BR" ? 25000 : 30000;
+        // Patterns para cada canal % revenue
+        const channelPatterns: Record<string, string> = {
+          "Agent.shop": "agent[._-]?shop|utm_source=agent",
+          "Awin": "awin|utm_source=awin|utm_medium=awin",
+          "ShopMy": "shopmy|utm_source=shopmy",
+        };
+        const pctEntries = (CHANNEL_COSTS[market] || []).filter((e) => e.percentOfRevenue != null);
+        for (const entry of pctEntries) {
+          const pattern = channelPatterns[entry.channel];
+          if (!pattern) continue;
+          const sql = `
+            SELECT SUM(CAST(total_price AS NUMERIC)) AS rev
+            FROM \`${tbl}\`
+            WHERE DATE(created_at, '${tz}') BETWEEN @start AND @end
+              AND financial_status NOT IN ('voided','refunded')
+              AND LOWER(IFNULL(financial_status, '')) NOT IN ('pending', 'expired', 'authorized')
+              AND (
+                JSON_VALUE(customer, '$.tags') IS NULL
+                OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(customer, '$.tags')), r'b2b|wholesale|marketplace|redo')
+              )
+              AND NOT REGEXP_CONTAINS(LOWER(IFNULL(tags, '')), r'b2b|wholesale|marketplace|redo')
+              AND CAST(total_price AS NUMERIC) < ${capVal}
+              AND (
+                REGEXP_CONTAINS(LOWER(IFNULL(landing_site, '')), r'${pattern}')
+                OR REGEXP_CONTAINS(LOWER(IFNULL(referring_site, '')), r'${pattern}')
+              )
+          `;
+          try {
+            const [cRows, pRows] = await Promise.all([
+              runQuery<{ rev: number | string }>(sql, { start: range.from, end: range.to }),
+              runQuery<{ rev: number | string }>(sql, { start: prevRange.from, end: prevRange.to }),
+            ]);
+            const cRev = num(cRows[0]?.rev);
+            const pRev = num(pRows[0]?.rev);
+            cAgent += Math.max(0, cRev * entry.percentOfRevenue!);
+            pAgent += Math.max(0, pRev * entry.percentOfRevenue!);
+          } catch (e) {
+            console.warn(`% revenue query failed for ${entry.channel} (${market}):`, e);
+          }
+        }
       } catch (err) {
-        console.warn("Agent.shop revenue query failed:", err);
+        console.warn("% revenue cost query failed:", err);
       }
     }
     const cToolsCost = cFixedTools + cAgent;

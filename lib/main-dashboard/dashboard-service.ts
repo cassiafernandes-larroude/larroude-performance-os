@@ -37,7 +37,7 @@ import {
 } from './supermetrics';
 import { calcPeriod, fmtCurrency, fmtMultiple, fmtNumber, fmtPercent, granularityFor, pctChange, safeDiv } from './utils';
 import { getMetaSpendAdjustment, getMetaSpendAdjustmentByDay } from '@/lib/shared/meta-adjustments';
-import { getFixedToolsCostInRange, getAgentShopCost, CHANNEL_COSTS } from '@/lib/channel-costs';
+import { getFixedToolsCostInRange, getAgentShopCost, getPercentRevenueCosts, CHANNEL_COSTS } from '@/lib/channel-costs';
 import type {
   CampaignRow,
   ChannelRevenue,
@@ -227,11 +227,12 @@ export async function getDashboardPayload(
   // Mesma regra do Overview (lib/data/metrics.ts).
   const fixedToolsCost = getFixedToolsCostInRange(market, period.start, period.end);
   const fixedToolsCostPrev = getFixedToolsCostInRange(market, period.prevStart, period.prevEnd);
-  // Agent.shop (BR) = 10% receita Agent.shop. Puxa do channelMix já carregado.
-  const agentShopRev = (channelMix as any[]).find((r) => r.channel === 'Agent.shop')?.revenue || 0;
-  const agentShopCost = getAgentShopCost(market, Number(agentShopRev) || 0);
-  // Prev: aproxima usando mesma % (não temos channelMix do período anterior; é uma aproximação ok)
-  const agentShopCostPrev = market === 'BR' ? agentShopCost : 0;
+  // Cassia 2026-06-14: TODOS canais % da receita (Agent.shop BR, Awin US+BR, ShopMy US)
+  // calculados via helper genérico — substitui getAgentShopCost
+  const percentRevCosts = getPercentRevenueCosts(market, channelMix as any[]);
+  const agentShopCost = Object.values(percentRevCosts).reduce((s, v) => s + v, 0);
+  // Prev: aproxima usando mesma soma (não temos channelMix do período anterior)
+  const agentShopCostPrev = agentShopCost;
 
   const spend = finalMetaSpend + finalGoogleSpend + fixedToolsCost + agentShopCost;
   // Debug log (visível em vercel logs)
@@ -923,8 +924,13 @@ export async function getDashboardPayload(
     }
     if (cost > 0) channelCosts.push({ channel: entry.channel, category: entry.category, cost, color: entry.color });
   }
-  if (agentShopCost > 0) {
-    channelCosts.push({ channel: 'Agent.shop', category: 'Affiliate', cost: agentShopCost, color: '#06B6D4' });
+  // Cassia 2026-06-14: % revenue costs (Agent.shop BR, Awin US+BR, ShopMy US)
+  for (const entry of CHANNEL_COSTS[market] || []) {
+    if (entry.percentOfRevenue == null) continue;
+    const cost = percentRevCosts[entry.channel] || 0;
+    if (cost > 0) {
+      channelCosts.push({ channel: entry.channel, category: entry.category, cost, color: entry.color });
+    }
   }
   // Ordena por custo desc
   channelCosts.sort((a, b) => b.cost - a.cost);

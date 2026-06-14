@@ -61,6 +61,22 @@ export const CHANNEL_COSTS: Record<Market, ChannelCostEntry[]> = {
         "2026-03": 11323.00, "2026-04": 11323.00, "2026-05": 11323.00,
       },
     },
+    // Cassia 2026-06-14: Awin US — 10% da receita atribuída ao canal Awin
+    {
+      channel: "Awin",
+      category: "Affiliate",
+      color: "#22C55E",
+      percentOfRevenue: 0.10,
+      revenueChannelName: "Awin Affiliate",
+    },
+    // Cassia 2026-06-14: ShopMy US apenas — 10% da receita atribuída
+    {
+      channel: "ShopMy",
+      category: "Creator",
+      color: "#A855F7",
+      percentOfRevenue: 0.10,
+      revenueChannelName: "ShopMy",
+    },
   ],
   BR: [
     {
@@ -91,6 +107,14 @@ export const CHANNEL_COSTS: Record<Market, ChannelCostEntry[]> = {
         "2025-12": 13000.00, "2026-01": 13000.00, "2026-02": 13000.00,
         "2026-03": 13000.00, "2026-04": 13000.00, "2026-05": 13000.00,
       },
+    },
+    // Cassia 2026-06-14: Awin BR — 10% da receita atribuída ao canal Awin
+    {
+      channel: "Awin",
+      category: "Affiliate",
+      color: "#22C55E",
+      percentOfRevenue: 0.10,
+      revenueChannelName: "Awin Affiliate",
     },
   ],
 };
@@ -132,4 +156,24 @@ export function getAgentShopCost(market: Market, agentShopRevenue: number): numb
   const entry = CHANNEL_COSTS.BR.find((e) => e.channel === "Agent.shop");
   if (!entry?.percentOfRevenue) return 0;
   return Math.max(0, agentShopRevenue * entry.percentOfRevenue);
+}
+
+// Cassia 2026-06-14: helper generico p/ todos os canais % da receita
+// (Agent.shop BR, Awin US+BR, ShopMy US). Recebe channelMix [{channel, revenue}] ja consultado.
+// Retorna um Record { channel -> cost } para cada canal % presente no market.
+export type ChannelRevRow = { channel: string; revenue: number };
+export function getPercentRevenueCosts(
+  market: Market,
+  channelMix: ChannelRevRow[],
+): Record<string, number> {
+  const entries = CHANNEL_COSTS[market] || [];
+  const result: Record<string, number> = {};
+  for (const entry of entries) {
+    if (entry.percentOfRevenue == null) continue;
+    const target = entry.revenueChannelName || entry.channel;
+    const rev = channelMix.find((r) => r.channel === target)?.revenue || 0;
+    const cost = Math.max(0, Number(rev) * entry.percentOfRevenue);
+    if (cost > 0) result[entry.channel] = cost;
+  }
+  return result;
 }
