@@ -109,34 +109,6 @@ export default function TabOverview({ market, period, custom }: { market: Market
         <Kpi label="Conversions" value={fmtInt(c.conversions)} sub="campaigns" />
       </div>
 
-      {/* Cassia 2026-06-14: Comparativo Campanhas vs Flows (8 KPIs side-by-side) */}
-      <SectionHead pill="Comparison" pillVariant="purple" title={<><b>Metrics comparison</b> &middot; Campaigns vs Flows</>} />
-      {(() => {
-        const cCtor = c.openRate > 0 ? (c.clickRate / c.openRate) * 100 : 0;
-        const fCtor = f.openRate > 0 ? (f.clickRate / f.openRate) * 100 : 0;
-        const cConvRate = c.recipients > 0 ? (c.conversions / c.recipients) * 100 : 0;
-        const fConvRate = (f.recipients || 0) > 0 ? (f.conversions / f.recipients) * 100 : 0;
-        const cAov = c.conversions > 0 ? c.revenue / c.conversions : 0;
-        const fAov = f.conversions > 0 ? f.revenue / f.conversions : 0;
-        const totalRev = (c.revenue || 0) + (f.revenue || 0);
-        const campRevPct = totalRev > 0 ? (c.revenue / totalRev) * 100 : 0;
-        const flowRevPct = totalRev > 0 ? (f.revenue / totalRev) * 100 : 0;
-        const flowsEfficiency = c.rpr > 0 && f.rpr > 0 ? f.rpr / c.rpr : 0;
-
-        return (
-          <div className="kpi-compare-grid">
-            <CompareCard label="Open Rate (OR)" camp={fmtPct(c.openRate)} flow={fmtPct(f.openRate)} note="bm: camp.>45% · flows>40%" warn={c.openRate < 45 || f.openRate < 40} />
-            <CompareCard label="Click Rate (CTR)" camp={fmtPct(c.clickRate, 2)} flow={fmtPct(f.clickRate, 2)} note="bm: camp.>1,5% · flows>3%" warn={c.clickRate < 1.5 || f.clickRate < 3} />
-            <CompareCard label="CTOR" camp={fmtPct(cCtor, 1)} flow={fmtPct(fCtor, 1)} note="click-to-open rate" />
-            <CompareCard label="Conv. Rate" camp={fmtPct(cConvRate, 2)} flow={fmtPct(fConvRate, 2)} note="bm: >0,2%" warn={cConvRate < 0.2 || fConvRate < 0.2} />
-            <CompareCard label={market === 'BR' ? 'R$/envio' : '$/send'} camp={fmtMoneyCents(c.rpr, market)} flow={fmtMoneyCents(f.rpr, market)} note={flowsEfficiency > 0 ? `flows ${flowsEfficiency.toFixed(1)}x more efficient` : 'per recipient'} />
-            <CompareCard label="Revenue" camp={fmtMoney(c.revenue, market)} flow={fmtMoney(f.revenue, market)} note={totalRev > 0 ? `camp. ${campRevPct.toFixed(0)}% · flows ${flowRevPct.toFixed(0)}%` : 'total'} />
-            <CompareCard label="Conversions" camp={fmtInt(c.conversions)} flow={fmtInt(f.conversions)} note={`total: ${fmtInt(c.conversions + f.conversions)}`} />
-            <CompareCard label="Avg AOV" camp={fmtMoney(cAov, market)} flow={fmtMoney(fAov, market)} note="combined order value" />
-          </div>
-        );
-      })()}
-
       <SectionHead pill="Daily KPIs" pillVariant="pink" title={<><b>Email performance by day</b> &middot; bars with labeled values</>} />
       <div className={stacked}>
         <DailyBarChart title="Daily Email Revenue" data={revPts} color={PINK} unit="currency" market={market} />
@@ -286,15 +258,35 @@ export default function TabOverview({ market, period, custom }: { market: Market
         </div>
       </>}
 
-      <SectionHead pill="Camps vs Flows" pillVariant="teal" title={<><b>Period averages</b></>} />
-      <div className="kpi-grid kpi-grid-6">
-        <Kpi label="OR Camp" value={fmtPct(c.openRate)} />
-        <Kpi label="OR Flow" value={fmtPct(f.openRate)} />
-        <Kpi label="CTR Camp" value={fmtPct(c.clickRate, 2)} />
-        <Kpi label="CTR Flow" value={fmtPct(f.clickRate, 2)} />
-        <Kpi label="RPR Camp" value={fmtMoneyCents(c.rpr, market)} />
-        <Kpi label="RPR Flow" value={fmtMoneyCents(f.rpr, market)} />
-      </div>
+      {/* Cassia 2026-06-14: Camps vs Flows expandido — adicionado CTOR, Conv Rate, Revenue, Sales, AOV */}
+      <SectionHead pill="Camps vs Flows" pillVariant="teal" title={<><b>Period averages</b> &middot; full comparison</>} />
+      {(() => {
+        const cCtor = c.openRate > 0 ? (c.clickRate / c.openRate) * 100 : 0;
+        const fCtor = f.openRate > 0 ? (f.clickRate / f.openRate) * 100 : 0;
+        const cConvRate = c.recipients > 0 ? (c.conversions / c.recipients) * 100 : 0;
+        const fConvRate = (f.recipients || 0) > 0 ? (f.conversions / f.recipients) * 100 : 0;
+        const cAov = c.conversions > 0 ? c.revenue / c.conversions : 0;
+        const fAov = f.conversions > 0 ? f.revenue / f.conversions : 0;
+        const totalRev = (c.revenue || 0) + (f.revenue || 0);
+        const totalConv = (c.conversions || 0) + (f.conversions || 0);
+        const totalAov = totalConv > 0 ? totalRev / totalConv : 0;
+        const campRevPct = totalRev > 0 ? (c.revenue / totalRev) * 100 : 0;
+        const flowRevPct = totalRev > 0 ? (f.revenue / totalRev) * 100 : 0;
+        const flowsEfficiency = c.rpr > 0 && f.rpr > 0 ? f.rpr / c.rpr : 0;
+
+        return (
+          <div className="kpi-compare-grid">
+            <CompareCard label="Open Rate (OR)" camp={fmtPct(c.openRate)} flow={fmtPct(f.openRate)} note="bm: camp.>45% · flows>40%" warn={c.openRate < 45 || f.openRate < 40} />
+            <CompareCard label="Click Rate (CTR)" camp={fmtPct(c.clickRate, 2)} flow={fmtPct(f.clickRate, 2)} note="bm: camp.>1,5% · flows>3%" warn={c.clickRate < 1.5 || f.clickRate < 3} />
+            <CompareCard label="CTOR" camp={fmtPct(cCtor, 1)} flow={fmtPct(fCtor, 1)} note="click-to-open rate" />
+            <CompareCard label="Conv. Rate" camp={fmtPct(cConvRate, 2)} flow={fmtPct(fConvRate, 2)} note="bm: >0,2%" warn={cConvRate < 0.2 || fConvRate < 0.2} />
+            <CompareCard label={market === 'BR' ? 'R$/envio (RPR)' : '$/send (RPR)'} camp={fmtMoneyCents(c.rpr, market)} flow={fmtMoneyCents(f.rpr, market)} note={flowsEfficiency > 0 ? `flows ${flowsEfficiency.toFixed(1)}x more efficient` : 'per recipient'} />
+            <CompareCard label="Revenue" camp={fmtMoney(c.revenue, market)} flow={fmtMoney(f.revenue, market)} note={totalRev > 0 ? `total ${fmtMoney(totalRev, market)} · camp ${campRevPct.toFixed(0)}% · flows ${flowRevPct.toFixed(0)}%` : 'total revenue'} />
+            <CompareCard label="Sales (conversions)" camp={fmtInt(c.conversions)} flow={fmtInt(f.conversions)} note={`total: ${fmtInt(totalConv)} orders`} />
+            <CompareCard label="Avg AOV" camp={fmtMoney(cAov, market)} flow={fmtMoney(fAov, market)} note={totalAov > 0 ? `combined: ${fmtMoney(totalAov, market)}` : 'avg order value'} />
+          </div>
+        );
+      })()}
     </>
   );
 }
