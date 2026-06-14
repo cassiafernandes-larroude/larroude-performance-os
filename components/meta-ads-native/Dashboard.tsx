@@ -22,6 +22,7 @@ import type { DashboardData, DateRange, Period, Region } from '@/lib/meta-ads-na
 import DailyBarChart from '@/components/main-dashboard/DailyBarChart';
 import DailyMultiBarChart from '@/components/main-dashboard/DailyMultiBarChart';
 import DuplicatePurchasesDisclaimer from '@/components/shared/DuplicatePurchasesDisclaimer';
+import CreativesTab from './CreativesTab';
 
 // Converte TimeSeriesPoint {date, value} -> DailyPoint {date, value, inPeriod}
 // Cassia 2026-06-14: arredonda valores pra evitar decimais excessivos no chart label
@@ -84,6 +85,9 @@ export default function MetaAdsDashboard() {
   const isLongPeriod = period === '28d' || period === '3M' || period === '6M' || period === '12M' || period === 'custom';
   const dailyChartsGrid = isLongPeriod ? 'grid grid-cols-1 gap-4' : 'grid grid-cols-1 lg:grid-cols-2 gap-4';
 
+  // Cassia 2026-06-14: tabs — Performance (default) e Creatives × Shopify
+  const [activeTab, setActiveTab] = useState<'performance' | 'creatives'>('performance');
+
   return (
     <div>
       <Header
@@ -117,6 +121,41 @@ export default function MetaAdsDashboard() {
             {(period === '6M' || period === '12M' || period === '3M') && (
               <DuplicatePurchasesDisclaimer />
             )}
+
+            {/* Cassia 2026-06-14: nav tabs — Performance / Creatives × Shopify */}
+            <div className="flex items-center gap-2 mb-4 border-b" style={{ borderColor: 'var(--border)' }}>
+              {([
+                { id: 'performance', label: 'Performance' },
+                { id: 'creatives', label: 'Creatives × Shopify' },
+              ] as const).map(t => {
+                const active = activeTab === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => setActiveTab(t.id)}
+                    className="px-4 py-2 text-[13px] font-semibold transition-colors"
+                    style={{
+                      color: active ? 'var(--pink-deep)' : 'var(--ink-soft)',
+                      borderBottom: active ? '2px solid var(--pink-deep)' : '2px solid transparent',
+                      marginBottom: '-1px',
+                    }}
+                  >
+                    {t.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {activeTab === 'creatives' && (
+              <CreativesTab
+                ads={data.ads}
+                region={region}
+                since={data.dateRange.since}
+                until={data.dateRange.until}
+                currency={currency}
+              />
+            )}
+            {activeTab === 'performance' && (<>
             {/* Cassia 2026-06-14: section label MERCADO igual Main Dashboard */}
             <div className="flex items-center gap-2 mb-3 mt-2">
               <span
@@ -240,6 +279,7 @@ export default function MetaAdsDashboard() {
               <div>Larroudé Analytics · {region} · Meta Ads ({region === 'US' ? 'Larroudé US + PRE-ORDER US + Larroude New' : 'Larroudé Brasil + Larroude BR - Pre-Order'})</div>
               <div className="mt-1">Period: {data.dateRange.since} → {data.dateRange.until} · vs. {data.comparisonRange.since} → {data.comparisonRange.until}</div>
             </footer>
+            </>)}
           </>
         )}
       </div>
