@@ -8,20 +8,18 @@
 // Se acha Collection ID (e não acha SKU) → retorna {type:'collection', value:'285632184302'}
 // Se não acha nenhum → retorna null
 
-// Cassia 2026-06-14: SKU Larroudé é "L<digits>" seguido por segmentos separados por HÍFEN.
-// O underscore é o separador entre SKU e o restante do nome do ad (descritivo).
-// Ex.: "L420-LOUL-BEIG-2695_Gif_ProductPage_Most-Aware_Product-focused_V02"
-//   → SKU = L420-LOUL-BEIG-2695   (para no primeiro underscore)
+// Cassia 2026-06-14 (rev2): conforme planilha de nomenclatura compartilhada:
+//   Padrão de ad name: Type_Advantage_Strategy_Category_Audience_SKU/ID_Format_Destination_Copy-Level_Creative-Angle_Variation
+//   Ex.: "Sale_Advantage_Maximize-Value-Of-Conversions_Mules-Pre-Order_Advantage_L420-LOUL-BEIG-2695_Video_ProductPage_..."
+//   Ex.: "L420-LOUL-BEIG-2695_Gif_ProductPage_Most-Aware_Product-focused_V02"  (formato antigo curto)
 //
-// Padrões aceitos:
-//   L0042                    → SKU = L0042
-//   L0042-CAMEL              → SKU = L0042-CAMEL
-//   L420-LOUL-BEIG-2695      → SKU = L420-LOUL-BEIG-2695
-//   L0042-CAMEL-7.0-PRETO    → SKU = L0042-CAMEL-7.0-PRETO
+// SKU format: L<3-5 digits>-<MODELO>-<COR>-<NUMERO> (ex: L277-FIOR-IVOR-2723, L420-LOUL-BEIG-2695)
+// Collection ID format: 12+ dígitos puros (ex: 686997569702)
 //
-// JS regex é greedy por default — vai consumir hífens enquanto bater no padrão,
-// e parar automaticamente em underscore, espaço, parêntese ou final.
-const SKU_REGEX = /\bL\d{3,5}(?:-[A-Z0-9.]+)*/i;
+// Regex precisa NÃO exigir \b antes do L (porque _ não é word boundary em JS).
+// Usa lookbehind negativo: SKU deve estar precedido por algo que NÃO seja letra/dígito
+// (ou estar no início da string).
+const SKU_REGEX = /(?<![A-Z0-9])L\d{3,5}(?:-[A-Z0-9.]+)*/i;
 const COLLECTION_ID_REGEX = /\b\d{12,15}\b/;
 
 export type AdRef =
