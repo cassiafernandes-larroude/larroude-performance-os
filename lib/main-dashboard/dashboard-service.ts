@@ -37,7 +37,7 @@ import {
 } from './supermetrics';
 import { calcPeriod, fmtCurrency, fmtMultiple, fmtNumber, fmtPercent, granularityFor, pctChange, safeDiv } from './utils';
 import { getMetaSpendAdjustment, getMetaSpendAdjustmentByDay } from '@/lib/shared/meta-adjustments';
-import { getFixedToolsCostInRange, getAgentShopCost } from '@/lib/channel-costs';
+import { getFixedToolsCostInRange, getAgentShopCost, CHANNEL_COSTS } from '@/lib/channel-costs';
 import type {
   CampaignRow,
   ChannelRevenue,
@@ -893,6 +893,42 @@ export async function getDashboardPayload(
     });
   }
 
+  // Cassia 2026-06-14: monta channelCosts pro card Cost by Channel.
+  // Inclui: Meta Ads, Google Ads, Klaviyo, Attentive (US), Criteo, Agent.shop (BR).
+  // Tools costs já distribuídos no período via getFixedToolsCostInRange/CHANNEL_COSTS.
+  const channelCosts: import('./types').ChannelCost[] = [];
+  if (finalMetaSpend > 0) {
+    channelCosts.push({ channel: 'Meta Ads', category: 'Ads', cost: finalMetaSpend, color: '#1877F2' });
+  }
+  if (finalGoogleSpend > 0) {
+    channelCosts.push({ channel: 'Google Ads', category: 'Ads', cost: finalGoogleSpend, color: '#34A853' });
+  }
+  // Tools fixas (Klaviyo, Attentive US, Criteo): pega per-canal direto do CHANNEL_COSTS pra distribuir no range.
+  for (const entry of CHANNEL_COSTS[market] || []) {
+    if (entry.percentOfRevenue != null) continue; // Agent.shop separado abaixo
+    const monthlyMap = entry.costsByMonth || {};
+    let cost = 0;
+    const startDate = new Date(period.start + 'T00:00:00Z');
+    const endDate = new Date(period.end + 'T00:00:00Z');
+    for (const [yyyymm, monthlyCost] of Object.entries(monthlyMap)) {
+      const [y, m] = yyyymm.split('-').map(Number);
+      const monthStart = new Date(Date.UTC(y, m - 1, 1));
+      const monthEnd = new Date(Date.UTC(y, m, 0));
+      const totalDaysInMonth = monthEnd.getUTCDate();
+      const iStart = startDate > monthStart ? startDate : monthStart;
+      const iEnd = endDate < monthEnd ? endDate : monthEnd;
+      if (iStart > iEnd) continue;
+      const daysInRange = Math.round((iEnd.getTime() - iStart.getTime()) / 86400000) + 1;
+      cost += (monthlyCost / totalDaysInMonth) * daysInRange;
+    }
+    if (cost > 0) channelCosts.push({ channel: entry.channel, category: entry.category, cost, color: entry.color });
+  }
+  if (agentShopCost > 0) {
+    channelCosts.push({ channel: 'Agent.shop', category: 'Affiliate', cost: agentShopCost, color: '#06B6D4' });
+  }
+  // Ordena por custo desc
+  channelCosts.sort((a, b) => b.cost - a.cost);
+
   return {
     market,
     currency,
@@ -902,6 +938,7 @@ export async function getDashboardPayload(
     funnel,
     daily,
     channels,
+    channelCosts,
     topCampaigns,
     campaigns: allCampaigns,
     alerts,

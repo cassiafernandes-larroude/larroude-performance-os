@@ -21,7 +21,7 @@ const SectionHeader = ({ children }: { children: React.ReactNode }) => (
 );
 
 export default function Dashboard({ data, dimmed }: Props) {
-  const { market, kpis, funnel, daily, channels, topCampaigns, campaigns, alerts, period } = data;
+  const { market, kpis, funnel, daily, channels, channelCosts, topCampaigns, campaigns, alerts, period } = data;
 
   // Layout 2-colunas para períodos com poucos buckets (gráficos curtos):
   //   7d  → 7 buckets diários  → 2 colunas
@@ -75,7 +75,7 @@ export default function Dashboard({ data, dimmed }: Props) {
 
       {/* Canais e campanhas - logo apos Conversoes por Etapa */}
       <SectionHeader>📡 CANAIS E CAMPANHAS — {market}</SectionHeader>
-      <ChannelBreakdown channels={channels} topCampaigns={topCampaigns} market={market} />
+      <ChannelBreakdown channels={channels} channelCosts={channelCosts ?? []} topCampaigns={topCampaigns} market={market} />
 
       {/* Receita diária */}
       <SectionHeader>📅 RECEITA DIÁRIA — {market}</SectionHeader>

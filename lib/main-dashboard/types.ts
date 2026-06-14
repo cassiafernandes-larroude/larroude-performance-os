@@ -62,6 +62,14 @@ export interface ChannelRevenue {
   color?: string;
 }
 
+// Cassia 2026-06-14: custo por canal (tools/platforms) — mesma fonte de CHANNEL_COSTS em lib/channel-costs.ts
+export interface ChannelCost {
+  channel: string;
+  category: string;
+  cost: number;
+  color: string;
+}
+
 export interface CampaignRow {
   campaign: string;
   /** plataforma da campanha — exibida em coluna na tabela */
@@ -99,6 +107,7 @@ export interface DashboardPayload {
   funnelPrev?: FunnelSteps;
   daily: Record<string, DailyPoint[]>; // chaves: gross_sales, net_sales, order_revenue, returns, discounts, spend, roas_gross, roas_order, roas_net, aov, cpo, cpa, cac, cvr, orders, atc, checkouts, purchases, sessions, sessions_prev, direct_sessions, organic_sessions
   channels: ChannelRevenue[];
+  channelCosts: ChannelCost[];
   topCampaigns: TopCampaignRoas[];
   campaigns: CampaignRow[];
   alerts: DashboardAlert[];
