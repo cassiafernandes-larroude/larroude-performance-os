@@ -21,10 +21,22 @@ import type { DashboardData, DateRange, Period, Region } from '@/lib/meta-ads-na
 // Cassia 2026-06-14: usar mesmos charts de barra do Main Dashboard pra padronizar visual
 import DailyBarChart from '@/components/main-dashboard/DailyBarChart';
 import DailyMultiBarChart from '@/components/main-dashboard/DailyMultiBarChart';
+import DuplicatePurchasesDisclaimer from '@/components/shared/DuplicatePurchasesDisclaimer';
 
 // Converte TimeSeriesPoint {date, value} -> DailyPoint {date, value, inPeriod}
-const toDailyPoints = (pts: { date: string; value: number }[] = []) =>
-  pts.map(p => ({ date: p.date, value: p.value, inPeriod: true }));
+// Cassia 2026-06-14: arredonda valores pra evitar decimais excessivos no chart label
+const toDailyPoints = (pts: { date: string; value: number }[] = [], opts?: { divideBy?: number; roundTo?: number }) =>
+  pts.map(p => {
+    let v = Number(p.value) || 0;
+    if (opts?.divideBy) v = v / opts.divideBy;
+    if (opts?.roundTo != null) {
+      const factor = Math.pow(10, opts.roundTo);
+      v = Math.round(v * factor) / factor;
+    } else {
+      v = Math.round(v);
+    }
+    return { date: p.date, value: v, inPeriod: true };
+  });
 
 const currencyFor = (r: Region) => (r === 'BR' ? 'BRL' : 'USD');
 
@@ -97,6 +109,9 @@ export default function MetaAdsDashboard() {
 
         {data && (
           <>
+            {(period === '6M' || period === '12M' || period === '3M') && (
+              <DuplicatePurchasesDisclaimer />
+            )}
             {/* Cassia 2026-06-14: section label MERCADO igual Main Dashboard */}
             <div className="flex items-center gap-2 mb-3 mt-2">
               <span
@@ -177,7 +192,7 @@ export default function MetaAdsDashboard() {
             <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               <div className="lg:col-span-1"><ObjectiveSpend data={data.topCampaignsByObjective} currency={currency} /></div>
               <div className="lg:col-span-2">
-                <DailyBarChart title="ROAS · Daily" data={toDailyPoints(data.series.roas)} color="#3b82f6" unit="multiple" market={region} />
+                <DailyBarChart title="ROAS · Daily" data={toDailyPoints(data.series.roas, { roundTo: 2 })} color="#3b82f6" unit="multiple" market={region} />
               </div>
             </section>
 
@@ -188,10 +203,11 @@ export default function MetaAdsDashboard() {
 
             <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <DailyBarChart title="Clicks (all)" data={toDailyPoints(data.series.clicks)} color="#0d9488" unit="number" market={region} />
-              <DailyBarChart title="CTR (all)" data={toDailyPoints(data.series.ctr)} color="#0891b2" unit="percent" market={region} />
+              {/* Cassia 2026-06-14: Meta retorna CTR já em % (ex 2.30 = 2.30%); fmtPercent multiplica por 100 — então dividimos por 100 antes. */}
+              <DailyBarChart title="CTR (all)" data={toDailyPoints(data.series.ctr, { divideBy: 100, roundTo: 4 })} color="#0891b2" unit="percent" market={region} />
             </section>
 
-            <DailyBarChart title="CPC (all)" data={toDailyPoints(data.series.cpc)} color="#c2410c" unit="currency" market={region} />
+            <DailyBarChart title="CPC (all)" data={toDailyPoints(data.series.cpc, { roundTo: 2 })} color="#c2410c" unit="currency" market={region} />
 
             <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <BarRanking
@@ -199,7 +215,10 @@ export default function MetaAdsDashboard() {
                 data={data.topAds7d.map((a: any) => ({ name: a.name, value: a.purchases }))}
                 formatValue={(v) => formatNumber(v)}
               />
-              <MonthlyRoas data={data.series.roasMonthly} />
+              <div>
+                <DuplicatePurchasesDisclaimer compact />
+                <MonthlyRoas data={data.series.roasMonthly} />
+              </div>
             </section>
 
             <AdsTable data={data.ads} currency={currency} />

@@ -1,6 +1,7 @@
 'use client';
 
 import BarLineChart from '@/components/shared/BarLineChart';
+import DuplicatePurchasesDisclaimer from '@/components/shared/DuplicatePurchasesDisclaimer';
 import type { Market, MonthlyLtvPoint } from '@/lib/ltv-dashboard/queries';
 
 /**
@@ -25,20 +26,23 @@ export default function MonthlyChart({
   }));
 
   return (
-    <BarLineChart
-      title="Monthly Avg LTV"
-      data={barData}
-      color="#d44a8a"
-      unit="currency"
-      market={market}
-      height={260}
-      line={{
-        data: lineData,
-        name: 'Repeat %',
-        color: '#2c7a5b',
-        unit: 'percent',
-        yAxis: 'right',
-      }}
-    />
+    <div>
+      <DuplicatePurchasesDisclaimer compact />
+      <BarLineChart
+        title="Monthly Avg LTV"
+        data={barData}
+        color="#d44a8a"
+        unit="currency"
+        market={market}
+        height={260}
+        line={{
+          data: lineData,
+          name: 'Repeat %',
+          color: '#2c7a5b',
+          unit: 'percent',
+          yAxis: 'right',
+        }}
+      />
+    </div>
   );
 }
