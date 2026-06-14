@@ -8,10 +8,20 @@
 // Se acha Collection ID (e não acha SKU) → retorna {type:'collection', value:'285632184302'}
 // Se não acha nenhum → retorna null
 
-// Captura SKU COMPLETO incluindo cor, tamanho, variante.
-// Ex: "L0042" / "L0042-CAMEL" / "L0042-CAMEL-7.0" / "L0042-CAMEL-7.0-PRETO"
-// Separadores aceitos entre partes: hífen ou underscore. Partes podem ter letras/dígitos/ponto.
-const SKU_REGEX = /\bL\d{3,5}(?:[-_][A-Z0-9.]+)*\b/i;
+// Cassia 2026-06-14: SKU Larroudé é "L<digits>" seguido por segmentos separados por HÍFEN.
+// O underscore é o separador entre SKU e o restante do nome do ad (descritivo).
+// Ex.: "L420-LOUL-BEIG-2695_Gif_ProductPage_Most-Aware_Product-focused_V02"
+//   → SKU = L420-LOUL-BEIG-2695   (para no primeiro underscore)
+//
+// Padrões aceitos:
+//   L0042                    → SKU = L0042
+//   L0042-CAMEL              → SKU = L0042-CAMEL
+//   L420-LOUL-BEIG-2695      → SKU = L420-LOUL-BEIG-2695
+//   L0042-CAMEL-7.0-PRETO    → SKU = L0042-CAMEL-7.0-PRETO
+//
+// JS regex é greedy por default — vai consumir hífens enquanto bater no padrão,
+// e parar automaticamente em underscore, espaço, parêntese ou final.
+const SKU_REGEX = /\bL\d{3,5}(?:-[A-Z0-9.]+)*/i;
 const COLLECTION_ID_REGEX = /\b\d{12,15}\b/;
 
 export type AdRef =
