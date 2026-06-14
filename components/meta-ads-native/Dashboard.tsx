@@ -23,6 +23,8 @@ import DailyBarChart from '@/components/main-dashboard/DailyBarChart';
 import DailyMultiBarChart from '@/components/main-dashboard/DailyMultiBarChart';
 import DuplicatePurchasesDisclaimer from '@/components/shared/DuplicatePurchasesDisclaimer';
 import CreativesTab from './CreativesTab';
+import RoasByDimension from './RoasByDimension';
+import { aggregateRoasByDimension } from '@/lib/meta-ads-native/ad-dimensions';
 
 // Converte TimeSeriesPoint {date, value} -> DailyPoint {date, value, inPeriod}
 // Cassia 2026-06-14: arredonda valores pra evitar decimais excessivos no chart label
@@ -274,6 +276,36 @@ export default function MetaAdsDashboard() {
             </section>
 
             <AdsTable data={data.ads} currency={currency} />
+
+            {/* Cassia 2026-06-14: ROAS por dimensão (Format, Destination, Copy-Level, Creative-Angle, Ref-Type).
+                Filtro: só categorias com spend >= $1.000. Análise via parsing do nome do ad. */}
+            {(() => {
+              const adsForDims = data.ads.map(a => ({ name: a.name, spend: a.spend || 0, revenue: a.revenue || 0 }));
+              const MIN_SPEND = 1000;
+              const byFormat = aggregateRoasByDimension(adsForDims, d => d.formatGroup, MIN_SPEND);
+              const byDestination = aggregateRoasByDimension(adsForDims, d => d.destination, MIN_SPEND);
+              const byCopyLevel = aggregateRoasByDimension(adsForDims, d => d.copyLevel, MIN_SPEND);
+              const byCreativeAngle = aggregateRoasByDimension(adsForDims, d => d.creativeAngle, MIN_SPEND);
+              const byRefType = aggregateRoasByDimension(
+                adsForDims,
+                d => (d.refType === 'sku' ? 'SKU' : d.refType === 'collection' ? 'COLEÇÃO' : null),
+                MIN_SPEND,
+              );
+              return (
+                <section className="space-y-4 mt-4">
+                  <div className="text-[11px] uppercase tracking-wider font-semibold" style={{ color: 'var(--ink-muted)' }}>
+                    🎯 TOP PERFORMANCE BY ROAS (ads com spend ≥ $1.000)
+                  </div>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <RoasByDimension title="ROAS by asset format" icon="🎬" rows={byFormat} currency={currency} tip="Tip: prioritize o formato com maior ROAS." />
+                    <RoasByDimension title="ROAS by destination" icon="📍" rows={byDestination} currency={currency} tip="Tip: o destino com maior ROAS converte mais." />
+                    <RoasByDimension title="ROAS by copy level" icon="📝" rows={byCopyLevel} currency={currency} tip="Tip: indica em que estágio do funil seu público está." />
+                    <RoasByDimension title="ROAS by creative angle" icon="🎨" rows={byCreativeAngle} currency={currency} tip="Tip: invista no ângulo criativo que rende mais." />
+                  </div>
+                  <RoasByDimension title="SKU vs Coleção" icon="🆚" rows={byRefType} currency={currency} tip="Tip: criativos referenciando SKU ou coleção performam diferente." />
+                </section>
+              );
+            })()}
 
             <footer className="text-xs text-ink-500 text-center py-6 border-t border-ink-200 mt-8">
               <div>Larroudé Analytics · {region} · Meta Ads ({region === 'US' ? 'Larroudé US + PRE-ORDER US + Larroude New' : 'Larroudé Brasil + Larroude BR - Pre-Order'})</div>
