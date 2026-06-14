@@ -328,6 +328,7 @@ function MarketCard({ flag, label, data, native, totalRev, totalSpend }: {
     profit_margin_pct: number;
     ue_profit: number;
     ue_margin_pct: number;
+    byChannel: Record<string, number>;
     revenue_brl?: number;
     spend_brl?: number;
     profit_brl?: number;
@@ -402,15 +403,18 @@ function MarketCard({ flag, label, data, native, totalRev, totalSpend }: {
         </div>
       </div>
 
-      {/* Investment breakdown por canal */}
-      <div className="text-[10px] uppercase tracking-wider font-semibold mb-1.5" style={{ color: "var(--ink-muted)" }}>Investment breakdown</div>
-      <div className="grid grid-cols-3 gap-x-3 gap-y-1 text-[11px]" style={{ color: "var(--ink-soft)" }}>
-        <div className="flex flex-col"><span>Meta Ads</span><span className="font-num font-semibold" style={{ color: "var(--ink)" }}>{formatCurrency(data.meta, "USD", false)}</span></div>
-        <div className="flex flex-col"><span>Google Ads</span><span className="font-num font-semibold" style={{ color: "var(--ink)" }}>{formatCurrency(data.google, "USD", false)}</span></div>
-        <div className="flex flex-col"><span>Tools</span><span className="font-num font-semibold" style={{ color: "var(--ink)" }}>{formatCurrency(data.tools + data.percent_rev, "USD", false)}</span></div>
-      </div>
-      <div className="text-[9px] italic mt-2" style={{ color: "var(--ink-muted)" }}>
-        Tools: Klaviyo · Attentive · Criteo · Agent.shop · Awin · ShopMy
+      {/* Investment breakdown POR CANAL (Cassia 2026-06-14: Meta, Google, Klaviyo, Criteo, Attentive, Agent.shop, Awin, ShopMy) */}
+      <div className="text-[10px] uppercase tracking-wider font-semibold mb-1.5" style={{ color: "var(--ink-muted)" }}>Investment breakdown (per channel)</div>
+      <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]" style={{ color: "var(--ink-soft)" }}>
+        {Object.entries(data.byChannel)
+          .filter(([, v]) => v > 0)
+          .sort(([, a], [, b]) => b - a)
+          .map(([channel, value]) => (
+            <div key={channel} className="flex justify-between border-b pb-0.5" style={{ borderColor: "var(--border)" }}>
+              <span>{channel}</span>
+              <span className="font-num font-semibold" style={{ color: "var(--ink)" }}>{formatCurrency(value, "USD", false)}</span>
+            </div>
+          ))}
       </div>
     </div>
   );

@@ -5,6 +5,7 @@ import { getNorthStarBundle } from "@/lib/data/northstar";
 import { cached } from "@/lib/cache";
 import { queryChannelMix } from "@/lib/main-dashboard/queries";
 import { getDashboardPayload } from "@/lib/main-dashboard/dashboard-service";
+import { computeTotalSpend } from "@/lib/channel-costs-bq";
 import type { DailyPoint } from "@/lib/main-dashboard/types";
 
 const TZ: Record<Market, string> = { US: "America/New_York", BR: "America/Sao_Paulo" };
@@ -87,6 +88,7 @@ export type ExecutiveConsolidated = {
       ue_profit: number;      // Lucro UE-style (≈ revenue × 0.42 − spend_total). Ver computeUeApprox.
       ue_margin_pct: number;
       units: number;
+      byChannel: Record<string, number>;  // Cassia 2026-06-14: breakdown TODOS os canais (Meta, Google, Klaviyo, Attentive, Criteo, Agent.shop, Awin, ShopMy)
     };
     BR: {
       revenue: number; spend: number; meta: number; google: number; revenue_brl: number; spend_brl: number; profit: number; profit_margin_pct: number; profit_brl: number;
@@ -95,6 +97,7 @@ export type ExecutiveConsolidated = {
       ue_profit: number;
       ue_margin_pct: number;
       units: number;
+      byChannel: Record<string, number>;
     };
   };
 };
@@ -318,8 +321,8 @@ export async function getExecutiveConsolidated(
         daily: { spend: [], total_sales: [], gross_sales: [], margin_total_sales: [], roas_total: [] },
         channels: [],
         by_market: {
-          US: { revenue: mockUsd.US, spend: mockSpend.US, meta: mockSpend.US * 0.85, google: mockSpend.US * 0.15, tools: 0, percent_rev: 0, units: 0, profit: mockUsd.US - mockSpend.US, profit_margin_pct: ((mockUsd.US - mockSpend.US) / mockUsd.US) * 100, ue_profit: 0, ue_margin_pct: 0 },
-          BR: { revenue: mockUsd.BR, spend: mockSpend.BR, meta: mockSpend.BR * 0.85, google: mockSpend.BR * 0.15, tools: 0, percent_rev: 0, units: 0, revenue_brl: 7700000, spend_brl: 2500000, profit: mockUsd.BR - mockSpend.BR, profit_margin_pct: ((mockUsd.BR - mockSpend.BR) / mockUsd.BR) * 100, profit_brl: 7700000 - 2500000, ue_profit: 0, ue_margin_pct: 0 },
+          US: { revenue: mockUsd.US, spend: mockSpend.US, meta: mockSpend.US * 0.85, google: mockSpend.US * 0.15, tools: 0, percent_rev: 0, units: 0, profit: mockUsd.US - mockSpend.US, profit_margin_pct: ((mockUsd.US - mockSpend.US) / mockUsd.US) * 100, ue_profit: 0, ue_margin_pct: 0, byChannel: {} },
+          BR: { revenue: mockUsd.BR, spend: mockSpend.BR, meta: mockSpend.BR * 0.85, google: mockSpend.BR * 0.15, tools: 0, percent_rev: 0, units: 0, revenue_brl: 7700000, spend_brl: 2500000, profit: mockUsd.BR - mockSpend.BR, profit_margin_pct: ((mockUsd.BR - mockSpend.BR) / mockUsd.BR) * 100, profit_brl: 7700000 - 2500000, ue_profit: 0, ue_margin_pct: 0, byChannel: {} },
         },
       };
     }
@@ -334,6 +337,17 @@ export async function getExecutiveConsolidated(
         getDashboardPayload("BR", period, range.to, customRange?.from),
         queryChannelMix("US", range.from, range.to).catch(() => []),
         queryChannelMix("BR", range.from, range.to).catch(() => []),
+      ]);
+
+      // Cassia 2026-06-14: pegar breakdown completo por canal (Meta, Google, Klaviyo,
+      // Attentive, Criteo, Agent.shop, Awin, ShopMy) via computeTotalSpend.byChannel.
+      const usMetaRaw = (us.kpis.find(k => k.label === "META SPEND")?.raw ?? 0) as number;
+      const usGoogleRaw = (us.kpis.find(k => k.label === "GOOGLE SPEND")?.raw ?? 0) as number;
+      const brMetaRaw = (br.kpis.find(k => k.label === "META SPEND")?.raw ?? 0) as number;
+      const brGoogleRaw = (br.kpis.find(k => k.label === "GOOGLE SPEND")?.raw ?? 0) as number;
+      const [usSpendBreakdown, brSpendBreakdown] = await Promise.all([
+        computeTotalSpend("US", range.from, range.to, usMetaRaw, usGoogleRaw).catch(() => ({ byChannel: {} as Record<string, number> })),
+        computeTotalSpend("BR", range.from, range.to, brMetaRaw, brGoogleRaw).catch(() => ({ byChannel: {} as Record<string, number> })),
       ]);
 
       // Extrai KPIs do payload.kpis (label-based)
@@ -463,6 +477,15 @@ export async function getExecutiveConsolidated(
           const usUeApprox = computeUeApprox({ revenue: usRev, units: usUnits, totalSpend: usSpend, market: 'US' });
           const brUeApprox = computeUeApprox({ revenue: brRevUsd, units: brUnits, totalSpend: brSpendUsd, market: 'BR' });
 
+          // Cassia 2026-06-14: byChannel completo (Meta, Google, Klaviyo, Criteo, Attentive, Agent.shop, Awin, ShopMy).
+          // BR vem em BRL — converte cada valor para USD via fxRate.
+          const usByChannel = usSpendBreakdown.byChannel ?? {};
+          const brByChannelNative = brSpendBreakdown.byChannel ?? {};
+          const brByChannelUsd: Record<string, number> = {};
+          for (const [ch, v] of Object.entries(brByChannelNative)) {
+            brByChannelUsd[ch] = v * fxRate;
+          }
+
           return {
             US: {
               revenue: usRev,
@@ -476,6 +499,7 @@ export async function getExecutiveConsolidated(
               profit_margin_pct: usRev > 0 ? ((usRev - usSpend) / usRev) * 100 : 0,
               ue_profit: usUeApprox.profit,
               ue_margin_pct: usUeApprox.marginPct,
+              byChannel: usByChannel,
             },
             BR: {
               revenue: brRevUsd,
@@ -492,6 +516,7 @@ export async function getExecutiveConsolidated(
               profit_brl: brRevNative - brSpendNative,
               ue_profit: brUeApprox.profit,
               ue_margin_pct: brUeApprox.marginPct,
+              byChannel: brByChannelUsd,
             },
           };
         })(),
@@ -505,8 +530,8 @@ export async function getExecutiveConsolidated(
         daily: { spend: [], total_sales: [], gross_sales: [], margin_total_sales: [], roas_total: [] },
         channels: [],
         by_market: {
-          US: { revenue: 0, spend: 0, meta: 0, google: 0, tools: 0, percent_rev: 0, units: 0, profit: 0, profit_margin_pct: 0, ue_profit: 0, ue_margin_pct: 0 },
-          BR: { revenue: 0, spend: 0, meta: 0, google: 0, tools: 0, percent_rev: 0, units: 0, revenue_brl: 0, spend_brl: 0, profit: 0, profit_margin_pct: 0, profit_brl: 0, ue_profit: 0, ue_margin_pct: 0 },
+          US: { revenue: 0, spend: 0, meta: 0, google: 0, tools: 0, percent_rev: 0, units: 0, profit: 0, profit_margin_pct: 0, ue_profit: 0, ue_margin_pct: 0, byChannel: {} },
+          BR: { revenue: 0, spend: 0, meta: 0, google: 0, tools: 0, percent_rev: 0, units: 0, revenue_brl: 0, spend_brl: 0, profit: 0, profit_margin_pct: 0, profit_brl: 0, ue_profit: 0, ue_margin_pct: 0, byChannel: {} },
         },
       };
     }
