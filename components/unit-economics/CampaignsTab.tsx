@@ -20,8 +20,13 @@ import {
   Package,
   DollarSign,
 } from "lucide-react";
+// Cassia 2026-06-14: incluir calculadora editável (mesma do UE Per Product)
+import AssumptionsPanel from "./AssumptionsPanel";
+import { DEFAULT_ASSUMPTIONS, type Assumptions } from "@/lib/unit-economics/cascade";
 
 type Market = "US" | "BR";
+
+const ASSUMPTIONS_STORAGE_KEY = "lpos-ue-campaigns-assumptions";
 
 interface ProductRow {
   motherSku: string;
@@ -102,9 +107,33 @@ function computeSuggestedDiscount(unitGrossRevenue: number, unitCogs: number): n
   return 0.1;
 }
 
-function computeNetMargin(p: ProductRow, appliedDiscount: number): number {
-  const grossAfterDiscount = p.unitGrossRevenue * (1 - appliedDiscount);
-  return grossAfterDiscount - p.unitCogs - p.unitTax - p.unitRefund;
+function computeNetMargin(
+  p: ProductRow,
+  appliedDiscount: number,
+  assumptions?: Assumptions,
+): number {
+  // Desconto principal + cupom extra (aplicado DEPOIS do desconto Shopify)
+  const totalDiscount = appliedDiscount + (assumptions?.couponPct ?? 0) * (1 - appliedDiscount);
+  const grossAfterDiscount = p.unitGrossRevenue * (1 - totalDiscount);
+  // PIX desconto aplicado proporcionalmente à fatia PIX
+  const pixCut = (assumptions?.pixDiscountPct ?? 0) * (p.pixShare || 0) * grossAfterDiscount;
+  // Card fee aplicado na fatia não-PIX
+  const cardFee = (assumptions?.cardFeePct ?? 0) * (1 - (p.pixShare || 0)) * grossAfterDiscount;
+  // Marketing como % da receita líquida pós-desconto
+  const marketingCost = (assumptions?.marketingPct ?? 0) * grossAfterDiscount;
+  const fulfillment = assumptions?.fulfillmentPerUnit ?? 0;
+  const shipping = assumptions?.shippingPerUnit ?? 0;
+  return (
+    grossAfterDiscount
+    - p.unitCogs
+    - p.unitTax
+    - p.unitRefund
+    - pixCut
+    - cardFee
+    - marketingCost
+    - fulfillment
+    - shipping
+  );
 }
 
 export default function CampaignsTab() {
@@ -123,13 +152,32 @@ export default function CampaignsTab() {
   const [showBulkPaste, setShowBulkPaste] = useState(false);
   const [bulkResult, setBulkResult] = useState<{ matched: number; missed: string[] } | null>(null);
 
-  // Load campaigns from localStorage on mount
+  // Cassia 2026-06-14: assumptions editáveis por market (mesmo padrão da aba Per Product)
+  const [assumptionsByMarket, setAssumptionsByMarket] = useState<Record<Market, Assumptions>>({
+    US: { ...DEFAULT_ASSUMPTIONS.US },
+    BR: { ...DEFAULT_ASSUMPTIONS.BR },
+  });
+  const assumptions = assumptionsByMarket[market];
+
+  // Load campaigns + assumptions from localStorage on mount
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) setCampaigns(JSON.parse(raw));
+      const rawAssump = localStorage.getItem(ASSUMPTIONS_STORAGE_KEY);
+      if (rawAssump) {
+        const saved = JSON.parse(rawAssump);
+        setAssumptionsByMarket((cur) => ({ ...cur, ...saved }));
+      }
     } catch {}
   }, []);
+
+  // Persist assumptions
+  useEffect(() => {
+    try {
+      localStorage.setItem(ASSUMPTIONS_STORAGE_KEY, JSON.stringify(assumptionsByMarket));
+    } catch {}
+  }, [assumptionsByMarket]);
 
   // Fetch products when market changes
   useEffect(() => {
@@ -229,7 +277,7 @@ export default function CampaignsTab() {
       ([motherSku, discount]) => {
         const p = products.find((x) => x.motherSku === motherSku)!;
         const baseMargin = p.unitGrossRevenue - p.unitCogs - p.unitTax - p.unitRefund;
-        const netMargin = computeNetMargin(p, discount);
+        const netMargin = computeNetMargin(p, discount, assumptions);
         return {
           motherSku,
           productName: p.productName,
@@ -351,8 +399,23 @@ export default function CampaignsTab() {
         </div>
       </div>
 
+      {/* === ASSUMPTIONS PANEL — Cassia 2026-06-14 (calculadora editável recalcula ao vivo) === */}
+      <AssumptionsPanel
+        assumptions={assumptions}
+        market={market}
+        onChange={(next) =>
+          setAssumptionsByMarket((cur) => ({ ...cur, [market]: next }))
+        }
+        onReset={() =>
+          setAssumptionsByMarket((cur) => ({
+            ...cur,
+            [market]: { ...DEFAULT_ASSUMPTIONS[market] },
+          }))
+        }
+      />
+
       {/* === BUILDER === */}
-      <div className="card mb-6" style={{ padding: 20 }}>
+      <div className="card mb-6" style={{ padding: 20, marginTop: 20 }}>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
           <div className="lg:col-span-1">
             <label
@@ -595,7 +658,7 @@ export default function CampaignsTab() {
                   const isSelected = selected.has(p.motherSku);
                   const discount = selected.get(p.motherSku) ?? computeSuggestedDiscount(p.unitGrossRevenue, p.unitCogs);
                   const marginPct = p.unitGrossRevenue > 0 ? ((p.unitGrossRevenue - p.unitCogs) / p.unitGrossRevenue) * 100 : 0;
-                  const netMargin = computeNetMargin(p, discount);
+                  const netMargin = computeNetMargin(p, discount, assumptions);
                   return (
                     <tr
                       key={p.motherSku}
