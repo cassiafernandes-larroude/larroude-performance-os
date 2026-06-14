@@ -1,35 +1,64 @@
-// Cassia 2026-06-14: extrai SKU mãe Larroudé do nome de um criativo/ad.
-// Convenção de SKU Larroudé: começa com L seguido de 3-5 dígitos (ex L0042, L1234).
-// Alguns ads podem conter o SKU como "L0042", "L0042-CAMEL", "(L0042)", "_L0042_", etc.
+// Cassia 2026-06-14: extrai identificador (SKU mãe OU Collection ID) do nome de um criativo Meta.
 //
-// Estratégia:
-//   1. Regex case-insensitive `\bL\d{3,5}\b` — pega L+3-5 dígitos cercados por word boundaries.
-//   2. Retorna em uppercase (L0042).
-//   3. Se não acha, retorna null.
+// Padrões:
+//   1. SKU mãe Larroudé: "L" + 3-5 dígitos (ex: L0042, L1234)
+//   2. Collection ID Shopify: 12+ dígitos consecutivos (ex: 285632184302)
+//
+// Se acha SKU → retorna {type:'sku', value:'L0042'}
+// Se acha Collection ID (e não acha SKU) → retorna {type:'collection', value:'285632184302'}
+// Se não acha nenhum → retorna null
 
 const SKU_REGEX = /\bL\d{3,5}\b/i;
+const COLLECTION_ID_REGEX = /\b\d{12,15}\b/;
+
+export type AdRef =
+  | { type: 'sku'; value: string }
+  | { type: 'collection'; value: string }
+  | null;
 
 /**
- * Extrai o código SKU do nome de um anúncio Meta.
- * Ex: "Adriana L0042 - Coleção Verão" → "L0042"
- *     "L1234_CAMEL_BR" → "L1234"
- *     "Brand campaign" → null
+ * Extrai identificador (SKU OR collection) do nome de um ad Meta.
+ * SKU tem precedência sobre collection ID.
  */
-export function extractSkuFromAdName(name: string | null | undefined): string | null {
+export function extractAdRefFromName(name: string | null | undefined): AdRef {
   if (!name) return null;
-  const match = name.match(SKU_REGEX);
-  if (!match) return null;
-  return match[0].toUpperCase();
+  // 1. Tenta SKU primeiro
+  const skuMatch = name.match(SKU_REGEX);
+  if (skuMatch) return { type: 'sku', value: skuMatch[0].toUpperCase() };
+  // 2. Senão tenta Collection ID (12+ dígitos)
+  const colMatch = name.match(COLLECTION_ID_REGEX);
+  if (colMatch) return { type: 'collection', value: colMatch[0] };
+  return null;
+}
+
+/** @deprecated use extractAdRefFromName */
+export function extractSkuFromAdName(name: string | null | undefined): string | null {
+  const ref = extractAdRefFromName(name);
+  return ref?.type === 'sku' ? ref.value : null;
 }
 
 /**
- * Extrai SKUs únicos de uma lista de nomes de ads.
+ * Agrupa refs únicos por tipo a partir de uma lista de ad names.
  */
-export function extractUniqueSkus(adNames: (string | null | undefined)[]): string[] {
+export function extractUniqueRefs(adNames: (string | null | undefined)[]): {
+  skus: string[];
+  collections: string[];
+} {
   const skus = new Set<string>();
+  const collections = new Set<string>();
   for (const name of adNames) {
-    const sku = extractSkuFromAdName(name);
-    if (sku) skus.add(sku);
+    const ref = extractAdRefFromName(name);
+    if (!ref) continue;
+    if (ref.type === 'sku') skus.add(ref.value);
+    else collections.add(ref.value);
   }
-  return Array.from(skus);
+  return {
+    skus: Array.from(skus),
+    collections: Array.from(collections),
+  };
+}
+
+/** @deprecated use extractUniqueRefs */
+export function extractUniqueSkus(adNames: (string | null | undefined)[]): string[] {
+  return extractUniqueRefs(adNames).skus;
 }
