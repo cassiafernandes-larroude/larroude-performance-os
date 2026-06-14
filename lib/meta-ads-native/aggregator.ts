@@ -197,9 +197,9 @@ export async function buildDashboard(
     ? await fetchAdsMetadataByIds(adIdsFromInsights).catch((e) => { console.warn('[aggregator] metadata fetch failed:', e); return []; })
     : [];
 
-  const adMetaMap = new Map<string, { status: string; effectiveStatus: string; thumbnail: string | null }>();
+  const adMetaMap = new Map<string, { status: string; effectiveStatus: string; thumbnail: string | null; linkUrl: string | null }>();
   for (const m of adsMetadataFresh) {
-    adMetaMap.set(m.id, { status: m.status, effectiveStatus: m.effectiveStatus, thumbnail: m.thumbnail });
+    adMetaMap.set(m.id, { status: m.status, effectiveStatus: m.effectiveStatus, thumbnail: m.thumbnail, linkUrl: m.linkUrl });
   }
   console.log(`[aggregator] ${adIdsFromInsights.length} ads in period, ${adsMetadataFresh.length} metadata fetched`);
 
@@ -360,10 +360,11 @@ export async function buildDashboard(
         ctr: NUM(r.ctr),
         roas: sSpend > 0 ? sRev / sSpend : 0,
         costPerPurchase: sPur > 0 ? sSpend / sPur : 0,
-        // Cassia 2026-06-14: metadata do ad (status + thumbnail real do criativo)
+        // Cassia 2026-06-14: metadata do ad (status + thumbnail real do criativo + URL destino)
         status: meta?.status,
         effectiveStatus: meta?.effectiveStatus,
         thumbnail: meta?.thumbnail || undefined,
+        linkUrl: meta?.linkUrl ?? null,
       };
     })
     .sort((a, b) => b.spend - a.spend);

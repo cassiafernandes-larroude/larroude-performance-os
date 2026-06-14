@@ -65,6 +65,7 @@ export interface AdRow extends CampaignRow {
   adsetName?: string;
   status?: string;             // ACTIVE | PAUSED | DELETED | ARCHIVED
   effectiveStatus?: string;    // ACTIVE | PAUSED | PENDING_REVIEW | DISAPPROVED | etc
+  linkUrl?: string | null;     // destination URL do criativo
 }
 
 export interface AgePerformanceRow {
