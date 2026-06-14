@@ -37,6 +37,7 @@ import {
 } from './supermetrics';
 import { calcPeriod, fmtCurrency, fmtMultiple, fmtNumber, fmtPercent, granularityFor, pctChange, safeDiv } from './utils';
 import { getMetaSpendAdjustment, getMetaSpendAdjustmentByDay } from '@/lib/shared/meta-adjustments';
+import { getFixedToolsCostInRange, getAgentShopCost } from '@/lib/channel-costs';
 import type {
   CampaignRow,
   ChannelRevenue,
@@ -221,7 +222,18 @@ export async function getDashboardPayload(
     console.log(`[meta-adj ${market}]`, `curr=$${metaAdjCurr.toFixed(0)}`, `prev=$${metaAdjPrev.toFixed(0)}`);
   }
 
-  const spend = finalMetaSpend + finalGoogleSpend;
+  // Cassia 2026-06-13: incluir tools cost (Klaviyo, Attentive, Criteo, Agent.shop)
+  // no AMOUNT SPENT do Main Dashboard pra ROAS/CAC/CPO refletirem custo total.
+  // Mesma regra do Overview (lib/data/metrics.ts).
+  const fixedToolsCost = getFixedToolsCostInRange(market, period.start, period.end);
+  const fixedToolsCostPrev = getFixedToolsCostInRange(market, period.prevStart, period.prevEnd);
+  // Agent.shop (BR) = 10% receita Agent.shop. Puxa do channelMix já carregado.
+  const agentShopRev = (channelMix as any[]).find((r) => r.channel === 'Agent.shop')?.revenue || 0;
+  const agentShopCost = getAgentShopCost(market, Number(agentShopRev) || 0);
+  // Prev: aproxima usando mesma % (não temos channelMix do período anterior; é uma aproximação ok)
+  const agentShopCostPrev = market === 'BR' ? agentShopCost : 0;
+
+  const spend = finalMetaSpend + finalGoogleSpend + fixedToolsCost + agentShopCost;
   // Debug log (visível em vercel logs)
   console.log(`[spend ${market} ${period.start}..${period.end}]`,
     `meta_supermetrics=${supermetricsMetaSpend.toFixed(2)}`,
@@ -230,6 +242,7 @@ export async function getDashboardPayload(
     `google_bq=${bqGoogleSpend.toFixed(2)}`,
     `final_meta=${finalMetaSpend.toFixed(2)}`,
     `final_google=${finalGoogleSpend.toFixed(2)}`,
+    `tools_cost=${fixedToolsCost.toFixed(2)}`,
     `TOTAL=${spend.toFixed(2)}`,
   );
   const gross = num(aggCurr.gross_sales);
@@ -264,7 +277,7 @@ export async function getDashboardPayload(
   const roasTotal = safeDiv(totalSales, spend);
 
   // Previous period — usa mesma lógica (Meta + Google Supermetrics)
-  const pSpend = finalMetaSpendPrev + finalGoogleSpendPrev;
+  const pSpend = finalMetaSpendPrev + finalGoogleSpendPrev + fixedToolsCostPrev + agentShopCostPrev;
   const pGross = num(aggPrev.gross_sales);
   const pDiscounts = num(aggPrev.discounts);
   const pRefund = num(aggPrev.refund_value);
@@ -370,7 +383,7 @@ export async function getDashboardPayload(
   );
 
   const kpis: KpiValue[] = [
-    { label: 'AMOUNT SPENT', value: fmtCurrency(spend, market, { compact: true }), raw: spend, delta: pctChange(spend, pSpend), hint: 'Meta + Google (todas contas)', tone: 'default' },
+    { label: 'AMOUNT SPENT', value: fmtCurrency(spend, market, { compact: true }), raw: spend, delta: pctChange(spend, pSpend), hint: market === 'US' ? 'Meta + Google + Klaviyo + Attentive + Criteo' : 'Meta + Google + Klaviyo + Criteo + Agent.shop (10% rev)', tone: 'default' },
     { label: 'META SPEND', value: fmtCurrency(finalMetaSpend, market, { compact: true }), raw: finalMetaSpend, delta: pctChange(finalMetaSpend, finalMetaSpendPrev), hint: market === 'US' ? 'Larroude US + Pre-Order US' : 'Larroude BR + Pre-Order BR + Brand BR (USD→BRL)', tone: 'default' },
     { label: 'GOOGLE SPEND', value: fmtCurrency(finalGoogleSpend, market, { compact: true }), raw: finalGoogleSpend, delta: pctChange(finalGoogleSpend, finalGoogleSpendPrev), hint: market === 'US' ? 'Google Ads US' : 'Google Ads BR (native BRL)', tone: 'default' },
     { label: 'ROAS GROSS SALES', value: fmtMultiple(roasGross), raw: roasGross, delta: pctChange(roasGross, pRoasGross), tone: 'default' },
