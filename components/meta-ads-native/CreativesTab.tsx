@@ -28,11 +28,15 @@ interface SkuRow {
   unitsSold: number;
   shopifyRevenue: number;
   currency: 'USD' | 'BRL';
-  hasAds: boolean;
+  hasAds: boolean;           // tem ad ATIVO no momento
+  hasAdsHistory: boolean;    // teve ad no período (pode estar pausado agora)
   adsSpend: number;
   adsPurchases: number;
   roasReal: number;
-  ads: AdDetail[];
+  ads: AdDetail[];            // SÓ ativos
+  totalAdsCount: number;
+  activeAdsCount: number;
+  campaigns: string[];
 }
 
 interface Props {
@@ -196,13 +200,18 @@ function SkuQuadro({
                 <>
                   <tr key={`${r.sku}-row`} className="border-t" style={{ borderColor: 'var(--border)' }}>
                     <td className="px-2 py-1.5 tabular-nums font-semibold" style={{ color: 'var(--ink-muted)' }}>{idx + 1}</td>
-                    {/* Produto com foto */}
-                    <td className="px-2 py-1.5 max-w-[240px]">
+                    {/* Produto com foto + campanhas */}
+                    <td className="px-2 py-1.5 max-w-[280px]">
                       <div className="flex items-center gap-2">
                         <img src={prodImg} alt="" width={44} height={44} style={{ borderRadius: 6, objectFit: 'cover', flexShrink: 0, background: '#eee' }} onError={(e) => { (e.currentTarget as HTMLImageElement).src = FALLBACK_IMG; }} />
                         <div className="min-w-0">
                           <div className="font-mono text-[11px] font-semibold" style={{ color: 'var(--pink-deep)' }}>{r.sku}</div>
                           <div className="truncate text-[11px]" style={{ color: 'var(--ink)' }} title={r.productName || ''}>{r.productName || '—'}</div>
+                          {r.campaigns.length > 0 && (
+                            <div className="truncate text-[10px] mt-0.5" style={{ color: 'var(--ink-muted)' }} title={r.campaigns.join(' · ')}>
+                              📣 {r.campaigns.length === 1 ? r.campaigns[0] : `${r.campaigns[0]} +${r.campaigns.length - 1}`}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -211,21 +220,22 @@ function SkuQuadro({
                     {/* Tag Com ads / Sem ads */}
                     <td className="px-2 py-1.5">
                       {(() => {
-                        const activeAds = r.ads.filter(a => a.isActive || (a.effectiveStatus || a.status || '').toUpperCase() === 'ACTIVE').length;
-                        const inactiveAds = r.ads.length - activeAds;
-                        if (activeAds > 0) {
+                        const active = r.activeAdsCount;
+                        const total = r.totalAdsCount;
+                        const inactive = Math.max(0, total - active);
+                        if (active > 0) {
                           return (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: 'rgba(13,148,136,0.12)', color: '#0d9488' }}>
                               <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981' }} />
-                              Ativo ({activeAds}{inactiveAds > 0 ? `+${inactiveAds} off` : ''})
+                              Ativo ({active}{inactive > 0 ? ` + ${inactive} off` : ''})
                             </span>
                           );
                         }
-                        if (r.ads.length > 0) {
+                        if (total > 0) {
                           return (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: 'rgba(156,163,175,0.18)', color: '#6b7280' }}>
                               <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#9ca3af' }} />
-                              Pausado ({r.ads.length})
+                              Pausado ({total})
                             </span>
                           );
                         }

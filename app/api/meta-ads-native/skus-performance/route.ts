@@ -61,11 +61,15 @@ interface SkuRow {
   unitsSold: number;
   shopifyRevenue: number;
   currency: 'USD' | 'BRL';
-  hasAds: boolean;
-  adsSpend: number;
+  hasAds: boolean;          // tem ad ATIVO atualmente?
+  hasAdsHistory: boolean;   // teve ad rodando no período (mesmo pausado agora)?
+  adsSpend: number;         // total no período (todos os ads, ativos+pausados)
   adsPurchases: number;
-  roasReal: number;       // shopifyRevenue / adsSpend
-  ads: AdDetail[];
+  roasReal: number;
+  ads: AdDetail[];          // SOMENTE ads ativos no momento (pra listagem)
+  totalAdsCount: number;    // quantos ads rodaram no período (referência)
+  activeAdsCount: number;
+  campaigns: string[];      // nomes únicos das campanhas onde tem ad desse SKU
 }
 
 const MAX_ORDER_VALUE = { US: 30000, BR: 25000 } as const;
@@ -203,8 +207,9 @@ export async function POST(req: NextRequest) {
     const topSkuSet = new Set(topSkus);
     const otherActiveSkus = skusFromAds.filter(s => {
       if (topSkuSet.has(s)) return false;
-      const totalSpend = adsBySku[s].reduce((acc, a) => acc + a.spend, 0);
-      return totalSpend > 0; // só inclui se tem spend ativo
+      // SKUs fora do top 30 que têm pelo menos UM ad ATIVO atualmente
+      const hasActive = adsBySku[s].some(a => a.isActive);
+      return hasActive;
     });
 
     // 4) Pra cada SKU (top + others), busca image+productName via Shopify GraphQL
@@ -257,10 +262,15 @@ export async function POST(req: NextRequest) {
       const adsForSku = findAdsForMother(sku);
       // Dedup por id pra evitar dupla contagem se um ad casar via múltiplas estratégias
       const dedupedAds = Array.from(new Map(adsForSku.map(a => [a.id, a])).values());
+      // Cassia 2026-06-14: MÉTRICAS somam TODOS os ads (rodaram no período),
+      // mas a LISTAGEM só mostra ATIVOS no momento.
+      const activeAds = dedupedAds.filter(a => a.isActive);
       const adsSpend = dedupedAds.reduce((a, b) => a + b.spend, 0);
       const adsPurchases = dedupedAds.reduce((a, b) => a + b.purchases, 0);
       const shopifyRevenue = sales?.revenue ?? 0;
       const unitsSold = sales?.units ?? 0;
+      // Lista única de campanhas (de TODOS ads, ativos+pausados, do período)
+      const campaigns = Array.from(new Set(dedupedAds.map(a => a.campaignName).filter((n): n is string => !!n)));
       return {
         sku,
         productName: imageCache[sku]?.name ?? sales?.product_name ?? null,
@@ -268,11 +278,15 @@ export async function POST(req: NextRequest) {
         unitsSold,
         shopifyRevenue,
         currency,
-        hasAds: dedupedAds.length > 0 && adsSpend > 0,
+        hasAds: activeAds.length > 0,
+        hasAdsHistory: dedupedAds.length > 0 && adsSpend > 0,
         adsSpend,
         adsPurchases,
         roasReal: adsSpend > 0 ? shopifyRevenue / adsSpend : 0,
-        ads: dedupedAds.sort((a, b) => b.spend - a.spend),
+        ads: activeAds.sort((a, b) => b.spend - a.spend),
+        totalAdsCount: dedupedAds.length,
+        activeAdsCount: activeAds.length,
+        campaigns,
       };
     };
 
