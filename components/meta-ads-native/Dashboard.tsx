@@ -78,6 +78,11 @@ export default function MetaAdsDashboard() {
   const handleExportPdf = () => { window.print(); };
 
   const currency = currencyFor(region);
+  // Cassia 2026-06-14: quando o chart daily teria > 14 barras, viramos 1 chart por linha pra
+  // dar respiro visual (28d+, 3M, 6M, 12M, custom). Charts NÃO-daily (audience, ranking, idade,
+  // região) continuam 2 por linha sempre — eles não têm o problema de eixo X cheio.
+  const isLongPeriod = period === '28d' || period === '3M' || period === '6M' || period === '12M' || period === 'custom';
+  const dailyChartsGrid = isLongPeriod ? 'grid grid-cols-1 gap-4' : 'grid grid-cols-1 lg:grid-cols-2 gap-4';
 
   return (
     <div>
@@ -177,7 +182,8 @@ export default function MetaAdsDashboard() {
             <ScatterRoas data={data.scatter} currency={currency} />
 
             {/* Cassia 2026-06-14: charts em barra usando DailyBarChart do Main Dashboard pra padronização */}
-            <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* >14 barras (28d+) → 1 chart por linha pra dar respiro visual */}
+            <section className={dailyChartsGrid}>
               <DailyMultiBarChart
                 title="Spend × Revenue (daily)"
                 market={region}
@@ -189,19 +195,26 @@ export default function MetaAdsDashboard() {
               <DailyBarChart title="Amount Spent" data={toDailyPoints(data.series.spendByDay)} color="#1f2d44" unit="currency" market={region} />
             </section>
 
-            <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              <div className="lg:col-span-1"><ObjectiveSpend data={data.topCampaignsByObjective} currency={currency} /></div>
-              <div className="lg:col-span-2">
+            {isLongPeriod ? (
+              <>
+                <ObjectiveSpend data={data.topCampaignsByObjective} currency={currency} />
                 <DailyBarChart title="ROAS · Daily" data={toDailyPoints(data.series.roas, { roundTo: 2 })} color="#3b82f6" unit="multiple" market={region} />
-              </div>
-            </section>
+              </>
+            ) : (
+              <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div className="lg:col-span-1"><ObjectiveSpend data={data.topCampaignsByObjective} currency={currency} /></div>
+                <div className="lg:col-span-2">
+                  <DailyBarChart title="ROAS · Daily" data={toDailyPoints(data.series.roas, { roundTo: 2 })} color="#3b82f6" unit="multiple" market={region} />
+                </div>
+              </section>
+            )}
 
-            <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <section className={dailyChartsGrid}>
               <DailyBarChart title="Impressions" data={toDailyPoints(data.series.impressions)} color="#8b5cf6" unit="number" market={region} />
               <ReachFrequency data={data.series.reachFrequency} />
             </section>
 
-            <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <section className={dailyChartsGrid}>
               <DailyBarChart title="Clicks (all)" data={toDailyPoints(data.series.clicks)} color="#0d9488" unit="number" market={region} />
               {/* Cassia 2026-06-14: Meta retorna CTR já em % (ex 2.30 = 2.30%); fmtPercent multiplica por 100 — então dividimos por 100 antes. */}
               <DailyBarChart title="CTR (all)" data={toDailyPoints(data.series.ctr, { divideBy: 100, roundTo: 4 })} color="#0891b2" unit="percent" market={region} />
