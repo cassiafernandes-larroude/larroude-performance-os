@@ -164,22 +164,38 @@ export async function getMetricBundle(
       hint: m.hint,
     });
 
-    // Cassia 2026-06-14: Google via Supermetrics SEMPRE (mesma fonte do Main Dashboard).
-    // BQ all_channels_daily como fallback. REGRA: spend Google sempre vem de Supermetrics
-    // pra paridade 100% entre Overview e Main Dashboard.
-    let cGoogleSpend = num(c.google_spend);
-    let pGoogleSpend = num(p.google_spend);
+    // Cassia 2026-06-14: REGRA — Google sempre vem de Supermetrics (= Main Dashboard, CAC, LTV).
+    // BQ all_channels_daily é IGNORADO porque retorna 0 pra D-1 (lag de processamento).
+    let cGoogleSpend = 0;
+    let pGoogleSpend = 0;
+    const bqGoogleCur = num(c.google_spend);
+    const bqGooglePrv = num(p.google_spend);
     try {
       const { queryGoogleAdsTotalViaSupermetrics } = await import("@/lib/main-dashboard/supermetrics");
       const [gCur, gPrev] = await Promise.all([
-        queryGoogleAdsTotalViaSupermetrics(market, range.from, range.to).catch(() => ({ spend: 0 })),
-        queryGoogleAdsTotalViaSupermetrics(market, prevRange.from, prevRange.to).catch(() => ({ spend: 0 })),
+        queryGoogleAdsTotalViaSupermetrics(market, range.from, range.to).catch((e: any) => {
+          console.error(`[overview google ${market}] Supermetrics CURR ERROR:`, e?.message || e);
+          return { spend: 0 };
+        }),
+        queryGoogleAdsTotalViaSupermetrics(market, prevRange.from, prevRange.to).catch((e: any) => {
+          console.error(`[overview google ${market}] Supermetrics PREV ERROR:`, e?.message || e);
+          return { spend: 0 };
+        }),
       ]);
-      if (gCur.spend > 0) cGoogleSpend = gCur.spend;
-      if (gPrev.spend > 0) pGoogleSpend = gPrev.spend;
-      console.log(`[overview google ${market} ${range.from}..${range.to}] supermetrics=$${cGoogleSpend.toFixed(0)} (prev=$${pGoogleSpend.toFixed(0)})`);
+      cGoogleSpend = gCur.spend > 0 ? gCur.spend : bqGoogleCur;
+      pGoogleSpend = gPrev.spend > 0 ? gPrev.spend : bqGooglePrv;
+      console.log(`[overview google ${market} ${range.from}..${range.to}]`,
+        `supermetrics_curr=$${gCur.spend.toFixed(0)}`,
+        `supermetrics_prev=$${gPrev.spend.toFixed(0)}`,
+        `bq_curr=$${bqGoogleCur.toFixed(0)}`,
+        `bq_prev=$${bqGooglePrv.toFixed(0)}`,
+        `FINAL_CURR=$${cGoogleSpend.toFixed(0)}`,
+        `FINAL_PREV=$${pGoogleSpend.toFixed(0)}`,
+      );
     } catch (err) {
-      console.warn("[overview] Google Supermetrics failed, fallback BQ:", err);
+      console.warn("[overview] Google fetch failed completely, using BQ fallback:", err);
+      cGoogleSpend = bqGoogleCur;
+      pGoogleSpend = bqGooglePrv;
     }
     let cMetaSpend = Math.max(0, num(c.spend) - cGoogleSpend);
     let pMetaSpend = Math.max(0, num(p.spend) - pGoogleSpend);

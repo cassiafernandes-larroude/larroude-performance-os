@@ -747,6 +747,25 @@ export async function getMonthlyLtvSeries(market: Market): Promise<MonthlyLtvPoi
     metaByMonth.set('2025-09', (metaByMonth.get('2025-09') ?? 0) + sep25Adj);
   }
 
+  // Cassia 2026-06-14: REGRA — para cada mês, spend total inclui Meta+Google+tools+%revenue.
+  // computeTotalSpend é chamado em paralelo para evitar bloqueio.
+  const { computeTotalSpend } = await import('@/lib/channel-costs-bq');
+  const monthExtras: Map<string, number> = new Map();
+  await Promise.all(rows.map(async (r) => {
+    const meta = metaByMonth.get(r.month) ?? 0;
+    const google = googleByMonth.get(r.month) ?? 0;
+    const [y, m] = r.month.split('-').map(Number);
+    const start = `${r.month}-01`;
+    const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    const end = `${r.month}-${String(lastDay).padStart(2, '0')}`;
+    try {
+      const bd = await computeTotalSpend(market as any, start, end, meta, google);
+      monthExtras.set(r.month, bd.fixedTools + bd.percentRev);
+    } catch (e) {
+      monthExtras.set(r.month, 0);
+    }
+  }));
+
   const byMonth = new Map<string, MonthlyLtvPoint>();
   for (const r of rows) {
     const orders = Number(r.orders ?? 0);
@@ -754,7 +773,8 @@ export async function getMonthlyLtvSeries(market: Market): Promise<MonthlyLtvPoi
     const newCustomers = Number(r.new_customers ?? 0);
     const metaSpend = metaByMonth.get(r.month) ?? 0;
     const googleSpend = googleByMonth.get(r.month) ?? 0;
-    const totalAdSpend = metaSpend + googleSpend;
+    const toolsExtra = monthExtras.get(r.month) ?? 0;
+    const totalAdSpend = metaSpend + googleSpend + toolsExtra;
     const cac = newCustomers > 0 ? totalAdSpend / newCustomers : 0;
     const ltvAvg = Number(r.ltv_avg ?? 0);
     // Só calcular ratio quando há sinal real (evita outliers de meses
