@@ -336,7 +336,7 @@ export const EN_TO_PT: Record<string, string> = {
   // === ALL labels with apostrophes / accents fixes ===
   "Larroudé": "Larroudé",
   "Larroude": "Larroudé",
-};
+
   "Inventory Intelligence": "Inteligência de Estoque",
   "Inventory": "Estoque",
   "Unit Economics": "Unit Economics",
