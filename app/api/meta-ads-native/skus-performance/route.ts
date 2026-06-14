@@ -258,16 +258,15 @@ export async function POST(req: NextRequest) {
     const buildRow = (sku: string): SkuRow => {
       const sales = topMap.get(sku);
       const adsForSku = findAdsForMother(sku);
-      // Dedup por id pra evitar dupla contagem se um ad casar via múltiplas estratégias
+      // Dedup por id pra evitar dupla contagem
       const dedupedAds = Array.from(new Map(adsForSku.map(a => [a.id, a])).values());
-      // Cassia 2026-06-14: MÉTRICAS somam TODOS os ads (rodaram no período),
-      // mas a LISTAGEM só mostra ATIVOS no momento.
+      // Cassia 2026-06-14 (rev): MOSTRAR TODOS os ads vinculados (ativos + pausados).
+      // O badge "Ativo/Off" individual no card de cada criativo mostra o status.
       const activeAds = dedupedAds.filter(a => a.isActive);
       const adsSpend = dedupedAds.reduce((a, b) => a + b.spend, 0);
       const adsPurchases = dedupedAds.reduce((a, b) => a + b.purchases, 0);
       const shopifyRevenue = sales?.revenue ?? 0;
       const unitsSold = sales?.units ?? 0;
-      // Lista única de campanhas (de TODOS ads, ativos+pausados, do período)
       const campaigns = Array.from(new Set(dedupedAds.map(a => a.campaignName).filter((n): n is string => !!n)));
       return {
         sku,
@@ -276,12 +275,13 @@ export async function POST(req: NextRequest) {
         unitsSold,
         shopifyRevenue,
         currency,
-        hasAds: activeAds.length > 0,
+        // hasAds = QUALQUER ad vinculado (ativo OU pausado)
+        hasAds: dedupedAds.length > 0,
         hasAdsHistory: dedupedAds.length > 0 && adsSpend > 0,
         adsSpend,
         adsPurchases,
         roasReal: adsSpend > 0 ? shopifyRevenue / adsSpend : 0,
-        ads: activeAds.sort((a, b) => b.spend - a.spend),
+        ads: dedupedAds.sort((a, b) => b.spend - a.spend),  // TODOS, ordenados por spend
         totalAdsCount: dedupedAds.length,
         activeAdsCount: activeAds.length,
         campaigns,
