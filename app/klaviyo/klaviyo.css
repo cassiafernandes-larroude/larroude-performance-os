@@ -142,6 +142,73 @@
 .klaviyo-root .kpi-grid-6 { grid-template-columns: repeat(6, 1fr); }
 .klaviyo-root .kpi-grid-3 { grid-template-columns: repeat(3, 1fr); }
 .klaviyo-root .kpi-grid-2 { grid-template-columns: repeat(2, 1fr); }
+
+/* Cassia 2026-06-14: Comparativo Campanhas vs Flows */
+.klaviyo-root .kpi-compare-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  margin-top: 10px;
+}
+@media (max-width: 1280px) { .klaviyo-root .kpi-compare-grid { grid-template-columns: repeat(4, 1fr); } }
+@media (max-width: 768px) { .klaviyo-root .kpi-compare-grid { grid-template-columns: repeat(2, 1fr); } }
+.klaviyo-root .kpi-compare {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 110px;
+}
+.klaviyo-root .kpi-compare .kc-label {
+  font-size: 11.5px;
+  color: var(--ink-3);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.klaviyo-root .kpi-compare .kc-values {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  align-items: end;
+}
+.klaviyo-root .kpi-compare .kc-col { display: flex; flex-direction: column; gap: 4px; }
+.klaviyo-root .kpi-compare .kc-val {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.0;
+}
+.klaviyo-root .kpi-compare .kc-camp { color: #3b82f6; }
+.klaviyo-root .kpi-compare .kc-flow { color: #7c3aed; }
+.klaviyo-root .kpi-compare .kc-tag {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  color: var(--ink-3);
+  font-weight: 500;
+}
+.klaviyo-root .kpi-compare .kc-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  font-size: 8px;
+  color: white;
+}
+.klaviyo-root .kpi-compare .kc-note {
+  font-size: 10.5px;
+  color: var(--ink-3);
+  margin-top: 2px;
+  border-top: 1px solid var(--line);
+  padding-top: 6px;
+}
+.klaviyo-root .kpi-compare .kc-warn { color: #d97706; font-weight: 700; }
 .klaviyo-root .kpi {
   background: var(--paper); border: 1.5px solid var(--line);
   border-radius: 16px; padding: 16px 18px;

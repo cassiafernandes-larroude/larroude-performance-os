@@ -3,6 +3,24 @@
 // Cassia 2026-06-13: "inclua um botao em cada dashboard onde eu possa traduzir automaticamente para portugues"
 
 export const EN_TO_PT: Record<string, string> = {
+  // Cassia 2026-06-14: Klaviyo Campaigns vs Flows comparison
+  "Metrics comparison": "Comparativo de métricas",
+  "Comparison": "Comparativo",
+  "Open Rate (OR)": "Taxa de Abertura (OR)",
+  "Click Rate (CTR)": "Taxa de Clique (CTR)",
+  "CTOR": "CTOR",
+  "Conv. Rate": "Taxa de Conv.",
+  "Avg AOV": "AOV médio",
+  "click-to-open rate": "taxa de clique-por-abertura",
+  "per recipient": "por destinatário",
+  "combined order value": "ticket médio combinado",
+  "campaigns": "campanhas",
+  "Campaigns": "Campanhas",
+  "Flows": "Flows",
+  "Camp.": "Camp.",
+  "more efficient": "mais eficientes",
+  "total:": "total:",
+
   // === Navigation / sidebar ===
   "Overview": "Visão Geral",
   "Main Dashboard": "Dashboard Principal",

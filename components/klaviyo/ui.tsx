@@ -52,6 +52,26 @@ export function StatusBadge({ kind, label }: { kind: 'red'|'gold'|'green'|'blue'
   return <span className={`status-badge st-${kind}`}>{label}</span>;
 }
 
+// Cassia 2026-06-14: card comparativo Campanhas vs Flows (2 valores side-by-side)
+export function CompareCard({ label, camp, flow, note, warn }: { label: string; camp: string; flow: string; note?: string; warn?: boolean }) {
+  return (
+    <div className="kpi-compare">
+      <div className="kc-label">{label}</div>
+      <div className="kc-values">
+        <div className="kc-col">
+          <div className="kc-val kc-camp">{camp}</div>
+          <div className="kc-tag"><span className="kc-dot" style={{ background: '#3b82f6' }} /> Camp.</div>
+        </div>
+        <div className="kc-col">
+          <div className="kc-val kc-flow">{flow}</div>
+          <div className="kc-tag"><span className="kc-dot" style={{ background: '#7c3aed' }}>⚡</span> Flows</div>
+        </div>
+      </div>
+      {note && <div className="kc-note">{warn && <span className="kc-warn">⚠ </span>}{note}</div>}
+    </div>
+  );
+}
+
 export function HBar({ value, max, color = 'teal', label }: { value: number; max: number; color?: string; label?: string }) {
   const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
   return (
