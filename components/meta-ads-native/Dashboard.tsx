@@ -302,21 +302,8 @@ export default function MetaAdsDashboard() {
                   {/* Cassia 2026-06-14: Top 10 criativos por ROAS com imagem */}
                   <TopCreativesByRoas ads={data.ads} currency={currency} top={10} minSpend={1000} />
 
-                  {/* Cassia 2026-06-14: Top 5 URLs por ROAS + Per-Campaign Optimization */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <TopUrlsByRoas
-                      ads={data.ads.map(a => ({
-                        spend: a.spend || 0,
-                        revenue: a.revenue || 0,
-                        purchases: a.purchases || 0,
-                        linkUrl: (a as any).linkUrl ?? null,
-                      }))}
-                      currency={currency}
-                      top={5}
-                      minSpend={500}
-                    />
-                    <PerCampaignOptimization ads={data.ads} currency={currency} maxAdsPerCampaign={5} />
-                  </div>
+                  {/* Cassia 2026-06-14: Per-Campaign Optimization (sozinho na linha pra ficar mais legível) */}
+                  <PerCampaignOptimization ads={data.ads} currency={currency} maxAdsPerCampaign={5} />
 
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <RoasByDimension title="ROAS by asset format" icon="🎬" rows={byFormat} currency={currency} tip="Tip: prioritize o formato com maior ROAS." />
@@ -325,6 +312,19 @@ export default function MetaAdsDashboard() {
                     <RoasByDimension title="ROAS by creative angle" icon="🎨" rows={byCreativeAngle} currency={currency} tip="Tip: invista no ângulo criativo que rende mais." />
                   </div>
                   <RoasByDimension title="SKU vs Coleção" icon="🆚" rows={byRefType} currency={currency} tip="Tip: criativos referenciando SKU ou coleção performam diferente." />
+
+                  {/* Cassia 2026-06-14: Top 5 URLs por ROAS — depois do SKU vs Coleção */}
+                  <TopUrlsByRoas
+                    ads={data.ads.map(a => ({
+                      spend: a.spend || 0,
+                      revenue: a.revenue || 0,
+                      purchases: a.purchases || 0,
+                      linkUrl: (a as any).linkUrl ?? null,
+                    }))}
+                    currency={currency}
+                    top={5}
+                    minSpend={500}
+                  />
                 </section>
               );
             })()}

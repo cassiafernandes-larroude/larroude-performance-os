@@ -235,12 +235,14 @@ export async function fetchAdsMetadataByIds(adIds: string[]): Promise<AdMeta[]> 
         const video = oss.video_data || {};
         const assetImages = c.asset_feed_spec?.images || [];
         const assetLinks = c.asset_feed_spec?.link_urls || [];
+        // Cassia 2026-06-14: preferir ALTA RESOLUÇÃO. thumbnail_url do Meta é só 64×64.
+        // Ordem: image_url (full) → link_data.picture → asset_feed.images[0] → video.image_url → thumbnail_url (último recurso).
         const thumb =
-          c.thumbnail_url ||
           c.image_url ||
           link.picture ||
-          video.image_url ||
           (Array.isArray(assetImages) && assetImages[0]?.url) ||
+          video.image_url ||
+          c.thumbnail_url ||
           null;
         const linkUrl =
           link.link ||
