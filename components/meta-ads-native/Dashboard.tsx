@@ -97,45 +97,46 @@ export default function MetaAdsDashboard() {
 
         {data && (
           <>
-            <div className="flex items-center gap-2 mt-2">
-              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wide bg-stone-200 text-ink-600">{region}</span>
-              <h2 className="text-sm font-semibold tracking-widest uppercase text-ink-700">
-                {region === 'US' ? 'United States' : 'Brazil'}
-              </h2>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide bg-brand-100 text-brand-700">
+            {/* Cassia 2026-06-14: section label MERCADO igual Main Dashboard */}
+            <div className="flex items-center gap-2 mb-3 mt-2">
+              <span
+                className="inline-flex items-center text-[11px] uppercase font-bold tracking-wider"
+                style={{ color: 'var(--ink-soft)' }}
+              >
+                <span
+                  className="inline-flex items-center justify-center mr-1.5 px-1.5 rounded text-[8px] leading-4 font-bold"
+                  style={{ background: '#ec4899', color: 'white' }}
+                >
+                  {region}
+                </span>
+                {region === 'US' ? 'UNITED STATES' : 'BRAZIL'}
+              </span>
+              <span
+                className="text-[9px] font-bold px-2 py-0.5 rounded-full"
+                style={{ background: '#fce7f3', color: '#be185d' }}
+              >
                 {currency}
               </span>
             </div>
 
-            <section className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-              <div className="lg:col-span-9 space-y-3">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px] font-semibold tracking-widest text-ink-400 uppercase">
-                  <div>Cost &amp; Revenue</div>
-                  <div>Revenue Efficiency</div>
-                  <div>Click Metrics</div>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                  <KpiCard kpi={data.kpis.spend} currency={currency} />
-                  <KpiCard kpi={data.kpis.revenue} currency={currency} />
-                  <KpiCard kpi={data.kpis.roas} hint="Revenue / Spend" />
-                  <KpiCard kpi={data.kpis.convRate} hint="Purchases / Clicks" />
-                  <KpiCard kpi={data.kpis.clicks} />
-                  <KpiCard kpi={data.kpis.cpc} currency={currency} hint="Spend / Clicks" />
-                </div>
-              </div>
-              <div className="lg:col-span-3">
-                <GenderDonut data={data.purchasesByGender} />
-              </div>
+            {/* KPIs flat — 6 colunas igual ao Main Dashboard (sem sub-secoes) */}
+            <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              <KpiCard kpi={data.kpis.spend} currency={currency} />
+              <KpiCard kpi={data.kpis.revenue} currency={currency} />
+              <KpiCard kpi={data.kpis.roas} hint="Revenue / Spend" />
+              <KpiCard kpi={data.kpis.convRate} hint="Purchases / Clicks" />
+              <KpiCard kpi={data.kpis.clicks} />
+              <KpiCard kpi={data.kpis.cpc} currency={currency} hint="Spend / Clicks" />
             </section>
 
-            <section className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-              <div className="lg:col-span-9">
-                <CampaignsTable data={data.campaigns} currency={currency} />
-              </div>
-              <div className="lg:col-span-3">
-                <Funnel {...data.funnel} />
-              </div>
+            {/* Audience: gender + funnel lado-a-lado */}
+            <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <GenderDonut data={data.purchasesByGender} />
+              <Funnel {...data.funnel} />
             </section>
+
+            {/* Campaigns table full-width */}
+            <CampaignsTable data={data.campaigns} currency={currency} />
 
             <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <BarRanking

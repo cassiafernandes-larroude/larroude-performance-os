@@ -1,6 +1,7 @@
-﻿'use client';
-import { cn } from '@/lib/meta-ads-native/cn';
-import { formatDelta, formatKpi } from '@/lib/meta-ads-native/format';
+'use client';
+// Cassia 2026-06-14: KpiCard padronizado com Main Dashboard
+// — mesmo layout grid 38/30/auto, label uppercase, tabular numeric, delta com seta + cor.
+import { formatKpi, formatDelta } from '@/lib/meta-ads-native/format';
 import type { Kpi } from '@/lib/meta-ads-native/types';
 
 interface Props {
@@ -10,30 +11,57 @@ interface Props {
   comparisonLabel?: string;
 }
 
-export default function KpiCard({ kpi, currency, hint, comparisonLabel = 'vs prev.' }: Props) {
-  const delta = formatDelta(kpi.delta);
+export default function KpiCard({ kpi, currency, hint, comparisonLabel = 'vs prior' }: Props) {
+  const delta = kpi.delta != null ? formatDelta(kpi.delta) : null;
+  const isUp = delta?.positive === true;
+  const isDown = delta?.positive === false;
+  const arrow = isUp ? '▲' : isDown ? '▼' : '·';
+  const deltaColor = isUp ? '#10b981' : isDown ? '#ef4444' : '#9ca3af';
+
   return (
-    <div className="card flex flex-col">
-      {/* Label has min-height to reserve 2 lines, so values align across cards */}
-      <div className="kpi-label">{kpi.label}</div>
-
-      {/* Value */}
-      <div className="kpi-value mt-1">{formatKpi(kpi, currency)}</div>
-
-      {/* Delta */}
-      <div className="mt-1.5 min-h-[18px]">
-        {kpi.delta != null && (
-          <div className="flex items-center gap-1 flex-wrap">
-            <span className={cn(delta.positive ? 'kpi-delta-up' : 'kpi-delta-down')}>
-              {delta.positive ? '▲' : '▼'} {delta.text}
-            </span>
-            <span className="text-[11px] text-ink-400">{comparisonLabel}</span>
-          </div>
+    <div
+      className="card"
+      style={{
+        padding: '10px 12px',
+        display: 'grid',
+        gridTemplateRows: '38px 30px auto',
+        rowGap: 4,
+        minHeight: 110,
+      }}
+    >
+      <div
+        className="text-[8.5px] font-bold tracking-wider text-steel uppercase leading-tight"
+        style={{
+          display: '-webkit-box',
+          WebkitLineClamp: 3,
+          WebkitBoxOrient: 'vertical',
+          overflow: 'hidden',
+          alignSelf: 'start',
+        }}
+      >
+        {kpi.label}
+      </div>
+      <div
+        className="text-xl font-bold text-ink leading-tight"
+        style={{
+          alignSelf: 'center',
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        {formatKpi(kpi, currency)}
+      </div>
+      <div className="text-[9px] font-medium leading-tight" style={{ alignSelf: 'end', minHeight: 14 }}>
+        {delta ? (
+          <span style={{ color: deltaColor }}>
+            <span className="mr-1">{arrow}</span>
+            <span>{delta.text} {comparisonLabel}</span>
+          </span>
+        ) : hint ? (
+          <span className="text-steel">{hint}</span>
+        ) : (
+          <span style={{ color: 'transparent' }}>·</span>
         )}
       </div>
-
-      {/* Hint */}
-      {hint && <div className="mt-1 text-[11px] text-ink-400 leading-tight">{hint}</div>}
     </div>
   );
 }
