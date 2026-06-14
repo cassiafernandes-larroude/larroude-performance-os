@@ -213,19 +213,15 @@ export default function CampaignsTab() {
     );
   }, [products, search]);
 
+  // Cassia 2026-06-14: o desconto agora é por CAMPANHA (vem do assumptions.discountPct).
+  // O Map só guarda quais SKUs estão selecionados — o value é mantido por retrocompat (= discountPct atual).
   function toggleProduct(p: ProductRow) {
     const next = new Map(selected);
     if (next.has(p.motherSku)) {
       next.delete(p.motherSku);
     } else {
-      next.set(p.motherSku, computeSuggestedDiscount(p.unitGrossRevenue, p.unitCogs));
+      next.set(p.motherSku, assumptions.discountPct);
     }
-    setSelected(next);
-  }
-
-  function updateDiscount(motherSku: string, value: number) {
-    const next = new Map(selected);
-    next.set(motherSku, Math.max(0, Math.min(0.9, value / 100)));
     setSelected(next);
   }
 
@@ -245,10 +241,7 @@ export default function CampaignsTab() {
       const product = productsByMotherSku.get(sku);
       if (product) {
         if (!next.has(product.motherSku)) {
-          next.set(
-            product.motherSku,
-            computeSuggestedDiscount(product.unitGrossRevenue, product.unitCogs)
-          );
+          next.set(product.motherSku, assumptions.discountPct);
         }
         matched++;
       } else {
@@ -273,11 +266,13 @@ export default function CampaignsTab() {
       return;
     }
 
+    // Cassia 2026-06-14: desconto é por CAMPANHA (vem do assumptions.discountPct), não por produto
+    const campaignDiscount = assumptions.discountPct;
     const selectedProducts: SelectedProduct[] = Array.from(selected.entries()).map(
-      ([motherSku, discount]) => {
+      ([motherSku]) => {
         const p = products.find((x) => x.motherSku === motherSku)!;
         const baseMargin = p.unitGrossRevenue - p.unitCogs - p.unitTax - p.unitRefund;
-        const netMargin = computeNetMargin(p, discount, assumptions);
+        const netMargin = computeNetMargin(p, campaignDiscount, assumptions);
         return {
           motherSku,
           productName: p.productName,
@@ -285,14 +280,13 @@ export default function CampaignsTab() {
           unitCogs: p.unitCogs,
           baseMargin,
           suggestedDiscount: computeSuggestedDiscount(p.unitGrossRevenue, p.unitCogs),
-          appliedDiscount: discount,
+          appliedDiscount: campaignDiscount,
           netMargin,
         };
       }
     );
 
-    const totalDiscount =
-      selectedProducts.reduce((s, p) => s + p.appliedDiscount, 0) / selectedProducts.length;
+    const totalDiscount = campaignDiscount;
     const expectedRevenue = selectedProducts.reduce(
       (s, p) => s + p.unitGrossRevenue * (1 - p.appliedDiscount),
       0
@@ -656,7 +650,8 @@ export default function CampaignsTab() {
               <tbody>
                 {filteredProducts.map((p) => {
                   const isSelected = selected.has(p.motherSku);
-                  const discount = selected.get(p.motherSku) ?? computeSuggestedDiscount(p.unitGrossRevenue, p.unitCogs);
+                  // Cassia 2026-06-14: desconto é a nível de CAMPANHA (vem da calculadora), não por produto
+                  const discount = assumptions.discountPct;
                   const marginPct = p.unitGrossRevenue > 0 ? ((p.unitGrossRevenue - p.unitCogs) / p.unitGrossRevenue) * 100 : 0;
                   const netMargin = computeNetMargin(p, discount, assumptions);
                   return (
@@ -690,32 +685,10 @@ export default function CampaignsTab() {
                       <td style={{ padding: "8px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
                         {marginPct.toFixed(0)}%
                       </td>
-                      <td style={{ padding: "8px 12px", textAlign: "right" }}>
-                        {isSelected ? (
-                          <input
-                            type="number"
-                            value={Math.round(discount * 100)}
-                            onChange={(e) => updateDiscount(p.motherSku, Number(e.target.value))}
-                            min={0}
-                            max={90}
-                            style={{
-                              width: 60,
-                              padding: "4px 8px",
-                              border: "1px solid #FF3D8B",
-                              borderRadius: 6,
-                              fontSize: 12,
-                              textAlign: "right",
-                              background: "white",
-                              color: "#FF3D8B",
-                              fontWeight: 700,
-                            }}
-                          />
-                        ) : (
-                          <span style={{ color: "var(--ink-muted)" }}>
-                            {(computeSuggestedDiscount(p.unitGrossRevenue, p.unitCogs) * 100).toFixed(0)}%
-                            <span style={{ fontSize: 9, marginLeft: 4 }}>(sug.)</span>
-                          </span>
-                        )}
+                      <td style={{ padding: "8px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                        <span style={{ color: isSelected ? "#FF3D8B" : "var(--ink-muted)", fontWeight: isSelected ? 700 : 400 }}>
+                          {(discount * 100).toFixed(0)}%
+                        </span>
                       </td>
                       <td style={{ padding: "8px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: netMargin >= 0 ? "#16A34A" : "#DC2626", fontWeight: 600 }}>
                         {fmtMoney(netMargin, market)}
