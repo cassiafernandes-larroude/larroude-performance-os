@@ -9,6 +9,7 @@ import {
   resolveAccountsForRegion,
   ACTION_TYPES,
   currencyForRegion,
+  fetchAdsMetadata,
   type MetaAccount,
 } from './meta-ads';
 import { periodToRange, previousRange, todayISO, bucketKey, granularityForPeriod, shiftISO, diffDays } from './dates';
@@ -138,6 +139,7 @@ export async function buildDashboard(
     regionRows,
     objRows,
     monthlyRows,
+    adsMetadataRaw, // Cassia 2026-06-14: status + thumbnail por ad
   ] = await Promise.all([
     // 1. Account-level current
     flatPromise(accounts.map((a) =>
@@ -183,7 +185,16 @@ export async function buildDashboard(
       fetchInsights(a.id, {
         level: 'account', timeRange: monthlyRange, fields: ['spend', 'action_values'], timeIncrement: 'monthly',
       }))),
+    // 13. Ad metadata (status + thumbnail) — Cassia 2026-06-14
+    Promise.all(accounts.map((a) => fetchAdsMetadata(a.id, 500).catch(() => [])))
+      .then(arrs => arrs.flat()),
   ]);
+
+  // Lookup metadata por ad_id
+  const adMetaMap = new Map<string, { status: string; effectiveStatus: string; thumbnail: string | null }>();
+  for (const m of (adsMetadataRaw as any[]) || []) {
+    adMetaMap.set(m.id, { status: m.status, effectiveStatus: m.effectiveStatus, thumbnail: m.thumbnail });
+  }
 
   const spend = sumNumeric(cur, 'spend');
   const impressions = sumNumeric(cur, 'impressions');
@@ -328,6 +339,7 @@ export async function buildDashboard(
       const sPur = findAction(r.actions, ACTION_TYPES.purchase);
       const sRev = findActionValue(r.action_values, ACTION_TYPES.purchase);
       const sAtc = findAction(r.actions, ACTION_TYPES.addToCart);
+      const meta = adMetaMap.get(r.ad_id);
       return {
         id: r.ad_id,
         name: r.ad_name,
@@ -341,6 +353,10 @@ export async function buildDashboard(
         ctr: NUM(r.ctr),
         roas: sSpend > 0 ? sRev / sSpend : 0,
         costPerPurchase: sPur > 0 ? sSpend / sPur : 0,
+        // Cassia 2026-06-14: metadata do ad (status + thumbnail real do criativo)
+        status: meta?.status,
+        effectiveStatus: meta?.effectiveStatus,
+        thumbnail: meta?.thumbnail || undefined,
       };
     })
     .sort((a, b) => b.spend - a.spend);

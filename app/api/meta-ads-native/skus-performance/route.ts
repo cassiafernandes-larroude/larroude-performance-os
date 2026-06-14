@@ -30,6 +30,8 @@ interface AdInput {
   spend: number;
   purchases: number;
   thumbnail?: string;
+  status?: string;
+  effectiveStatus?: string;
 }
 interface RequestBody {
   market: 'US' | 'BR';
@@ -48,6 +50,9 @@ interface AdDetail {
   thumbnail: string | null;
   spend: number;
   purchases: number;
+  status: string | null;             // raw status from Meta (ACTIVE/PAUSED/etc)
+  effectiveStatus: string | null;    // effective status (computed by Meta)
+  isActive: boolean;                 // shortcut: effective_status === 'ACTIVE'
 }
 interface SkuRow {
   sku: string;
@@ -99,6 +104,9 @@ export async function POST(req: NextRequest) {
         thumbnail: ad.thumbnail ?? null,
         spend: Number(ad.spend) || 0,
         purchases: Number(ad.purchases) || 0,
+        status: ad.status ?? null,
+        effectiveStatus: ad.effectiveStatus ?? null,
+        isActive: (ad.effectiveStatus ?? ad.status ?? '').toUpperCase() === 'ACTIVE',
       });
     }
     const skusFromAds = Object.keys(adsBySku);
@@ -108,6 +116,13 @@ export async function POST(req: NextRequest) {
       ? `AND o.financial_status NOT IN ('voided','refunded','pending','expired','authorized')`
       : `AND o.financial_status NOT IN ('voided','refunded')`;
 
+    // Cassia 2026-06-14: Mother SKU = estilo + cor (sem tamanho).
+    // Replicando a lógica do UE motherSkuOf:
+    //   L0042         → L0042
+    //   L0042-CAMEL   → L0042-CAMEL
+    //   L0042-CAMEL-7.0       → L0042-CAMEL (parts[2] é tamanho)
+    //   L0042-CAMEL-7.0-PRETO → L0042-CAMEL-PRETO (parts[2] tamanho, parts[3] adicional)
+    //   L0042-CAMEL-PRETO     → L0042-CAMEL-PRETO (parts[2] não é número)
     const topSql = `
       WITH line_items_unnested AS (
         SELECT
@@ -125,21 +140,46 @@ export async function POST(req: NextRequest) {
           AND (JSON_VALUE(o.customer, '$.tags') IS NULL OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(o.customer, '$.tags')), r'${EXCLUDED_TAGS}'))
           AND CAST(o.total_price AS NUMERIC) < ${MAX_ORDER_VALUE[market]}
       ),
-      matched AS (
+      parsed AS (
         SELECT
-          REGEXP_EXTRACT(sku_raw, r'(L\\d{3,5})') AS mother_code,
+          sku_raw,
+          SPLIT(sku_raw, '-') AS parts,
           title, qty, unit_price
         FROM line_items_unnested
-        WHERE sku_raw IS NOT NULL AND REGEXP_CONTAINS(sku_raw, r'L\\d{3,5}')
+        WHERE sku_raw IS NOT NULL AND REGEXP_CONTAINS(sku_raw, r'^L\\d{3,5}')
+      ),
+      with_mother AS (
+        SELECT
+          CASE
+            WHEN ARRAY_LENGTH(parts) < 3 THEN sku_raw
+            -- parts[OFFSET(2)] é tamanho (número)?
+            WHEN REGEXP_CONTAINS(parts[OFFSET(2)], r'^\\d+(\\.\\d+)?$')
+              THEN
+                CASE
+                  WHEN ARRAY_LENGTH(parts) >= 5 AND parts[OFFSET(4)] != ''
+                    THEN CONCAT(parts[OFFSET(0)], '-', parts[OFFSET(1)], '-', parts[OFFSET(3)], '-', parts[OFFSET(4)])
+                  WHEN ARRAY_LENGTH(parts) >= 4
+                    THEN CONCAT(parts[OFFSET(0)], '-', parts[OFFSET(1)], '-', parts[OFFSET(3)])
+                  ELSE CONCAT(parts[OFFSET(0)], '-', parts[OFFSET(1)])
+                END
+            ELSE
+              CASE
+                WHEN ARRAY_LENGTH(parts) >= 4
+                  THEN CONCAT(parts[OFFSET(0)], '-', parts[OFFSET(1)], '-', parts[OFFSET(2)], '-', parts[OFFSET(3)])
+                ELSE CONCAT(parts[OFFSET(0)], '-', parts[OFFSET(1)], '-', parts[OFFSET(2)])
+              END
+          END AS mother_sku,
+          title, qty, unit_price
+        FROM parsed
       )
       SELECT
-        mother_code AS sku,
+        mother_sku AS sku,
         ANY_VALUE(title) AS product_name,
         SUM(qty) AS units,
         SUM(qty * unit_price) AS revenue
-      FROM matched
-      WHERE mother_code IS NOT NULL
-      GROUP BY mother_code
+      FROM with_mother
+      WHERE mother_sku IS NOT NULL
+      GROUP BY mother_sku
       ORDER BY units DESC
       LIMIT ${Math.max(1, Math.min(100, limit + 200))}
     `;
@@ -184,11 +224,34 @@ export async function POST(req: NextRequest) {
       topMap.set(r.sku, { product_name: r.product_name, units: Number(r.units) || 0, revenue: Number(r.revenue) || 0 });
     }
 
+    // Cassia 2026-06-14: matching SKU ad ↔ mother SKU shopify (prefix match em ambos os lados).
+    //   Ad "L0042"           → matches mother "L0042-CAMEL", "L0042-PRETO", etc.
+    //   Ad "L0042-CAMEL"     → matches mother "L0042-CAMEL", "L0042-CAMEL-PRETO"
+    //   Ad "L0042-CAMEL-XYZ" → matches mother "L0042-CAMEL-XYZ" se exato
+    const adSkusList = Object.keys(adsBySku);
+    const findAdsForMother = (motherSku: string): AdDetail[] => {
+      const matched: AdDetail[] = [];
+      for (const adSku of adSkusList) {
+        if (adSku === motherSku) {
+          matched.push(...adsBySku[adSku]);
+        } else if (motherSku.startsWith(adSku + '-')) {
+          // ad sku é prefixo do mother → genérico cobre essa variante
+          matched.push(...adsBySku[adSku]);
+        } else if (adSku.startsWith(motherSku + '-')) {
+          // ad sku é mais específico que o mother (raro mas possível)
+          matched.push(...adsBySku[adSku]);
+        }
+      }
+      return matched;
+    };
+
     const buildRow = (sku: string): SkuRow => {
       const sales = topMap.get(sku);
-      const adsForSku = adsBySku[sku] || [];
-      const adsSpend = adsForSku.reduce((a, b) => a + b.spend, 0);
-      const adsPurchases = adsForSku.reduce((a, b) => a + b.purchases, 0);
+      const adsForSku = findAdsForMother(sku);
+      // Dedup por id pra evitar dupla contagem se um ad casar via múltiplas estratégias
+      const dedupedAds = Array.from(new Map(adsForSku.map(a => [a.id, a])).values());
+      const adsSpend = dedupedAds.reduce((a, b) => a + b.spend, 0);
+      const adsPurchases = dedupedAds.reduce((a, b) => a + b.purchases, 0);
       const shopifyRevenue = sales?.revenue ?? 0;
       const unitsSold = sales?.units ?? 0;
       return {
@@ -198,11 +261,11 @@ export async function POST(req: NextRequest) {
         unitsSold,
         shopifyRevenue,
         currency,
-        hasAds: adsForSku.length > 0 && adsSpend > 0,
+        hasAds: dedupedAds.length > 0 && adsSpend > 0,
         adsSpend,
         adsPurchases,
         roasReal: adsSpend > 0 ? shopifyRevenue / adsSpend : 0,
-        ads: adsForSku.sort((a, b) => b.spend - a.spend),
+        ads: dedupedAds.sort((a, b) => b.spend - a.spend),
       };
     };
 

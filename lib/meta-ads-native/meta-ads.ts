@@ -183,6 +183,54 @@ export async function fetchInsights(adAccountId: string, p: InsightsParams): Pro
   return j.data || [];
 }
 
+// ---------- Ad metadata (status + creative thumbnail) ----------
+// Cassia 2026-06-14: Insights API não traz status nem thumbnail do criativo.
+// Buscamos via /{account}/ads com fields=status,effective_status,creative{thumbnail_url}.
+
+export interface AdMeta {
+  id: string;
+  name?: string;
+  status: string;                   // 'ACTIVE' | 'PAUSED' | 'DELETED' | 'ARCHIVED'
+  effectiveStatus: string;          // 'ACTIVE' | 'PAUSED' | 'PENDING_REVIEW' | 'DISAPPROVED' | etc
+  thumbnail: string | null;
+}
+
+export async function fetchAdsMetadata(adAccountId: string, limit = 500): Promise<AdMeta[]> {
+  if (!adAccountId) return [];
+  const params: Record<string, string> = {
+    access_token: token(),
+    fields: 'id,name,status,effective_status,creative{thumbnail_url,image_url}',
+    limit: String(limit),
+  };
+  const qs = new URLSearchParams(params).toString();
+  const out: AdMeta[] = [];
+  let url: string | undefined = `${BASE}/${adAccountId}/ads?${qs}`;
+  let safety = 0;
+  while (url && safety < 10) {
+    safety++;
+    const r: Response = await fetch(url, { next: { revalidate: 600 } });
+    if (!r.ok) {
+      // não trava o dashboard se metadata falhar
+      console.warn(`[meta-ads] fetchAdsMetadata HTTP ${r.status} on ${adAccountId}`);
+      break;
+    }
+    const j: any = await r.json();
+    const arr = (j.data || []) as any[];
+    for (const a of arr) {
+      const thumb = a.creative?.thumbnail_url || a.creative?.image_url || null;
+      out.push({
+        id: a.id,
+        name: a.name,
+        status: a.status || 'UNKNOWN',
+        effectiveStatus: a.effective_status || 'UNKNOWN',
+        thumbnail: thumb,
+      });
+    }
+    url = j.paging?.next as string | undefined;
+  }
+  return out;
+}
+
 // ---------- Helpers for action arrays ----------
 
 export function findAction(actions: any[] | undefined, type: string): number {

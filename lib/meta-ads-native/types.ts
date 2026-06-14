@@ -63,6 +63,8 @@ export interface AdRow extends CampaignRow {
   addsToCart?: number;
   campaignName?: string;
   adsetName?: string;
+  status?: string;             // ACTIVE | PAUSED | DELETED | ARCHIVED
+  effectiveStatus?: string;    // ACTIVE | PAUSED | PENDING_REVIEW | DISAPPROVED | etc
 }
 
 export interface AgePerformanceRow {

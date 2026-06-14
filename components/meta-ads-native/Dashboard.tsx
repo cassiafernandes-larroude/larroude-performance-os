@@ -199,12 +199,12 @@ export default function MetaAdsDashboard() {
 
             <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <BarRanking
-                title="Top Campaigns"
+                title={`Top Campaigns (${period.toUpperCase()})`}
                 data={data.topCampaigns7d.map((c: any) => ({ name: c.name, value: c.spend }))}
                 formatValue={(v) => formatCurrency(v, currency, true)}
               />
               <BarRanking
-                title="Campaigns with high CPC"
+                title={`Campaigns with high CPC (${period.toUpperCase()})`}
                 data={data.highCpcCampaigns7d.map((c: any) => ({ name: c.name, value: c.cpc }))}
                 formatValue={(v) => formatCurrency(v, currency, true)}
                 color="#7E22CE"
@@ -263,7 +263,7 @@ export default function MetaAdsDashboard() {
 
             <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <BarRanking
-                title="Top Ads (by purchases)"
+                title={`Top Ads (by purchases — ${period.toUpperCase()})`}
                 data={data.topAds7d.map((a: any) => ({ name: a.name, value: a.purchases }))}
                 formatValue={(v) => formatNumber(v)}
               />

@@ -17,6 +17,9 @@ interface AdDetail {
   thumbnail: string | null;
   spend: number;
   purchases: number;
+  status: string | null;
+  effectiveStatus: string | null;
+  isActive: boolean;
 }
 interface SkuRow {
   sku: string;
@@ -61,6 +64,8 @@ export default function CreativesTab({ ads, region, since, until, currency }: Pr
       thumbnail: (a as any).thumbnail ?? null,
       spend: a.spend || 0,
       purchases: a.purchases || 0,
+      status: (a as any).status ?? null,
+      effectiveStatus: (a as any).effectiveStatus ?? null,
     }));
     fetch('/api/meta-ads-native/skus-performance', {
       method: 'POST',
@@ -205,17 +210,32 @@ function SkuQuadro({
                     <td className="px-2 py-1.5 text-right tabular-nums">{formatCurrency(r.shopifyRevenue, currency, true)}</td>
                     {/* Tag Com ads / Sem ads */}
                     <td className="px-2 py-1.5">
-                      {r.hasAds ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: 'rgba(13,148,136,0.12)', color: '#0d9488' }}>
-                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981' }} />
-                          Com ads ({r.ads.length})
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: 'rgba(156,163,175,0.15)', color: '#6b7280' }}>
-                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#9ca3af' }} />
-                          Sem ads
-                        </span>
-                      )}
+                      {(() => {
+                        const activeAds = r.ads.filter(a => a.isActive || (a.effectiveStatus || a.status || '').toUpperCase() === 'ACTIVE').length;
+                        const inactiveAds = r.ads.length - activeAds;
+                        if (activeAds > 0) {
+                          return (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: 'rgba(13,148,136,0.12)', color: '#0d9488' }}>
+                              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981' }} />
+                              Ativo ({activeAds}{inactiveAds > 0 ? `+${inactiveAds} off` : ''})
+                            </span>
+                          );
+                        }
+                        if (r.ads.length > 0) {
+                          return (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: 'rgba(156,163,175,0.18)', color: '#6b7280' }}>
+                              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#9ca3af' }} />
+                              Pausado ({r.ads.length})
+                            </span>
+                          );
+                        }
+                        return (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: 'rgba(156,163,175,0.15)', color: '#6b7280' }}>
+                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#9ca3af' }} />
+                            Sem ads
+                          </span>
+                        );
+                      })()}
                     </td>
                     {/* Criativos thumbnails clicáveis */}
                     <td className="px-2 py-1.5">
@@ -255,25 +275,38 @@ function SkuQuadro({
                       <td colSpan={9} className="px-3 py-2">
                         <div className="text-[10px] uppercase tracking-wider font-semibold mb-2" style={{ color: 'var(--ink-muted)' }}>Criativos deste SKU</div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                          {r.ads.map(ad => (
-                            <div key={ad.id} className="flex items-start gap-2 p-2 rounded" style={{ background: 'white', border: '1px solid var(--border)' }}>
-                              <img src={ad.thumbnail || FALLBACK_IMG} alt="" width={56} height={56} style={{ borderRadius: 6, objectFit: 'cover', background: '#eee', flexShrink: 0 }} onError={(e) => { (e.currentTarget as HTMLImageElement).src = FALLBACK_IMG; }} />
-                              <div className="flex-1 min-w-0">
-                                <div className="font-medium text-[11px] truncate" style={{ color: 'var(--ink)' }} title={ad.name}>{ad.name}</div>
-                                <div className="text-[10px] truncate" style={{ color: 'var(--ink-soft)' }} title={`Campanha: ${ad.campaignName || '—'}`}>
-                                  <strong>Campanha:</strong> {ad.campaignName || '—'}
-                                </div>
-                                <div className="text-[10px] truncate" style={{ color: 'var(--ink-soft)' }} title={`Adset: ${ad.adsetName || '—'}`}>
-                                  <strong>Ad set:</strong> {ad.adsetName || '—'}
-                                </div>
-                                <div className="text-[10px]" style={{ color: 'var(--ink-muted)' }}>{ad.account}</div>
-                                <div className="flex items-center gap-3 mt-1 text-[10px]" style={{ color: 'var(--ink-soft)' }}>
-                                  <span><b>Spend:</b> {formatCurrency(ad.spend, currency, true)}</span>
-                                  <span><b>Purch:</b> {formatNumber(ad.purchases)}</span>
+                          {r.ads.map(ad => {
+                            const effStatus = (ad.effectiveStatus || ad.status || 'UNKNOWN').toUpperCase();
+                            const isAct = ad.isActive || effStatus === 'ACTIVE';
+                            const statusColor = isAct ? '#10b981' : effStatus.includes('PAUSED') ? '#9ca3af' : effStatus.includes('DISAPPROVED') || effStatus.includes('DELETED') ? '#ef4444' : '#f59e0b';
+                            const statusBg = isAct ? 'rgba(13,148,136,0.12)' : effStatus.includes('PAUSED') ? 'rgba(156,163,175,0.15)' : 'rgba(245,158,11,0.12)';
+                            const statusLabel = isAct ? 'Ativo' : effStatus.replace('_', ' ').toLowerCase().replace(/^./, c => c.toUpperCase());
+                            return (
+                              <div key={ad.id} className="flex items-start gap-2 p-2 rounded" style={{ background: 'white', border: '1px solid var(--border)' }}>
+                                <img src={ad.thumbnail || FALLBACK_IMG} alt="" width={56} height={56} style={{ borderRadius: 6, objectFit: 'cover', background: '#eee', flexShrink: 0 }} onError={(e) => { (e.currentTarget as HTMLImageElement).src = FALLBACK_IMG; }} />
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-0.5">
+                                    <div className="font-medium text-[11px] truncate flex-1" style={{ color: 'var(--ink)' }} title={ad.name}>{ad.name}</div>
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-semibold whitespace-nowrap" style={{ background: statusBg, color: statusColor }}>
+                                      <span style={{ width: 5, height: 5, borderRadius: '50%', background: statusColor }} />
+                                      {statusLabel}
+                                    </span>
+                                  </div>
+                                  <div className="text-[10px] truncate" style={{ color: 'var(--ink-soft)' }} title={`Campanha: ${ad.campaignName || '—'}`}>
+                                    <strong>Campanha:</strong> {ad.campaignName || '—'}
+                                  </div>
+                                  <div className="text-[10px] truncate" style={{ color: 'var(--ink-soft)' }} title={`Adset: ${ad.adsetName || '—'}`}>
+                                    <strong>Ad set:</strong> {ad.adsetName || '—'}
+                                  </div>
+                                  <div className="text-[10px]" style={{ color: 'var(--ink-muted)' }}>{ad.account}</div>
+                                  <div className="flex items-center gap-3 mt-1 text-[10px]" style={{ color: 'var(--ink-soft)' }}>
+                                    <span><b>Spend:</b> {formatCurrency(ad.spend, currency, true)}</span>
+                                    <span><b>Purch:</b> {formatNumber(ad.purchases)}</span>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </td>
                     </tr>
