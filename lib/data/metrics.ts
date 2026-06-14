@@ -164,10 +164,23 @@ export async function getMetricBundle(
       hint: m.hint,
     });
 
-    // Meta API direto = fonte de verdade (igual ao dashboard principal)
-    // Soma todas as contas Meta US ou BR, com FX dinamico por conta para BR
-    const cGoogleSpend = num(c.google_spend);
-    const pGoogleSpend = num(p.google_spend);
+    // Cassia 2026-06-14: Google via Supermetrics SEMPRE (mesma fonte do Main Dashboard).
+    // BQ all_channels_daily como fallback. REGRA: spend Google sempre vem de Supermetrics
+    // pra paridade 100% entre Overview e Main Dashboard.
+    let cGoogleSpend = num(c.google_spend);
+    let pGoogleSpend = num(p.google_spend);
+    try {
+      const { queryGoogleAdsTotalViaSupermetrics } = await import("@/lib/main-dashboard/supermetrics");
+      const [gCur, gPrev] = await Promise.all([
+        queryGoogleAdsTotalViaSupermetrics(market, range.from, range.to).catch(() => ({ spend: 0 })),
+        queryGoogleAdsTotalViaSupermetrics(market, prevRange.from, prevRange.to).catch(() => ({ spend: 0 })),
+      ]);
+      if (gCur.spend > 0) cGoogleSpend = gCur.spend;
+      if (gPrev.spend > 0) pGoogleSpend = gPrev.spend;
+      console.log(`[overview google ${market} ${range.from}..${range.to}] supermetrics=$${cGoogleSpend.toFixed(0)} (prev=$${pGoogleSpend.toFixed(0)})`);
+    } catch (err) {
+      console.warn("[overview] Google Supermetrics failed, fallback BQ:", err);
+    }
     let cMetaSpend = Math.max(0, num(c.spend) - cGoogleSpend);
     let pMetaSpend = Math.max(0, num(p.spend) - pGoogleSpend);
     let metaApiOk = false;
