@@ -1,7 +1,7 @@
 ﻿'use client';
 import React, { useEffect, useState } from 'react';
 import { api } from './fetcher';
-import { Kpi, SectionHead, HBar, CompareCard, fmtMoney, fmtInt, fmtPct, fmtMoneyCents } from './ui';
+import { Kpi, SectionHead, HBar, CompareCard, fmtMoney, fmtInt, fmtPct, fmtMoneyCents, fmtMoneyCompact } from './ui';
 import DailyBarChart from './DailyBarChart';
 import type { Market, Period, CustomRange } from '@/types/klaviyo/models';
 import GenericDiagnosticsPanel from '@/components/shared/GenericDiagnosticsPanel';
@@ -281,7 +281,7 @@ export default function TabOverview({ market, period, custom }: { market: Market
             <CompareCard label="CTOR" camp={fmtPct(cCtor, 1)} flow={fmtPct(fCtor, 1)} note="click-to-open rate" />
             <CompareCard label="Conv. Rate" camp={fmtPct(cConvRate, 2)} flow={fmtPct(fConvRate, 2)} note="bm: >0,2%" warn={cConvRate < 0.2 || fConvRate < 0.2} />
             <CompareCard label={market === 'BR' ? 'R$/envio (RPR)' : '$/send (RPR)'} camp={fmtMoneyCents(c.rpr, market)} flow={fmtMoneyCents(f.rpr, market)} note={flowsEfficiency > 0 ? `flows ${flowsEfficiency.toFixed(1)}x more efficient` : 'per recipient'} />
-            <CompareCard label="Revenue" camp={fmtMoney(c.revenue, market)} flow={fmtMoney(f.revenue, market)} note={totalRev > 0 ? `total ${fmtMoney(totalRev, market)} · camp ${campRevPct.toFixed(0)}% · flows ${flowRevPct.toFixed(0)}%` : 'total revenue'} />
+            <CompareCard label="Revenue" camp={fmtMoneyCompact(c.revenue, market)} flow={fmtMoneyCompact(f.revenue, market)} note={totalRev > 0 ? `total ${fmtMoneyCompact(totalRev, market)} · camp ${campRevPct.toFixed(0)}% · flows ${flowRevPct.toFixed(0)}%` : 'total revenue'} />
             <CompareCard label="Sales (conversions)" camp={fmtInt(c.conversions)} flow={fmtInt(f.conversions)} note={`total: ${fmtInt(totalConv)} orders`} />
             <CompareCard label="Avg AOV" camp={fmtMoney(cAov, market)} flow={fmtMoney(fAov, market)} note={totalAov > 0 ? `combined: ${fmtMoney(totalAov, market)}` : 'avg order value'} />
           </div>
