@@ -75,7 +75,7 @@ const ORDERS_TABLE: Record<Market, string> = {
  */
 // Cassia 2026-06-12: alinhado com Main/CAC/UE → exclui b2b|wholesale|marketplace|redo|influencer
 // tanto em customer.tags quanto em order.tags.
-const COMMON_FILTERS = `
+const COMMON_FILTERS_BASE = `
   cancelled_at IS NULL
   AND test = FALSE
   AND JSON_VALUE(customer, '$.id') IS NOT NULL
@@ -97,6 +97,28 @@ const COMMON_FILTERS = `
     OR LOWER(IFNULL(tags, '')) LIKE '%loop:%'
   )
 `;
+
+// Cassia 2026-06-14: filtros DTC por market (threshold + PIX não-pago BR).
+// Alinha LTV com Main/CAC/Overview/NorthStar — DTC only.
+const LTV_MAX_ORDER_VALUE: Record<Market, number> = { US: 30000, BR: 25000 };
+
+function dtcExtras(market: Market): string {
+  const pixFilter = market === 'BR'
+    ? `AND financial_status NOT IN ('voided','refunded','pending','expired','authorized')`
+    : '';
+  return `
+    AND CAST(total_price AS NUMERIC) < ${LTV_MAX_ORDER_VALUE[market]}
+    ${pixFilter}
+  `;
+}
+
+/** COMMON_FILTERS + threshold + PIX (BR). Use sempre que houver market disponível. */
+function COMMON_FILTERS_DTC(market: Market): string {
+  return COMMON_FILTERS_BASE + dtcExtras(market);
+}
+
+/** Compat alias — mantém retrocompat para queries internas (sem market) — sem threshold/PIX. */
+const COMMON_FILTERS = COMMON_FILTERS_BASE;
 
 /**
  * net_sales = total_line_items_price - total_discounts - refunds
@@ -128,7 +150,7 @@ const NET_SALES_EXPR = `
  * Prepend this to a query's WITH clause, then filter target table with
  *   ... AND id IN (SELECT order_id FROM valid_orders)
  */
-function validOrdersCte(table: string): string {
+function validOrdersCte(table: string, market: Market): string {
   return `
   __vo_refunded AS (
     SELECT o.id AS order_id,
@@ -150,7 +172,7 @@ function validOrdersCte(table: string): string {
       CAST(JSON_VALUE(li, '$.quantity') AS FLOAT64) AS qty
     FROM \`${table}\` o,
       UNNEST(JSON_QUERY_ARRAY(o.line_items)) AS li
-    WHERE ${COMMON_FILTERS.replace(/test = FALSE/, 'o.test = FALSE').replace(/cancelled_at IS NULL/, 'o.cancelled_at IS NULL').replace(/JSON_VALUE\(customer/g, 'JSON_VALUE(o.customer').replace(/(?<![A-Za-z_])name LIKE/g, 'o.name LIKE').replace(/IFNULL\(tags/g, 'IFNULL(o.tags').replace(/IFNULL\(note/g, 'IFNULL(o.note')}
+    WHERE ${COMMON_FILTERS_DTC(market).replace(/test = FALSE/, 'o.test = FALSE').replace(/cancelled_at IS NULL/, 'o.cancelled_at IS NULL').replace(/JSON_VALUE\(customer/g, 'JSON_VALUE(o.customer').replace(/(?<![A-Za-z_])name LIKE/g, 'o.name LIKE').replace(/IFNULL\(tags/g, 'IFNULL(o.tags').replace(/IFNULL\(note/g, 'IFNULL(o.note').replace(/CAST\(total_price/g, 'CAST(o.total_price').replace(/(?<![A-Za-z_.])financial_status/g, 'o.financial_status')}
   ),
   __vo_clean_li AS (
     SELECT r.*, r.qty - IFNULL(rf.refunded_qty, 0) AS net_qty
@@ -364,7 +386,7 @@ export async function getLtvKpiSummary(
   // exclui TroquEcommerce + recompras de mesmo produto+cor.
   const summaryQuery = `
     WITH
-    ${validOrdersCte(table)},
+    ${validOrdersCte(table, market)},
     base AS (
       SELECT
         JSON_VALUE(customer, '$.id') AS customer_id,
@@ -372,7 +394,7 @@ export async function getLtvKpiSummary(
         id AS order_id,
         ${NET_SALES_EXPR} AS net_sales
       FROM \`${table}\`
-      WHERE ${COMMON_FILTERS}
+      WHERE ${COMMON_FILTERS_DTC(market)}
         AND DATE(created_at) BETWEEN @start AND @end
         AND id IN (SELECT order_id FROM valid_orders)
     ),
@@ -454,7 +476,7 @@ export async function getLtvKpiSummary(
           JSON_VALUE(customer, '$.id') AS customer_id,
           DATE(created_at) AS order_date
         FROM \`${table}\`
-        WHERE ${COMMON_FILTERS}
+        WHERE ${COMMON_FILTERS_DTC(market)}
       )
       GROUP BY customer_id
     )
@@ -553,14 +575,14 @@ export async function getDailyLtvSeries(
   // Série diária — exclui trocas (TroquEcommerce + mesmo produto+cor)
   const q = `
     WITH
-    ${validOrdersCte(table)},
+    ${validOrdersCte(table, market)},
     base AS (
       SELECT
         JSON_VALUE(customer, '$.id') AS customer_id,
         DATE(created_at) AS order_date,
         ${NET_SALES_EXPR} AS net_sales
       FROM \`${table}\`
-      WHERE ${COMMON_FILTERS}
+      WHERE ${COMMON_FILTERS_DTC(market)}
         AND DATE(created_at) BETWEEN @start AND @end
         AND id IN (SELECT order_id FROM valid_orders)
     ),
@@ -638,7 +660,7 @@ export async function getMonthlyLtvSeries(market: Market): Promise<MonthlyLtvPoi
   // exclui TroquEcommerce + recompras de mesmo produto+cor.
   const q = `
     WITH
-    ${validOrdersCte(table)},
+    ${validOrdersCte(table, market)},
     window_orders AS (
       SELECT
         JSON_VALUE(customer, '$.id') AS customer_id,
@@ -647,7 +669,7 @@ export async function getMonthlyLtvSeries(market: Market): Promise<MonthlyLtvPoi
         FORMAT_DATE('%Y-%m', DATE(created_at)) AS ym,
         ${NET_SALES_EXPR} AS net_sales
       FROM \`${table}\`
-      WHERE ${COMMON_FILTERS}
+      WHERE ${COMMON_FILTERS_DTC(market)}
         AND DATE(created_at) >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 11 MONTH), MONTH)
         AND id IN (SELECT order_id FROM valid_orders)
     ),
@@ -657,7 +679,7 @@ export async function getMonthlyLtvSeries(market: Market): Promise<MonthlyLtvPoi
         JSON_VALUE(customer, '$.id') AS customer_id,
         MIN(DATE(created_at)) AS first_d
       FROM \`${table}\`
-      WHERE ${COMMON_FILTERS}
+      WHERE ${COMMON_FILTERS_DTC(market)}
         AND id IN (SELECT order_id FROM valid_orders)
       GROUP BY customer_id
     ),
@@ -850,12 +872,12 @@ export async function getProductLtv(
   // Inclui apenas orders válidas (exclui trocas + recompras de mesmo produto+cor)
   const custLifetimeQuery = `
     WITH
-    ${validOrdersCte(table)}
+    ${validOrdersCte(table, market)}
     SELECT
       JSON_VALUE(customer, '$.id') AS customer_id,
       SUM(${NET_SALES_EXPR}) AS lifetime_in_window
     FROM \`${table}\`
-    WHERE ${COMMON_FILTERS}
+    WHERE ${COMMON_FILTERS_DTC(market)}
       AND DATE(created_at) BETWEEN @start AND @end
       AND id IN (SELECT order_id FROM valid_orders)
     GROUP BY customer_id
@@ -877,7 +899,7 @@ export async function getProductLtv(
   // Line items dos produtos no período — exclui trocas + recompras de mesmo produto+cor
   const lineItemsQuery = `
     WITH
-    ${validOrdersCte(table)},
+    ${validOrdersCte(table, market)},
     refunded AS (
       SELECT
         o.id AS order_id,
@@ -900,7 +922,7 @@ export async function getProductLtv(
         li AS line_item_json
       FROM \`${table}\` o,
         UNNEST(JSON_QUERY_ARRAY(o.line_items)) AS li
-      WHERE ${COMMON_FILTERS.replace(/test = FALSE/, 'o.test = FALSE').replace(/cancelled_at IS NULL/, 'o.cancelled_at IS NULL').replace(/JSON_VALUE\(customer/g, 'JSON_VALUE(o.customer')}
+      WHERE ${COMMON_FILTERS_DTC(market).replace(/test = FALSE/, 'o.test = FALSE').replace(/cancelled_at IS NULL/, 'o.cancelled_at IS NULL').replace(/JSON_VALUE\(customer/g, 'JSON_VALUE(o.customer').replace(/CAST\(total_price/g, 'CAST(o.total_price').replace(/(?<![A-Za-z_.])financial_status/g, 'o.financial_status')}
         AND DATE(o.created_at) BETWEEN @start AND @end
         AND o.id IN (SELECT order_id FROM valid_orders)
     )
@@ -1112,14 +1134,14 @@ export async function getRetentionStats(market: Market): Promise<RetentionStats>
   // de mesmo produto+cor) — agora é "returning genuíno", não inflado por trocas.
   const q = `
     WITH
-    ${validOrdersCte(table)},
+    ${validOrdersCte(table, market)},
     base AS (
       SELECT
         JSON_VALUE(customer, '$.id') AS customer_id,
         DATE(created_at) AS order_date,
         id AS order_id
       FROM \`${table}\`
-      WHERE ${COMMON_FILTERS}
+      WHERE ${COMMON_FILTERS_DTC(market)}
     ),
     valid_base AS (
       SELECT * FROM base WHERE order_id IN (SELECT order_id FROM valid_orders)
@@ -1217,7 +1239,7 @@ export async function getCustomerJourney(market: Market): Promise<CustomerJourne
         CAST(JSON_VALUE(li, '$.price') AS FLOAT64) AS price
       FROM \`${table}\` o,
         UNNEST(JSON_QUERY_ARRAY(o.line_items)) AS li
-      WHERE ${COMMON_FILTERS.replace(/test = FALSE/, 'o.test = FALSE').replace(/cancelled_at IS NULL/, 'o.cancelled_at IS NULL').replace(/JSON_VALUE\(customer/g, 'JSON_VALUE(o.customer').replace(/(?<![A-Za-z_])name LIKE/g, 'o.name LIKE').replace(/IFNULL\(tags/g, 'IFNULL(o.tags').replace(/IFNULL\(note/g, 'IFNULL(o.note')}
+      WHERE ${COMMON_FILTERS_DTC(market).replace(/test = FALSE/, 'o.test = FALSE').replace(/cancelled_at IS NULL/, 'o.cancelled_at IS NULL').replace(/JSON_VALUE\(customer/g, 'JSON_VALUE(o.customer').replace(/(?<![A-Za-z_])name LIKE/g, 'o.name LIKE').replace(/IFNULL\(tags/g, 'IFNULL(o.tags').replace(/IFNULL\(note/g, 'IFNULL(o.note').replace(/CAST\(total_price/g, 'CAST(o.total_price').replace(/(?<![A-Za-z_.])financial_status/g, 'o.financial_status')}
     ),
     clean_li AS (
       SELECT r.*, r.qty - IFNULL(rf.refunded_qty, 0) AS net_qty

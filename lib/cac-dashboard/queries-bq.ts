@@ -267,13 +267,17 @@ const TZ: Record<Market, string> = {
 };
 
 function shopifyFilters(market: Market, alias = 'o'): string {
+  // Cassia 2026-06-14: BR exclui PIX pendente/expired/authorized (DTC = apenas pagas)
+  const pixFilter = market === 'BR'
+    ? `AND ${alias}.financial_status NOT IN ('voided', 'refunded', 'pending', 'expired', 'authorized')`
+    : `AND ${alias}.financial_status NOT IN ('voided', 'refunded')`;
   return `
     AND ${alias}.cancelled_at IS NULL
     AND ${alias}.test = FALSE
     AND NOT REGEXP_CONTAINS(LOWER(IFNULL(${alias}.tags, '')), r'${EXCLUDED_TAGS_REGEX}')
     AND (JSON_VALUE(${alias}.customer, '$.tags') IS NULL OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(${alias}.customer, '$.tags')), r'${EXCLUDED_TAGS_REGEX}'))
     AND CAST(${alias}.total_price AS NUMERIC) < ${MAX_ORDER_VALUE[market]}
-    AND ${alias}.financial_status NOT IN ('voided', 'refunded')
+    ${pixFilter}
   `;
 }
 

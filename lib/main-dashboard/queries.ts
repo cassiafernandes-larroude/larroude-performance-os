@@ -26,15 +26,21 @@ const TZ: Record<Market, string> = {
 // 1) Tags B2B / wholesale / marketplace / redo (na order OU no customer)
 // 2) Orders com total_price acima do cap por mercado (US > $30k, BR > R$25k)
 //    Pedidos acima desse valor sao tipicamente atacado/marketplace/redo
+// 3) BR: PIX nao-pago (financial_status IN pending/expired/authorized) — Cassia 2026-06-14
 const MAX_ORDER_VALUE: Record<Market, number> = { US: 30000, BR: 25000 };
 const EXCLUDED_TAGS_REGEX = 'b2b|wholesale|marketplace|redo';
 
 function shopifyOrderFilters(market: Market, alias = ''): string {
   const a = alias ? `${alias}.` : '';
+  // Cassia 2026-06-14: BR exclui PIX pendente/expired/authorized (DTC = apenas pagas)
+  const pixFilter = market === 'BR'
+    ? `AND ${a}financial_status NOT IN ('pending','expired','authorized')`
+    : '';
   return `
     AND NOT REGEXP_CONTAINS(LOWER(IFNULL(${a}tags, '')), r'${EXCLUDED_TAGS_REGEX}')
     AND (JSON_VALUE(${a}customer, '$.tags') IS NULL OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(${a}customer, '$.tags')), r'${EXCLUDED_TAGS_REGEX}'))
-    AND CAST(${a}total_price AS NUMERIC) < ${MAX_ORDER_VALUE[market]}`;
+    AND CAST(${a}total_price AS NUMERIC) < ${MAX_ORDER_VALUE[market]}
+    ${pixFilter}`;
 }
 
 // Para gold_sales.* store usa 'US' / 'BR' uppercase
