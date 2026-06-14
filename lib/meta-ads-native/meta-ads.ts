@@ -195,6 +195,66 @@ export interface AdMeta {
   thumbnail: string | null;
 }
 
+/**
+ * Cassia 2026-06-14: busca status + criativo para IDs específicos de ads via /?ids=.
+ * Garante que pegamos APENAS ads que rodaram no período (lista vinda dos insights)
+ * e SEM cache (cache:'no-store') — status reflete momento exato da consulta.
+ *
+ * Meta limita ~50 ids por request — batcheamos em chunks.
+ */
+export async function fetchAdsMetadataByIds(adIds: string[]): Promise<AdMeta[]> {
+  if (!adIds || adIds.length === 0) return [];
+  const BATCH_SIZE = 50;
+  const out: AdMeta[] = [];
+  const fields = 'id,name,status,effective_status,creative{thumbnail_url,image_url,image_hash,object_story_spec{link_data{picture,image_hash},video_data{image_url}},asset_feed_spec{images{url}}}';
+
+  for (let i = 0; i < adIds.length; i += BATCH_SIZE) {
+    const chunk = adIds.slice(i, i + BATCH_SIZE);
+    const params = new URLSearchParams({
+      access_token: token(),
+      ids: chunk.join(','),
+      fields,
+    });
+    const url = `${BASE}/?${params.toString()}`;
+    try {
+      // cache: 'no-store' — sempre busca status atual
+      const r = await fetch(url, { cache: 'no-store' });
+      if (!r.ok) {
+        console.warn(`[meta-ads] fetchAdsMetadataByIds HTTP ${r.status} for batch ${i}`);
+        continue;
+      }
+      const j: any = await r.json();
+      // Response shape: { "<ad_id>": { id, name, status, ... }, ... }
+      for (const adId of chunk) {
+        const a = j[adId];
+        if (!a) continue;
+        const c = a.creative || {};
+        const oss = c.object_story_spec || {};
+        const link = oss.link_data || {};
+        const video = oss.video_data || {};
+        const assetImages = c.asset_feed_spec?.images || [];
+        const thumb =
+          c.thumbnail_url ||
+          c.image_url ||
+          link.picture ||
+          video.image_url ||
+          (Array.isArray(assetImages) && assetImages[0]?.url) ||
+          null;
+        out.push({
+          id: a.id,
+          name: a.name,
+          status: a.status || 'UNKNOWN',
+          effectiveStatus: a.effective_status || 'UNKNOWN',
+          thumbnail: thumb,
+        });
+      }
+    } catch (e) {
+      console.warn(`[meta-ads] fetchAdsMetadataByIds error batch ${i}:`, e);
+    }
+  }
+  return out;
+}
+
 export async function fetchAdsMetadata(adAccountId: string, limit = 1000): Promise<AdMeta[]> {
   if (!adAccountId) return [];
   // Cassia 2026-06-14: pega thumbnail de TODOS os tipos de criativo (video, image, dynamic).

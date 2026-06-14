@@ -10,6 +10,7 @@ import {
   ACTION_TYPES,
   currencyForRegion,
   fetchAdsMetadata,
+  fetchAdsMetadataByIds,
   type MetaAccount,
 } from './meta-ads';
 import { periodToRange, previousRange, todayISO, bucketKey, granularityForPeriod, shiftISO, diffDays } from './dates';
@@ -185,16 +186,22 @@ export async function buildDashboard(
       fetchInsights(a.id, {
         level: 'account', timeRange: monthlyRange, fields: ['spend', 'action_values'], timeIncrement: 'monthly',
       }))),
-    // 13. Ad metadata (status + thumbnail) — Cassia 2026-06-14
-    Promise.all(accounts.map((a) => fetchAdsMetadata(a.id, 500).catch(() => [])))
-      .then(arrs => arrs.flat()),
+    // 13. Placeholder — adsMetadata é buscado APÓS adsRaw chegar (precisa dos ad_ids)
+    Promise.resolve([] as any[]),
   ]);
 
-  // Lookup metadata por ad_id
+  // Cassia 2026-06-14: busca status REAL TIME pra ads que rodaram no período.
+  // Usa /?ids= (no-store) — garante status atual, sem cache stale, sem limite de pagina.
+  const adIdsFromInsights = (adsRaw as any[]).map(r => r.ad_id).filter(Boolean);
+  const adsMetadataFresh = adIdsFromInsights.length > 0
+    ? await fetchAdsMetadataByIds(adIdsFromInsights).catch((e) => { console.warn('[aggregator] metadata fetch failed:', e); return []; })
+    : [];
+
   const adMetaMap = new Map<string, { status: string; effectiveStatus: string; thumbnail: string | null }>();
-  for (const m of (adsMetadataRaw as any[]) || []) {
+  for (const m of adsMetadataFresh) {
     adMetaMap.set(m.id, { status: m.status, effectiveStatus: m.effectiveStatus, thumbnail: m.thumbnail });
   }
+  console.log(`[aggregator] ${adIdsFromInsights.length} ads in period, ${adsMetadataFresh.length} metadata fetched`);
 
   const spend = sumNumeric(cur, 'spend');
   const impressions = sumNumeric(cur, 'impressions');
