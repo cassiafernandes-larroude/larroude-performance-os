@@ -195,7 +195,7 @@ export interface AdMeta {
   thumbnail: string | null;
 }
 
-export async function fetchAdsMetadata(adAccountId: string, limit = 500): Promise<AdMeta[]> {
+export async function fetchAdsMetadata(adAccountId: string, limit = 1000): Promise<AdMeta[]> {
   if (!adAccountId) return [];
   const params: Record<string, string> = {
     access_token: token(),
@@ -206,9 +206,10 @@ export async function fetchAdsMetadata(adAccountId: string, limit = 500): Promis
   const out: AdMeta[] = [];
   let url: string | undefined = `${BASE}/${adAccountId}/ads?${qs}`;
   let safety = 0;
-  while (url && safety < 10) {
+  // Cassia 2026-06-14: cache 60s só pra status refletir mudanças no mesmo dia.
+  while (url && safety < 20) {
     safety++;
-    const r: Response = await fetch(url, { next: { revalidate: 600 } });
+    const r: Response = await fetch(url, { next: { revalidate: 60 } });
     if (!r.ok) {
       // não trava o dashboard se metadata falhar
       console.warn(`[meta-ads] fetchAdsMetadata HTTP ${r.status} on ${adAccountId}`);

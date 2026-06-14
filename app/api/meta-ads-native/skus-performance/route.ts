@@ -95,6 +95,13 @@ export async function POST(req: NextRequest) {
       if (!ref || ref.type !== 'sku') continue; // só processa SKUs (collections ficam de fora aqui)
       const sku = ref.value;
       if (!adsBySku[sku]) adsBySku[sku] = [];
+      // Cassia 2026-06-14: se Meta metadata não veio (limite de paginação, etc),
+      // usar spend>0 como proxy de "ativo" — se gastou no período, estava rodando.
+      const knownStatus = (ad.effectiveStatus ?? ad.status ?? '').toUpperCase();
+      const explicitlyPaused = knownStatus === 'PAUSED' || knownStatus === 'DELETED' || knownStatus === 'ARCHIVED';
+      const explicitlyActive = knownStatus === 'ACTIVE';
+      const isActive = explicitlyActive
+        || (!explicitlyPaused && Number(ad.spend) > 0); // fallback: gastou = ativo
       adsBySku[sku].push({
         id: ad.id,
         name: ad.name,
@@ -106,7 +113,7 @@ export async function POST(req: NextRequest) {
         purchases: Number(ad.purchases) || 0,
         status: ad.status ?? null,
         effectiveStatus: ad.effectiveStatus ?? null,
-        isActive: (ad.effectiveStatus ?? ad.status ?? '').toUpperCase() === 'ACTIVE',
+        isActive,
       });
     }
     const skusFromAds = Object.keys(adsBySku);
