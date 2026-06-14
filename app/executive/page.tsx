@@ -269,7 +269,7 @@ export default async function ExecutivePage({
           <MarketCard flag="🇧🇷" label="Brazil" data={c.by_market.BR} native="BRL" totalRev={c.total_revenue} totalSpend={c.total_ad_spend} brData={c.by_market.BR} />
         </div>
         <div className="text-[10px] mb-6 px-3 py-2 rounded" style={{ background: "var(--paper)", color: "var(--ink-muted)" }}>
-          <strong style={{ color: "var(--ink-soft)" }}>How to read:</strong> Investment Total inclui TODOS os canais (Meta + Google + Klaviyo + Attentive + Criteo + Agent.shop + Awin + ShopMy), igual ao Dashboard Principal.
+          <strong style={{ color: "var(--ink-soft)" }}>How to read:</strong> Investment Total inclui Meta + Google + Tools (Klaviyo, Attentive, Criteo, Agent.shop, Awin, ShopMy), igual ao Dashboard Principal.
           {" "}<strong style={{ color: "var(--ink-soft)" }}>Profit Op</strong> = Revenue − Investment Total.
           {" "}<strong style={{ color: "var(--ink-soft)" }}>Profit UE</strong> ≈ aplicação das regras do Unit Economics no agregado (COGS 30%, Tax 8% US / 12% BR, Card 3.5%, PIX 5%, Frete/unit). Veja UE para análise por produto.
         </div>
@@ -404,14 +404,13 @@ function MarketCard({ flag, label, data, native, totalRev, totalSpend }: {
 
       {/* Investment breakdown por canal */}
       <div className="text-[10px] uppercase tracking-wider font-semibold mb-1.5" style={{ color: "var(--ink-muted)" }}>Investment breakdown</div>
-      <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]" style={{ color: "var(--ink-soft)" }}>
-        <div className="flex justify-between"><span>Meta Ads</span><span className="font-num font-semibold" style={{ color: "var(--ink)" }}>{formatCurrency(data.meta, "USD", false)}</span></div>
-        <div className="flex justify-between"><span>Google Ads</span><span className="font-num font-semibold" style={{ color: "var(--ink)" }}>{formatCurrency(data.google, "USD", false)}</span></div>
-        <div className="flex justify-between"><span>Fixed tools</span><span className="font-num font-semibold" style={{ color: "var(--ink)" }}>{formatCurrency(data.tools, "USD", false)}</span></div>
-        <div className="flex justify-between"><span>% revenue affiliates</span><span className="font-num font-semibold" style={{ color: "var(--ink)" }}>{formatCurrency(data.percent_rev, "USD", false)}</span></div>
+      <div className="grid grid-cols-3 gap-x-3 gap-y-1 text-[11px]" style={{ color: "var(--ink-soft)" }}>
+        <div className="flex flex-col"><span>Meta Ads</span><span className="font-num font-semibold" style={{ color: "var(--ink)" }}>{formatCurrency(data.meta, "USD", false)}</span></div>
+        <div className="flex flex-col"><span>Google Ads</span><span className="font-num font-semibold" style={{ color: "var(--ink)" }}>{formatCurrency(data.google, "USD", false)}</span></div>
+        <div className="flex flex-col"><span>Tools</span><span className="font-num font-semibold" style={{ color: "var(--ink)" }}>{formatCurrency(data.tools + data.percent_rev, "USD", false)}</span></div>
       </div>
       <div className="text-[9px] italic mt-2" style={{ color: "var(--ink-muted)" }}>
-        Tools: Klaviyo · Attentive · Criteo · Agent.shop  ·  % rev: Awin · ShopMy
+        Tools: Klaviyo · Attentive · Criteo · Agent.shop · Awin · ShopMy
       </div>
     </div>
   );
