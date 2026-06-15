@@ -299,7 +299,8 @@ export default function InventoryDashboard() {
           if (e.button !== 0) return;
           isDown = true;
           moved = false;
-          el.classList.add('dragging');
+          // NÃO adicionar `dragging` aqui — só quando começar a mover de fato.
+          // Adicionar no mousedown quebra o click dos <tr> (pointer-events: none).
           startX = e.pageX - el.offsetLeft;
           startY = e.pageY - el.offsetTop;
           scrollLeft = el.scrollLeft;
@@ -314,14 +315,21 @@ export default function InventoryDashboard() {
         };
         const onMove = (e: MouseEvent) => {
           if (!isDown) return;
-          e.preventDefault();
           const x = e.pageX - el.offsetLeft;
           const y = e.pageY - el.offsetTop;
           const dx = (x - startX) * 1.4;
           const dy = (y - startY) * 1.4;
-          if (Math.abs(dx) > 3 || Math.abs(dy) > 3) moved = true;
-          el.scrollLeft = scrollLeft - dx;
-          el.scrollTop = scrollTop - dy;
+          // Só dispara o modo "dragging" depois de > 5px de movimento — assim cliques
+          // simples não são engolidos pelo overlay de pointer-events: none.
+          if (!moved && (Math.abs(dx) > 5 || Math.abs(dy) > 5)) {
+            moved = true;
+            el.classList.add('dragging');
+          }
+          if (moved) {
+            e.preventDefault();
+            el.scrollLeft = scrollLeft - dx;
+            el.scrollTop = scrollTop - dy;
+          }
         };
         // Evita que click dispare depois de drag
         const onClick = (e: MouseEvent) => {
@@ -869,7 +877,7 @@ export default function InventoryDashboard() {
         {/* 📋 Detalhe */}
         <div className="section-head" id="sec-detalhe">
           <span className="section-pill sp-purple">📋 Detalhe</span>
-          <span className="title">Tabela completa · todos os modelos · filtros + busca + paginação</span>
+          <span className="title">Tabela completa · todos os modelos · <b>duplo-clique abre estoque por tamanho</b></span>
           <span className="right-info">{detalheFull.length} modelos</span>
         </div>
         <div className="list-card">
@@ -930,9 +938,9 @@ export default function InventoryDashboard() {
                 return (
                   <tr
                     key={p.row.s}
-                    onClick={() => setSelected({ sku: p.row.s, name: p.row.n })}
-                    style={{ cursor: 'pointer' }}
-                    title="Clique para ver estoque por tamanho"
+                    onDoubleClick={() => setSelected({ sku: p.row.s, name: p.row.n })}
+                    style={{ cursor: 'pointer', userSelect: 'none' }}
+                    title="Duplo-clique para ver estoque por tamanho"
                   >
                     <ProductCell row={p.row} />
                     <ProductionCell row={p.row} />
