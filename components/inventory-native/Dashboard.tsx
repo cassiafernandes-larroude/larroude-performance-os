@@ -48,6 +48,15 @@ interface Data {
   rows: Row[];
 }
 
+interface VariantRow {
+  sku: string;
+  size: string;
+  inStock: number;
+  onDemand: number;
+  fromBatch: number;
+  total: number;
+}
+
 const PERIOD_DAYS: Record<Period, number> = { '7d': 7, '14d': 14, '28d': 28, '3M': 90, '6M': 180, '12M': 365 };
 const PERIOD_LABEL: Record<Period, string> = { '7d': '7D', '14d': '14D', '28d': '28D', '3M': '3M', '6M': '6M', '12M': '12M' };
 
@@ -183,7 +192,7 @@ function origins(r: Row): { estoque: boolean; ondemand: boolean; frombatch: bool
   };
 }
 
-const PAGE_SIZE = 25; // Cassia 2026-06-15: 25 linhas/pag em todos os blocos paginados
+const PAGE_SIZE = 15; // Cassia 2026-06-15: 15 linhas/pag em todos os blocos paginados
 
 export default function InventoryDashboard() {
   const [market, setMarket] = useState<Market>('US');
@@ -203,6 +212,12 @@ export default function InventoryDashboard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Modal drill-down de variantes
+  const [selected, setSelected] = useState<{ sku: string; name: string } | null>(null);
+  const [variants, setVariants] = useState<VariantRow[] | null>(null);
+  const [variantsLoading, setVariantsLoading] = useState(false);
+  const [variantsError, setVariantsError] = useState<string | null>(null);
+
   const load = async () => {
     setLoading(true); setError(null);
     try {
@@ -212,6 +227,44 @@ export default function InventoryDashboard() {
     } catch (e: any) { setError(e.message); } finally { setLoading(false); }
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [market]);
+
+  // Carrega variantes quando um produto é clicado na tabela Detalhe
+  useEffect(() => {
+    if (!selected) { setVariants(null); setVariantsError(null); return; }
+    let cancelled = false;
+    setVariantsLoading(true);
+    setVariantsError(null);
+    setVariants(null);
+    fetch(`/api/inventory/${market}/variants/${encodeURIComponent(selected.sku)}`)
+      .then(async r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then(d => {
+        if (cancelled) return;
+        setVariants(d.variants || []);
+      })
+      .catch(e => {
+        if (cancelled) return;
+        setVariantsError(e?.message || 'Erro ao carregar variantes');
+      })
+      .finally(() => {
+        if (!cancelled) setVariantsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [selected, market]);
+
+  // Tecla ESC fecha o modal
+  useEffect(() => {
+    if (!selected) return;
+    const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') setSelected(null); };
+    window.addEventListener('keydown', onEsc);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onEsc);
+      document.body.style.overflow = '';
+    };
+  }, [selected]);
   useEffect(() => {
     setPage(1); setPageConc(1); setPageProd(1); setPageCap(1); setPageRent(1);
   }, [statusFilter, search, origin, production, period, market]);
@@ -875,7 +928,12 @@ export default function InventoryDashboard() {
               {detalhe.map(p => {
                 const pctTot = kpis.revP > 0 ? p.revenue / kpis.revP : 0;
                 return (
-                  <tr key={p.row.s}>
+                  <tr
+                    key={p.row.s}
+                    onClick={() => setSelected({ sku: p.row.s, name: p.row.n })}
+                    style={{ cursor: 'pointer' }}
+                    title="Clique para ver estoque por tamanho"
+                  >
                     <ProductCell row={p.row} />
                     <ProductionCell row={p.row} />
                     <td className="num"><b>{fmtMoney(p.revenue, market)}</b></td>
@@ -973,6 +1031,18 @@ export default function InventoryDashboard() {
           Larroudé Inventory Intelligence · {data ? `gerado em ${fmtDate(data.generatedAt)}` : '—'} · BigQuery Larroudé OS
         </div>
       </div>
+
+      {/* Modal Drill-Down: estoque por variante (tamanho) */}
+      {selected && (
+        <VariantsModal
+          sku={selected.sku}
+          name={selected.name}
+          variants={variants}
+          loading={variantsLoading}
+          error={variantsError}
+          onClose={() => setSelected(null)}
+        />
+      )}
     </div>
   );
 }
@@ -1074,6 +1144,102 @@ function RemessaInfo({ qty, when, po, tone }: {
           {visible.join(', ')}{extra > 0 ? ` +${extra}` : ''}
         </div>
       )}
+    </div>
+  );
+}
+
+function VariantsModal({ sku, name, variants, loading, error, onClose }: {
+  sku: string;
+  name: string;
+  variants: VariantRow[] | null;
+  loading: boolean;
+  error: string | null;
+  onClose: () => void;
+}) {
+  // Total agregado
+  const totals = (variants || []).reduce(
+    (acc, v) => ({
+      inStock: acc.inStock + (v.inStock || 0),
+      onDemand: acc.onDemand + (v.onDemand || 0),
+      fromBatch: acc.fromBatch + (v.fromBatch || 0),
+      total: acc.total + (v.total || 0),
+    }),
+    { inStock: 0, onDemand: 0, fromBatch: 0, total: 0 }
+  );
+
+  return (
+    <div className="inv-modal-overlay" onClick={onClose}>
+      <div className="inv-modal-card" onClick={e => e.stopPropagation()}>
+        <button className="inv-modal-close" onClick={onClose} aria-label="Fechar">×</button>
+
+        <div className="inv-modal-label">ESTOQUE POR TAMANHO</div>
+        <h2 className="inv-modal-title">{name}</h2>
+        <div className="inv-modal-sku">{sku}</div>
+
+        {loading && (
+          <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--inv-ink-3)', fontWeight: 600 }}>
+            ⏳ Carregando variantes…
+          </div>
+        )}
+
+        {error && (
+          <div style={{
+            padding: '16px 18px', background: 'var(--inv-red-soft)',
+            color: 'var(--inv-red)', borderRadius: 12, fontSize: 13, fontWeight: 600,
+            marginTop: 16,
+          }}>
+            ⚠️ Não foi possível carregar as variantes: {error}
+          </div>
+        )}
+
+        {!loading && !error && variants && variants.length === 0 && (
+          <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--inv-ink-3)' }}>
+            Nenhuma variante encontrada para este SKU.
+          </div>
+        )}
+
+        {!loading && !error && variants && variants.length > 0 && (
+          <div className="inv-modal-table-wrap">
+            <table className="inv-modal-table">
+              <thead>
+                <tr>
+                  <th>TAMANHO</th>
+                  <th className="num" style={{ color: 'var(--inv-green)' }}>EM ESTOQUE</th>
+                  <th className="num" style={{ color: 'var(--inv-purple)' }}>ON-DEMAND</th>
+                  <th className="num" style={{ color: 'var(--inv-orange)' }}>FROM-BATCH</th>
+                  <th className="num">TOTAL</th>
+                </tr>
+              </thead>
+              <tbody>
+                {variants.map(v => (
+                  <tr key={v.sku}>
+                    <td className="size">{v.size || '—'}</td>
+                    <td className="num" style={{ color: 'var(--inv-green)', fontWeight: 700 }}>
+                      {v.inStock > 0 ? fmtNum(v.inStock) : <span style={{ color: 'var(--inv-ink-4)', fontWeight: 400 }}>—</span>}
+                    </td>
+                    <td className="num" style={{ color: 'var(--inv-purple)', fontWeight: 700 }}>
+                      {v.onDemand > 0 ? fmtNum(v.onDemand) : <span style={{ color: 'var(--inv-ink-4)', fontWeight: 400 }}>—</span>}
+                    </td>
+                    <td className="num" style={{ color: 'var(--inv-orange)', fontWeight: 700 }}>
+                      {v.fromBatch > 0 ? fmtNum(v.fromBatch) : <span style={{ color: 'var(--inv-ink-4)', fontWeight: 400 }}>—</span>}
+                    </td>
+                    <td className="num total">{fmtNum(v.total)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td className="size">TOTAL</td>
+                  <td className="num" style={{ color: 'var(--inv-green)' }}>{fmtNum(totals.inStock)}</td>
+                  <td className="num" style={{ color: 'var(--inv-purple)' }}>{fmtNum(totals.onDemand)}</td>
+                  <td className="num" style={{ color: 'var(--inv-orange)' }}>{fmtNum(totals.fromBatch)}</td>
+                  <td className="num total">{fmtNum(totals.total)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
