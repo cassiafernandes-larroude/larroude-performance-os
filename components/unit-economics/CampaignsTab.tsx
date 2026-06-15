@@ -71,8 +71,18 @@ interface Campaign {
   appliedAt: string;
   totalProducts: number;
   avgDiscount: number;
+  /** Receita media por unidade (com desconto aplicado) — calculo legado */
   expectedRevenue: number;
+  /** Margem media por unidade — calculo legado */
   expectedMargin: number;
+  /** Unidades meta (informado pela usuaria no painel de previsao) */
+  targetUnits?: number;
+  /** Faturamento total previsto = avgPrice × targetUnits */
+  forecastRevenue?: number;
+  /** Investimento marketing = forecastRevenue / targetROAS */
+  marketingInvestment?: number;
+  /** Target ROAS usado (snapshot) */
+  targetROAS?: number;
   products: SelectedProduct[];
 }
 
@@ -352,6 +362,16 @@ export default function CampaignsTab() {
     );
     const expectedMargin = selectedProducts.reduce((s, p) => s + p.netMargin, 0);
 
+    // Cassia 2026-06-15: snapshot da previsao de campanha (unidades, faturamento, marketing)
+    const avgPriceAfterDiscount =
+      selectedProducts.length > 0
+        ? selectedProducts.reduce((s, p) => s + p.unitGrossRevenue * (1 - p.appliedDiscount), 0) /
+          selectedProducts.length
+        : 0;
+    const targetROAS = assumptions.marketingPct > 0 ? 1 / assumptions.marketingPct : 0;
+    const forecastRevenue = avgPriceAfterDiscount * (campaignUnits || 0);
+    const marketingInvestment = targetROAS > 0 ? forecastRevenue / targetROAS : 0;
+
     const campaign: Campaign = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       name: name.trim(),
@@ -363,6 +383,10 @@ export default function CampaignsTab() {
       avgDiscount: totalDiscount,
       expectedRevenue,
       expectedMargin,
+      targetUnits: campaignUnits || 0,
+      forecastRevenue,
+      marketingInvestment,
+      targetROAS,
       products: selectedProducts,
     };
 
@@ -378,7 +402,8 @@ export default function CampaignsTab() {
     setBulkSkuPaste("");
     setBulkResult(null);
     setShowBulkPaste(false);
-    alert(`Campaign "${campaign.name}" applied with ${campaign.totalProducts} products.`);
+    setCampaignUnits(0);
+    alert(`Campanha "${campaign.name}" aplicada com ${campaign.totalProducts} produtos.`);
   }
 
   function deleteCampaign(id: string) {
@@ -819,7 +844,7 @@ export default function CampaignsTab() {
           className="text-[11px] font-semibold uppercase tracking-wider"
           style={{ color: "var(--ink-muted)", letterSpacing: "0.06em" }}
         >
-          Applied campaigns ({campaigns.length})
+          Campanhas aplicadas ({campaigns.length})
         </span>
       </div>
       {campaigns.length === 0 ? (
@@ -882,26 +907,50 @@ export default function CampaignsTab() {
                     fontWeight: 700,
                   }}
                 >
-                  <Trash2 className="w-3 h-3" /> Delete
+                  <Trash2 className="w-3 h-3" /> Excluir
                 </button>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-3">
                 <div>
-                  <div className="text-[10px] uppercase tracking-wider" style={{ color: "var(--ink-muted)" }}>Products</div>
+                  <div className="text-[10px] uppercase tracking-wider" style={{ color: "var(--ink-muted)" }}>Produtos</div>
                   <div style={{ fontSize: 18, fontWeight: 700 }}>{c.totalProducts}</div>
                 </div>
                 <div>
-                  <div className="text-[10px] uppercase tracking-wider" style={{ color: "var(--ink-muted)" }}>Avg discount</div>
+                  <div className="text-[10px] uppercase tracking-wider" style={{ color: "var(--ink-muted)" }}>Unidades meta</div>
+                  <div style={{ fontSize: 18, fontWeight: 700 }}>
+                    {(c.targetUnits ?? 0).toLocaleString("pt-BR")}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider" style={{ color: "var(--ink-muted)" }}>Desconto médio</div>
                   <div style={{ fontSize: 18, fontWeight: 700, color: "#FF3D8B" }}>{(c.avgDiscount * 100).toFixed(1)}%</div>
                 </div>
                 <div>
-                  <div className="text-[10px] uppercase tracking-wider" style={{ color: "var(--ink-muted)" }}>Expected revenue / unit</div>
-                  <div style={{ fontSize: 16, fontWeight: 700 }}>{fmtMoney(c.expectedRevenue / Math.max(1, c.totalProducts), c.market)}</div>
+                  <div className="text-[10px] uppercase tracking-wider" style={{ color: "var(--ink-muted)" }}>ROAS alvo</div>
+                  <div style={{ fontSize: 18, fontWeight: 700 }}>
+                    {c.targetROAS && c.targetROAS > 0 ? `${c.targetROAS.toFixed(1)}x` : "—"}
+                  </div>
                 </div>
                 <div>
-                  <div className="text-[10px] uppercase tracking-wider" style={{ color: "var(--ink-muted)" }}>Expected margin / unit</div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: c.expectedMargin >= 0 ? "#16A34A" : "#DC2626" }}>
-                    {fmtMoney(c.expectedMargin / Math.max(1, c.totalProducts), c.market)}
+                  <div className="text-[10px] uppercase tracking-wider" style={{ color: "var(--ink-muted)" }}>Faturamento previsto</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: "#166534" }}>
+                    {c.forecastRevenue && c.forecastRevenue > 0
+                      ? fmtMoney(c.forecastRevenue, c.market)
+                      : "—"}
+                  </div>
+                  <div className="text-[10px]" style={{ color: "var(--ink-muted)" }}>
+                    {c.targetUnits ? `${c.targetUnits.toLocaleString("pt-BR")} un` : "informe unidades"}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider" style={{ color: "var(--ink-muted)" }}>Investimento marketing</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: "#1E40AF" }}>
+                    {c.marketingInvestment && c.marketingInvestment > 0
+                      ? fmtMoney(c.marketingInvestment, c.market)
+                      : "—"}
+                  </div>
+                  <div className="text-[10px]" style={{ color: "var(--ink-muted)" }}>
+                    {c.targetROAS && c.targetROAS > 0 ? `Faturamento ÷ ${c.targetROAS.toFixed(1)}x` : ""}
                   </div>
                 </div>
               </div>
@@ -915,7 +964,7 @@ export default function CampaignsTab() {
                     userSelect: "none",
                   }}
                 >
-                  Show {c.totalProducts} products
+                  Mostrar {c.totalProducts} produtos
                 </summary>
                 <div style={{ marginTop: 8, maxHeight: 260, overflowY: "auto" }}>
                   <table style={{ width: "100%", fontSize: 11 }}>
