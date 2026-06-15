@@ -1,333 +1,952 @@
 'use client';
-// Cassia 2026-06-14: clone interno de larroude-inventory-dashboard.vercel.app
-// Consome /api/inventory/[market] e renderiza tabela com filtros, busca, KPIs.
+// Cassia 2026-06-15: clone 100% fiel ao larroude-inventory-dashboard.vercel.app
+// Source: DOCUMENTACAO-COMPLETA-dashboards-larroude.md + DESIGN-system-larroude.md
+//
+// Estrutura espelhada do original:
+//   Header h1 + market pills + subtitle
+//   → Ciclo do par banner (On-Demand → From-Batch → Em Trânsito → Em Estoque)
+//   → Filter card (Período + Origem + Produção + Search)
+//   → 🥇 Visão Geral (10 KPIs)
+//   → 🎯 Matriz de Decisão (4 cards BCG)
+//   → 📊 Concentração (Top 20)
+//   → 🟢 Produzir mais (stockout iminente)
+//   → 🔴 Capital parado (encalhe)
+//   → 💰 Rentabilidade (3 cols margem)
+//   → 📋 Tabela completa (BCG filter pills + paginação 30/pág)
+//   → 🎁 Promoções sugeridas (3 cenários -10/-20/-30%)
 
 import { useEffect, useMemo, useState } from 'react';
 
 type Market = 'US' | 'BR';
+type Period = '7d' | '14d' | '28d' | '3M' | '6M' | '12M';
+type Origin = 'all' | 'preorder' | 'instock';
+type Production = 'all' | 'ondemand' | 'frombatch';
+type StatusClass = 'all' | 'produzir' | 'stockout' | 'manter' | 'avaliar' | 'encalhe' | 'margemneg' | 'reduzir' | 'inativo';
 
-interface InventoryRow {
-  s: string;           // SKU mãe
-  n: string;           // nome
-  m: string;           // method (from_batch / from_variant)
-  // Vendas por período: r = revenue, q = quantity, c = cost, p = profit, pq = profit qty
+interface Row {
+  s: string;
+  n: string;
+  m: string;
   r7?: number; q7?: number; c7?: number; p7?: number; p7q?: number;
   r14?: number; q14?: number; c14?: number; p14?: number; p14q?: number;
   r28?: number; q28?: number; c28?: number; p28?: number; p28q?: number;
-  r3?: number; q3?: number; c3?: number; p3?: number; p3q?: number;     // 3M
-  r6?: number; q6?: number; c6?: number; p6?: number; p6q?: number;     // 6M
-  r12?: number; q12?: number; c12?: number; p12?: number; p12q?: number; // 12M
-  q60?: number;        // qty 60d
-  e?: number;          // estoque atual
-  eo?: number;         // estoque outro depósito
-  eb?: number;         // estoque batch/lote
-  r?: number;          // received
-  t?: number;          // in transit
-  rp?: string | null;  // recent purchase date
-  tp?: string | null;  // target purchase date
-  rnum?: string;       // PO numbers received
-  tnum?: string;       // PO numbers transit
-  ap?: number;         // avg price
+  r3?: number; q3?: number; c3?: number; p3?: number; p3q?: number;
+  r6?: number; q6?: number; c6?: number; p6?: number; p6q?: number;
+  r12?: number; q12?: number; c12?: number; p12?: number; p12q?: number;
+  q60?: number;
+  e?: number; eo?: number; eb?: number;
+  r?: number; t?: number;
+  rp?: string | null; tp?: string | null;
+  rnum?: string; tnum?: string;
+  ap?: number;
 }
 
-interface InventoryData {
+interface Data {
   market: string;
   count: number;
   generatedAt: string;
-  rows: InventoryRow[];
+  rows: Row[];
 }
 
-type SortKey = 'r28' | 'q28' | 'q60' | 'e' | 'eb' | 'r12' | 's' | 'n' | 'runway28';
+const PERIOD_DAYS: Record<Period, number> = { '7d': 7, '14d': 14, '28d': 28, '3M': 90, '6M': 180, '12M': 365 };
+const PERIOD_LABEL: Record<Period, string> = { '7d': '7D', '14d': '14D', '28d': '28D', '3M': '3M', '6M': '6M', '12M': '12M' };
 
-function fmtMoney(v: number | undefined, market: Market): string {
-  if (v == null || isNaN(v)) return '—';
-  if (market === 'BR') return `R$ ${v.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}`;
-  return `$${(v / 1000).toFixed(1)}K`;
+// Estrutura de margem (validado por Cassia 2026-05-29)
+// BR: variável = ICMS+PIS+COFINS (27.3%) + Frete out (4.17%) + Payment (2.5%) + Devolução (8%) = 41.97%
+//     fixo = Marketing 27.5%
+// US: variável = Frete out (9.79%) + Payment (2.5%) + Devolução (15%) = 27.29%
+//     fixo = Marketing 38.32%
+const MARGIN_COSTS = {
+  BR: { variable: 0.4197, fixed: 0.275 },
+  US: { variable: 0.2729, fixed: 0.3832 },
+};
+
+function rev(r: Row, p: Period): number {
+  const k = ({ '7d': 'r7', '14d': 'r14', '28d': 'r28', '3M': 'r3', '6M': 'r6', '12M': 'r12' } as const)[p];
+  return (r as any)[k] ?? 0;
 }
-function fmtNum(v: number | undefined): string {
-  if (v == null || isNaN(v)) return '—';
-  return v.toLocaleString('en-US');
+function qtyOf(r: Row, p: Period): number {
+  const k = ({ '7d': 'q7', '14d': 'q14', '28d': 'q28', '3M': 'q3', '6M': 'q6', '12M': 'q12' } as const)[p];
+  return (r as any)[k] ?? 0;
+}
+function cogsOf(r: Row, p: Period): number {
+  const k = ({ '7d': 'c7', '14d': 'c14', '28d': 'c28', '3M': 'c3', '6M': 'c6', '12M': 'c12' } as const)[p];
+  return (r as any)[k] ?? 0;
+}
+function dailyVel(r: Row, p: Period): number {
+  return qtyOf(r, p) / PERIOD_DAYS[p];
+}
+function avgPrice(r: Row, p: Period): number {
+  const q = qtyOf(r, p);
+  if (q > 0) return rev(r, p) / q;
+  return r.ap || 0;
+}
+function unitCost(r: Row, p: Period): number {
+  const q = qtyOf(r, p);
+  return q > 0 ? cogsOf(r, p) / q : 0;
+}
+function fmtMoney(v: number | null | undefined, market: Market, compact = true): string {
+  if (v == null || !isFinite(v)) return '—';
+  const cur = market === 'BR' ? 'R$' : '$';
+  if (market === 'BR') {
+    if (compact && Math.abs(v) >= 1_000_000) return `${cur}${(v / 1_000_000).toFixed(2)}M`;
+    if (compact && Math.abs(v) >= 1000) return `${cur}${(v / 1000).toFixed(1)}k`;
+    return `${cur}${Math.round(v).toLocaleString('pt-BR')}`;
+  }
+  if (compact && Math.abs(v) >= 1_000_000) return `${cur}${(v / 1_000_000).toFixed(2)}M`;
+  if (compact && Math.abs(v) >= 1000) return `${cur}${(v / 1000).toFixed(1)}k`;
+  return `${cur}${Math.round(v).toLocaleString('en-US')}`;
+}
+function fmtNum(v: number | null | undefined): string {
+  if (v == null || !isFinite(v)) return '—';
+  return Math.round(v).toLocaleString('pt-BR');
+}
+function fmtPct(v: number | null | undefined, digits = 1): string {
+  if (v == null || !isFinite(v)) return '—';
+  return `${(v * 100).toFixed(digits)}%`;
 }
 function fmtDate(v: string | null | undefined): string {
   if (!v) return '—';
-  return new Date(v).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+  try {
+    const d = new Date(v + (v.length === 10 ? 'T00:00:00Z' : ''));
+    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', timeZone: 'UTC' });
+  } catch { return v; }
 }
-function runway(stock: number | undefined, qtyDays: number | undefined, days: number): number | null {
-  if (!stock || !qtyDays) return null;
-  const dailyRate = qtyDays / days;
-  if (dailyRate <= 0) return null;
-  return Math.round(stock / dailyRate);
+
+interface Processed {
+  row: Row;
+  revenue: number;
+  qty: number;
+  cogs: number;
+  daily: number;
+  cov: number | null;
+  ap: number;
+  uc: number;
+  estoque: number;
+  onDemand: number;
+  emRemessa: number;
+  emTransito: number;
+  fatPrev: number;
+  capParado: number;
+  marginGross: number | null;
+  marginContrib: number | null;
+  marginNet: number | null;
+  noSales60: boolean;
+  status: StatusClass;
 }
+
+function classifyStatus(p: Omit<Processed, 'status'>): StatusClass {
+  if (p.qty === 0 && p.estoque === 0) return 'inativo';
+  if (p.qty > 0 && (p.cov ?? 999) < 14) return 'stockout';
+  if (p.marginNet != null && p.marginNet < 0) return 'margemneg';
+  if (p.noSales60 && p.estoque > 50) return 'encalhe';
+  if (p.qty > 0 && (p.cov ?? 999) < 45) return 'produzir';
+  if (p.qty > 0 && (p.cov ?? 999) >= 45 && (p.cov ?? 999) <= 120) return 'manter';
+  if (p.qty > 0 && (p.cov ?? 999) > 120) return 'avaliar';
+  if (p.qty === 0 && p.estoque > 0) return 'reduzir';
+  return 'manter';
+}
+
+function process(r: Row, period: Period, market: Market): Processed {
+  const revenue = rev(r, period);
+  const qtyP = qtyOf(r, period);
+  const cogsP = cogsOf(r, period);
+  const daily = dailyVel(r, period);
+  const estoque = r.e || 0;
+  const onDemand = r.eo || 0;
+  const emRemessa = r.eb || 0;
+  const emTransito = r.t || 0;
+  const ap = avgPrice(r, period);
+  const uc = unitCost(r, period);
+  const cov = daily > 0 ? estoque / daily : null;
+  const fatPrev = estoque * ap;
+  const capParado = estoque * uc;
+  const marginGross = revenue > 0 ? (revenue - cogsP) / revenue : null;
+  const costs = MARGIN_COSTS[market];
+  const marginContrib = marginGross != null ? marginGross - costs.variable : null;
+  const marginNet = marginGross != null ? marginGross - costs.variable - costs.fixed : null;
+  const noSales60 = (r.q60 || 0) === 0;
+  const partial: Omit<Processed, 'status'> = {
+    row: r, revenue, qty: qtyP, cogs: cogsP, daily, cov, ap, uc,
+    estoque, onDemand, emRemessa, emTransito, fatPrev, capParado,
+    marginGross, marginContrib, marginNet, noSales60
+  };
+  return { ...partial, status: classifyStatus(partial) };
+}
+
+function origins(r: Row): { estoque: boolean; ondemand: boolean; frombatch: boolean; transit: boolean } {
+  return {
+    estoque: (r.e || 0) > 0,
+    ondemand: (r.eo || 0) > 0,
+    frombatch: (r.eb || 0) > 0,
+    transit: (r.t || 0) > 0,
+  };
+}
+
+const PAGE_SIZE = 30;
 
 export default function InventoryDashboard() {
   const [market, setMarket] = useState<Market>('US');
-  const [data, setData] = useState<InventoryData | null>(null);
+  const [period, setPeriod] = useState<Period>('3M');
+  const [origin, setOrigin] = useState<Origin>('all');
+  const [production, setProduction] = useState<Production>('all');
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusClass>('all');
+  const [page, setPage] = useState(1);
+
+  const [data, setData] = useState<Data | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
-  const [sortKey, setSortKey] = useState<SortKey>('r28');
-  const [sortDesc, setSortDesc] = useState(true);
-  const [statusFilter, setStatusFilter] = useState<'all' | 'low' | 'critical' | 'ok'>('all');
 
   const load = async () => {
     setLoading(true); setError(null);
     try {
       const r = await fetch(`/api/inventory/${market}`);
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const d = await r.json();
-      setData(d);
-    } catch (e: any) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
+      setData(await r.json());
+    } catch (e: any) { setError(e.message); } finally { setLoading(false); }
   };
-
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [market]);
+  useEffect(() => { setPage(1); }, [statusFilter, search, origin, production, period, market]);
 
-  // Filtragem + ordenação
-  const rows = useMemo(() => {
-    if (!data) return [];
+  const filtered = useMemo(() => {
+    if (!data) return [] as Row[];
     let r = data.rows.slice();
     if (search.trim()) {
       const q = search.trim().toLowerCase();
-      r = r.filter(x =>
-        (x.s || '').toLowerCase().includes(q) ||
-        (x.n || '').toLowerCase().includes(q),
-      );
+      r = r.filter(x => (x.s || '').toLowerCase().includes(q) || (x.n || '').toLowerCase().includes(q));
     }
-    if (statusFilter !== 'all') {
+    if (origin !== 'all') {
       r = r.filter(x => {
-        const rn = runway(x.e, x.q28, 28);
-        if (rn == null) return statusFilter === 'all';
-        if (statusFilter === 'critical') return rn <= 14;
-        if (statusFilter === 'low') return rn > 14 && rn <= 45;
-        if (statusFilter === 'ok') return rn > 45;
+        const o = origins(x);
+        if (origin === 'preorder') return o.ondemand || o.frombatch;
+        if (origin === 'instock') return o.estoque;
         return true;
       });
     }
-    r.sort((a, b) => {
-      let va: any, vb: any;
-      if (sortKey === 's' || sortKey === 'n') {
-        va = (a[sortKey] || '').toString();
-        vb = (b[sortKey] || '').toString();
-        return sortDesc ? vb.localeCompare(va) : va.localeCompare(vb);
-      }
-      if (sortKey === 'runway28') {
-        va = runway(a.e, a.q28, 28) ?? Infinity;
-        vb = runway(b.e, b.q28, 28) ?? Infinity;
-      } else {
-        va = (a as any)[sortKey] ?? 0;
-        vb = (b as any)[sortKey] ?? 0;
-      }
-      return sortDesc ? (vb - va) : (va - vb);
-    });
+    if (production !== 'all') {
+      r = r.filter(x => {
+        const o = origins(x);
+        if (production === 'ondemand') return o.ondemand;
+        if (production === 'frombatch') return o.frombatch;
+        return true;
+      });
+    }
     return r;
-  }, [data, search, sortKey, sortDesc, statusFilter]);
+  }, [data, search, origin, production]);
 
-  const totals = useMemo(() => {
-    if (!data) return null;
-    const t = data.rows.reduce((acc, r) => {
-      acc.r28 += r.r28 || 0;
-      acc.q28 += r.q28 || 0;
-      acc.e += r.e || 0;
-      acc.eb += r.eb || 0;
-      acc.t += r.t || 0;
-      const rn = runway(r.e, r.q28, 28);
-      if (rn != null && rn <= 14) acc.critical += 1;
-      else if (rn != null && rn <= 45) acc.low += 1;
-      return acc;
-    }, { r28: 0, q28: 0, e: 0, eb: 0, t: 0, critical: 0, low: 0 });
-    return t;
-  }, [data]);
+  const processed = useMemo(() => filtered.map(r => process(r, period, market)), [filtered, period, market]);
 
-  function toggleSort(k: SortKey) {
-    if (sortKey === k) setSortDesc(d => !d);
-    else { setSortKey(k); setSortDesc(true); }
-  }
+  const kpis = useMemo(() => {
+    const sum = (k: keyof Processed) => processed.reduce((a, x) => a + ((x[k] as number) || 0), 0);
+    const revP = sum('revenue');
+    const cogsP = sum('cogs');
+    const qtyP = sum('qty');
+    const ticket = qtyP > 0 ? revP / qtyP : 0;
+    const grossWeighted = revP > 0 ? (revP - cogsP) / revP : 0;
+    const costs = MARGIN_COSTS[market];
+    const netWeighted = grossWeighted > 0 ? grossWeighted - costs.variable - costs.fixed : 0;
+    const contribWeighted = grossWeighted > 0 ? grossWeighted - costs.variable : 0;
+    const modelosAtivos = processed.filter(x => x.qty > 0).length;
+    const emEstoque = sum('estoque');
+    const onDemand = sum('onDemand');
+    const emRemessa = sum('emRemessa');
+    const emTransito = sum('emTransito');
+    const fatPrevisto = sum('fatPrev');
+    return { revP, cogsP, qtyP, ticket, grossWeighted, contribWeighted, netWeighted, modelosAtivos, emEstoque, onDemand, emRemessa, emTransito, fatPrevisto };
+  }, [processed, market]);
+
+  const matriz = useMemo(() => {
+    const counts: Record<StatusClass, number> = { all: 0, produzir: 0, stockout: 0, manter: 0, avaliar: 0, encalhe: 0, margemneg: 0, reduzir: 0, inativo: 0 };
+    const revs: Record<StatusClass, number> = { all: 0, produzir: 0, stockout: 0, manter: 0, avaliar: 0, encalhe: 0, margemneg: 0, reduzir: 0, inativo: 0 };
+    for (const p of processed) {
+      counts[p.status]++;
+      counts.all++;
+      revs[p.status] += p.revenue;
+      revs.all += p.revenue;
+    }
+    return { counts, revs };
+  }, [processed]);
+
+  const concentracao = useMemo(() => {
+    const sorted = [...processed].sort((a, b) => b.revenue - a.revenue).slice(0, 20);
+    let acc = 0;
+    return sorted.map((p, i) => {
+      const pct = kpis.revP > 0 ? p.revenue / kpis.revP : 0;
+      acc += pct;
+      return { p, pct, acc, rank: i + 1 };
+    });
+  }, [processed, kpis.revP]);
+
+  const produzirMais = useMemo(() => {
+    return [...processed]
+      .filter(p => p.cov != null && p.cov < 30 && p.daily > 0.3)
+      .sort((a, b) => (a.cov! - b.cov!))
+      .slice(0, 10);
+  }, [processed]);
+
+  const capitalParado = useMemo(() => {
+    return [...processed]
+      .filter(p => p.estoque > 100 && (p.noSales60 || p.daily < 0.05))
+      .sort((a, b) => b.capParado - a.capParado)
+      .slice(0, 10);
+  }, [processed]);
+
+  const rentabilidade = useMemo(() => {
+    return [...processed]
+      .filter(p => p.qty >= 5 && p.marginNet != null)
+      .sort((a, b) => (a.marginNet ?? 999) - (b.marginNet ?? 999))
+      .slice(0, 10);
+  }, [processed]);
+
+  const detalheFull = useMemo(() => {
+    return [...processed]
+      .filter(p => statusFilter === 'all' || p.status === statusFilter)
+      .sort((a, b) => b.revenue - a.revenue);
+  }, [processed, statusFilter]);
+  const totalPages = Math.max(1, Math.ceil(detalheFull.length / PAGE_SIZE));
+  const detalhe = detalheFull.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  const promocoes = useMemo(() => {
+    return [...processed]
+      .filter(p => p.cov != null && p.cov > 180 && p.estoque > 50 && p.ap > 0 && p.uc > 0)
+      .sort((a, b) => (b.cov! - a.cov!))
+      .slice(0, 6);
+  }, [processed]);
 
   return (
-    <div className="main-dashboard-root px-4 lg:px-8 py-5 lg:py-8 max-w-[1500px] mx-auto">
-      {/* Header */}
-      <div className="mb-4 flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="font-display text-[26px] lg:text-[36px]" style={{ color: 'var(--ink)' }}>Inventory Intelligence</h1>
-          <p className="text-[12px] lg:text-[14px] mt-1" style={{ color: 'var(--ink-soft)' }}>
-            Decisão de produção com base em venda real, custo e estoque atual.
-          </p>
-          {data && (
-            <p className="text-[11px] mt-1" style={{ color: 'var(--ink-muted)' }}>
-              {data.count} SKUs · gerado em {new Date(data.generatedAt).toLocaleString('pt-BR')}
-            </p>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          {(['US', 'BR'] as Market[]).map(m => (
-            <button
-              key={m}
-              onClick={() => setMarket(m)}
-              className="inline-flex items-center justify-center rounded-full px-3 sm:px-4 py-1.5 text-[12px] sm:text-[13px] font-semibold transition-colors"
-              style={{
-                background: market === m ? '#ec4899' : '#ebe9e3',
-                color: market === m ? 'white' : '#1a1a1a',
-              }}
-            >
-              <span className="text-[10px] font-bold opacity-70 mr-1.5">{m}</span>
-              {m === 'US' ? 'United States' : 'Brazil'}
+    <div className="inv-root">
+      <div className="app">
+
+        {/* Header */}
+        <header>
+          <h1>
+            Larroudé<span className="sep">·</span>Inventory Intelligence
+          </h1>
+          <div className="market-row">
+            <button className={`market-pill ${market === 'US' ? 'active' : ''}`} onClick={() => setMarket('US')}>
+              <span className="flag">US</span>
+              United States
             </button>
-          ))}
-          <button
-            onClick={load}
-            disabled={loading}
-            className="pill pill-pink px-3 py-1.5 text-[12px] font-medium"
-            style={{ opacity: loading ? 0.6 : 1 }}
-          >
-            {loading ? 'Carregando…' : '↻ Refresh'}
-          </button>
-        </div>
-      </div>
-
-      {error && (
-        <div className="card border-rose-300 bg-rose-50 text-rose-700 text-sm mb-4">
-          Erro: {error}
-        </div>
-      )}
-
-      {/* KPIs */}
-      {totals && (
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
-          <Kpi label="Revenue 28d" value={fmtMoney(totals.r28, market)} />
-          <Kpi label="Units 28d" value={fmtNum(totals.q28)} />
-          <Kpi label="Stock atual" value={fmtNum(totals.e)} hint="Em loja/site" />
-          <Kpi label="Em trânsito" value={fmtNum(totals.t)} hint="POs a chegar" />
-          <Kpi label="Críticos" value={`${totals.critical} SKUs`} hint="Runway ≤ 14d" tone="negative" />
-        </div>
-      )}
-
-      {/* Filters */}
-      <div className="card mb-4">
-        <div className="flex items-center gap-3 flex-wrap">
-          <input
-            type="text"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Buscar por SKU ou nome…"
-            className="rounded-full px-4 py-2 text-[13px] bg-white font-medium flex-1 min-w-[200px]"
-            style={{ border: '1px solid var(--border)' }}
-          />
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {([
-              { id: 'all', label: 'Todos' },
-              { id: 'critical', label: '🔴 Crítico (≤14d)' },
-              { id: 'low', label: '🟠 Baixo (15-45d)' },
-              { id: 'ok', label: '🟢 OK (>45d)' },
-            ] as const).map(s => (
-              <button
-                key={s.id}
-                onClick={() => setStatusFilter(s.id)}
-                className="px-3 py-1.5 rounded-full text-[11px] font-semibold transition-colors"
-                style={{
-                  background: statusFilter === s.id ? 'var(--pink-deep)' : 'var(--paper)',
-                  color: statusFilter === s.id ? 'white' : 'var(--ink-soft)',
-                  border: '1px solid var(--border)',
-                }}
-              >
-                {s.label}
-              </button>
-            ))}
+            <button className={`market-pill ${market === 'BR' ? 'active' : ''}`} onClick={() => setMarket('BR')}>
+              <span className="flag">BR</span>
+              Brasil
+            </button>
+            <button onClick={load} disabled={loading} style={{
+              marginLeft: 'auto', background: 'var(--inv-paper)',
+              border: '1.5px solid var(--inv-line)', borderRadius: 100,
+              padding: '8px 18px', fontWeight: 700, fontSize: 13,
+              color: 'var(--inv-ink-2)', cursor: loading ? 'wait' : 'pointer',
+              opacity: loading ? 0.6 : 1, fontFamily: 'inherit',
+            }}>
+              {loading ? '⏳ Carregando…' : '↻ Atualizar'}
+            </button>
           </div>
-        </div>
-      </div>
+          <p className="subtitle">
+            Decisão de produção por modelo · com base em <b>venda real, custo e estoque atual</b>
+            {data && <> · dados de <b>{fmtDate(data.generatedAt)}</b></>}
+            {' · '}BigQuery Larroudé OS · apenas <b>DTC</b> · exclui B2B, Marketplace, Influencer e Gift Cards
+          </p>
+        </header>
 
-      {/* Tabela */}
-      <div className="card overflow-x-auto">
-        <table className="w-full text-[11px] min-w-[1100px]">
-          <thead style={{ background: 'var(--paper)', color: 'var(--ink-soft)' }}>
-            <tr>
-              <SortHeader label="SKU" k="s" current={sortKey} desc={sortDesc} onClick={toggleSort} align="left" />
-              <SortHeader label="Produto" k="n" current={sortKey} desc={sortDesc} onClick={toggleSort} align="left" />
-              <SortHeader label="Q 60d" k="q60" current={sortKey} desc={sortDesc} onClick={toggleSort} align="right" />
-              <SortHeader label="Q 28d" k="q28" current={sortKey} desc={sortDesc} onClick={toggleSort} align="right" />
-              <SortHeader label="Rev 28d" k="r28" current={sortKey} desc={sortDesc} onClick={toggleSort} align="right" />
-              <SortHeader label="Estoque" k="e" current={sortKey} desc={sortDesc} onClick={toggleSort} align="right" />
-              <SortHeader label="Batch" k="eb" current={sortKey} desc={sortDesc} onClick={toggleSort} align="right" />
-              <SortHeader label="Runway" k="runway28" current={sortKey} desc={sortDesc} onClick={toggleSort} align="right" />
-              <th className="text-right px-2 py-1.5">Em trânsito</th>
-              <th className="text-left px-2 py-1.5">Próx. chegada</th>
-              <SortHeader label="Rev 12M" k="r12" current={sortKey} desc={sortDesc} onClick={toggleSort} align="right" />
-            </tr>
-          </thead>
-          <tbody>
-            {!loading && rows.length === 0 && (
-              <tr><td colSpan={11} className="px-2 py-6 text-center" style={{ color: 'var(--ink-muted)' }}>Nenhum SKU encontrado.</td></tr>
-            )}
-            {rows.slice(0, 500).map(r => {
-              const rn = runway(r.e, r.q28, 28);
-              const runwayColor = rn == null ? 'var(--ink-muted)' : rn <= 14 ? '#dc2626' : rn <= 45 ? '#f59e0b' : '#10b981';
-              return (
-                <tr key={r.s} className="border-t" style={{ borderColor: 'var(--border)' }}>
-                  <td className="px-2 py-1.5 font-mono font-semibold text-[10px]" style={{ color: 'var(--pink-deep)' }}>{r.s}</td>
-                  <td className="px-2 py-1.5 max-w-[240px] truncate" style={{ color: 'var(--ink)' }} title={r.n}>{r.n}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{fmtNum(r.q60)}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums font-semibold">{fmtNum(r.q28)}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{fmtMoney(r.r28, market)}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums font-semibold">{fmtNum(r.e)}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums" style={{ color: 'var(--ink-muted)' }}>{fmtNum(r.eb)}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums font-bold" style={{ color: runwayColor }}>
-                    {rn != null ? `${rn}d` : '—'}
-                  </td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{fmtNum(r.t)}</td>
-                  <td className="px-2 py-1.5 text-[10px]" style={{ color: 'var(--ink-soft)' }} title={r.tnum || ''}>
-                    {fmtDate(r.tp)}
-                  </td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{fmtMoney(r.r12, market)}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        {rows.length > 500 && (
-          <div className="text-[10px] mt-2 text-center" style={{ color: 'var(--ink-muted)' }}>
-            Mostrando 500 de {rows.length} SKUs. Use a busca pra refinar.
+        {/* Ciclo do Par */}
+        <div className="ciclo-banner">
+          <span className="ciclo-label">CICLO DO PAR</span>
+          <span className="ciclo-pill" style={{ background: 'var(--inv-purple-soft)', color: 'var(--inv-purple)' }}>
+            <span className="dot" style={{ background: 'var(--inv-purple)' }} />
+            <b>1. On-Demand</b>
+            <span className="ciclo-desc">vendido, não entrou na produção</span>
+          </span>
+          <span className="ciclo-arrow">→</span>
+          <span className="ciclo-pill" style={{ background: 'var(--inv-orange-soft)', color: 'var(--inv-orange)' }}>
+            <span className="dot" style={{ background: 'var(--inv-orange)' }} />
+            <b>2. Em Remessa · From-Batch</b>
+            <span className="ciclo-desc">sendo produzido agora</span>
+          </span>
+          <span className="ciclo-arrow">→</span>
+          <span className="ciclo-pill" style={{ background: 'var(--inv-gold-soft)', color: 'var(--inv-gold)' }}>
+            <span className="dot" style={{ background: 'var(--inv-gold)' }} />
+            <b>3. Em Trânsito</b>
+            <span className="ciclo-desc">produzido, indo pro warehouse</span>
+          </span>
+          <span className="ciclo-arrow">→</span>
+          <span className="ciclo-pill" style={{ background: 'var(--inv-green-soft)', color: 'var(--inv-green)' }}>
+            <span className="dot" style={{ background: 'var(--inv-green)' }} />
+            <b>4. Em Estoque</b>
+            <span className="ciclo-desc">no warehouse, pronto pra venda</span>
+          </span>
+        </div>
+
+        {/* Filter card */}
+        <div className="filter-card">
+          <div className="filter-group">
+            <span className="filter-label">PERÍODO</span>
+            <div className="btn-row">
+              {(['7d','14d','28d','3M','6M','12M'] as Period[]).map(p => (
+                <button key={p} className={`btn-pill ${period === p ? 'active' : ''}`} onClick={() => setPeriod(p)}>
+                  {PERIOD_LABEL[p]}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="filter-group">
+            <span className="filter-label">ORIGEM</span>
+            <div className="btn-row">
+              <button className={`btn-pill ${origin === 'all' ? 'active' : ''}`} onClick={() => setOrigin('all')}>Todos</button>
+              <button className={`btn-pill ${origin === 'preorder' ? 'active' : ''}`} onClick={() => setOrigin('preorder')}>Pre-Order</button>
+              <button className={`btn-pill ${origin === 'instock' ? 'active' : ''}`} onClick={() => setOrigin('instock')}>In-Stock</button>
+            </div>
+          </div>
+          <div className="filter-group">
+            <span className="filter-label">PRODUÇÃO</span>
+            <div className="btn-row">
+              <button className={`btn-pill ${production === 'all' ? 'active' : ''}`} onClick={() => setProduction('all')}>Todos</button>
+              <button className={`btn-pill ${production === 'ondemand' ? 'active' : ''}`} onClick={() => setProduction('ondemand')}>On-Demand</button>
+              <button className={`btn-pill ${production === 'frombatch' ? 'active' : ''}`} onClick={() => setProduction('frombatch')}>From-Batch</button>
+            </div>
+          </div>
+          <input className="search-input" placeholder="Buscar por nome ou SKU…" value={search} onChange={e => setSearch(e.target.value)} />
+        </div>
+
+        {error && (
+          <div style={{ background: 'var(--inv-red-soft)', color: 'var(--inv-red)', padding: '12px 16px', borderRadius: 12, marginBottom: 16, fontWeight: 600, fontSize: 13 }}>
+            Erro ao carregar: {error}
           </div>
         )}
-      </div>
 
-      <div className="text-[10px] italic mt-3" style={{ color: 'var(--ink-muted)' }}>
-        Runway = stock atual / vendas médias diárias (28d). Crítico ≤ 14d (vermelho), Baixo 15-45d (laranja), OK &gt; 45d (verde).
+        {/* 🥇 Visão Geral */}
+        <div className="section-head" id="sec-visao">
+          <span className="section-pill sp-gold">🥇 Visão Geral</span>
+          <span className="title">
+            <b>{market === 'US' ? 'UNITED STATES' : 'BRASIL'}</b> · {PERIOD_LABEL[period]}
+          </span>
+          <span className="right-info">{kpis.modelosAtivos} modelos ativos</span>
+        </div>
+        <div className="kpi-grid kpi-grid-8">
+          <Kpi label="Faturamento" value={fmtMoney(kpis.revP, market)} sub={`${fmtNum(kpis.qtyP)} unidades`} />
+          <Kpi label="COGS no Período" value={fmtMoney(kpis.cogsP, market)} sub={`${fmtPct(kpis.revP > 0 ? kpis.cogsP / kpis.revP : 0)} do faturamento`} />
+          <Kpi
+            label="Margem Líquida"
+            value={fmtPct(kpis.netWeighted)}
+            sub={<>bruta <b>{fmtPct(kpis.grossWeighted)}</b> · contrib <b>{fmtPct(kpis.contribWeighted)}</b></>}
+            highlight={kpis.netWeighted < 0 ? 'red' : kpis.netWeighted < 0.1 ? 'gold' : 'green'}
+          />
+          <Kpi label="Ticket Médio" value={fmtMoney(kpis.ticket, market, false)} />
+          <Kpi label="Em Estoque" value={fmtNum(kpis.emEstoque)} sub="warehouse" tone="green" />
+          <Kpi label="On-Demand" value={fmtNum(kpis.onDemand)} sub="vendido, não produzido" tone="purple" />
+          <Kpi label="Em Remessa · From-Batch" value={fmtNum(kpis.emRemessa)} sub="produzindo agora" tone="orange" />
+          <Kpi label="Em Trânsito" value={fmtNum(kpis.emTransito)} sub="indo pro warehouse" tone="gold" />
+        </div>
+        <div className="kpi-grid kpi-grid-4" style={{ marginTop: 10 }}>
+          <Kpi label="Faturamento Previsto" value={fmtMoney(kpis.fatPrevisto, market)} sub="estoque atual × preço atual" tone="green" />
+          <Kpi label="Modelos Ativos" value={fmtNum(kpis.modelosAtivos)} sub={`de ${fmtNum(processed.length)} no catálogo`} />
+          <Kpi label="Estoque Total" value={fmtNum(kpis.emEstoque + kpis.onDemand + kpis.emRemessa + kpis.emTransito)} sub="todas as etapas do ciclo" />
+          <Kpi
+            label="Stockout"
+            value={fmtNum(matriz.counts.stockout)}
+            sub={<>+ <b>{matriz.counts.margemneg}</b> marg. neg · <b>{matriz.counts.encalhe}</b> encalhe</>}
+            highlight="red"
+          />
+        </div>
+
+        {/* 🎯 Matriz de Decisão */}
+        <div className="section-head" id="sec-matriz">
+          <span className="section-pill sp-blue">🎯 Matriz de Decisão</span>
+          <span className="title">Classificação BCG · clique para filtrar a tabela completa</span>
+        </div>
+        <div className="matrix-grid">
+          <MatrixCard tone="green" emoji="🟢" label="Produzir mais"
+            count={matriz.counts.produzir + matriz.counts.stockout}
+            revenue={matriz.revs.produzir + matriz.revs.stockout} market={market}
+            desc="Cobertura curta + velocidade alta. Risco de stockout."
+            onClick={() => { setStatusFilter('produzir'); document.getElementById('sec-detalhe')?.scrollIntoView({ behavior: 'smooth' }); }} />
+          <MatrixCard tone="blue" emoji="🔵" label="Manter"
+            count={matriz.counts.manter} revenue={matriz.revs.manter} market={market}
+            desc="Cobertura 45-120d. Estoque saudável."
+            onClick={() => { setStatusFilter('manter'); document.getElementById('sec-detalhe')?.scrollIntoView({ behavior: 'smooth' }); }} />
+          <MatrixCard tone="gold" emoji="🟡" label="Avaliar"
+            count={matriz.counts.avaliar} revenue={matriz.revs.avaliar} market={market}
+            desc="Cobertura > 120d. Vendendo, mas sobrando."
+            onClick={() => { setStatusFilter('avaliar'); document.getElementById('sec-detalhe')?.scrollIntoView({ behavior: 'smooth' }); }} />
+          <MatrixCard tone="red" emoji="🔴" label="Reduzir / Parar"
+            count={matriz.counts.encalhe + matriz.counts.margemneg + matriz.counts.reduzir + matriz.counts.inativo}
+            revenue={matriz.revs.encalhe + matriz.revs.margemneg + matriz.revs.reduzir + matriz.revs.inativo} market={market}
+            desc="Encalhe, margem negativa ou inativos."
+            onClick={() => { setStatusFilter('encalhe'); document.getElementById('sec-detalhe')?.scrollIntoView({ behavior: 'smooth' }); }} />
+        </div>
+
+        {/* 📊 Concentração */}
+        <div className="section-head" id="sec-conc">
+          <span className="section-pill sp-teal">📊 Concentração</span>
+          <span className="title">Top 20 modelos por faturamento · análise ABC</span>
+          <span className="right-info">% acumulado mostra Pareto</span>
+        </div>
+        <div className="list-card">
+          <table className="list-table">
+            <thead>
+              <tr>
+                <th style={{ width: 40 }}>#</th>
+                <th>Produto</th>
+                <th>Produção</th>
+                <th className="num">Faturamento</th>
+                <th className="num">% do total</th>
+                <th className="num">% acumulado</th>
+                <th className="num">Unidades</th>
+                <th className="num">Velocidade</th>
+                <th className="num">Estoque</th>
+                <th className="num">Cobertura</th>
+                <th className="num">Em Remessa</th>
+                <th className="num">Em Trânsito</th>
+              </tr>
+            </thead>
+            <tbody>
+              {concentracao.map(x => (
+                <tr key={x.p.row.s}>
+                  <td className="rank">{x.rank}</td>
+                  <ProductCell row={x.p.row} />
+                  <ProductionCell row={x.p.row} />
+                  <td className="num"><b>{fmtMoney(x.p.revenue, market)}</b></td>
+                  <td className="num">{(x.pct * 100).toFixed(2)}%</td>
+                  <td className="num" style={{ color: x.acc <= 0.8 ? 'var(--inv-ink)' : 'var(--inv-ink-3)' }}>{(x.acc * 100).toFixed(1)}%</td>
+                  <td className="num">{fmtNum(x.p.qty)}</td>
+                  <td className="num" style={{ fontSize: 11, color: 'var(--inv-ink-3)' }}>{x.p.daily.toFixed(1)} un/d</td>
+                  <td className="num">{fmtNum(x.p.estoque)}</td>
+                  <td className="num"><CoverageBadge cov={x.p.cov} /></td>
+                  <td className="num"><RemessaInfo qty={x.p.emRemessa} when={x.p.row.rp} /></td>
+                  <td className="num"><RemessaInfo qty={x.p.emTransito} when={x.p.row.tp} /></td>
+                </tr>
+              ))}
+              {concentracao.length === 0 && (
+                <tr><td colSpan={12} style={{ textAlign: 'center', padding: 40, color: 'var(--inv-ink-3)' }}>Sem dados pra este filtro.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* 🟢 Produzir mais */}
+        <div className="section-head" id="sec-produzir">
+          <span className="section-pill sp-green">🟢 Produzir mais</span>
+          <span className="title">Stockout iminente · cobertura &lt; 30d · velocidade &gt; 0,3 un/dia</span>
+          <span className="right-info">{produzirMais.length} modelos</span>
+        </div>
+        <div className="list-card">
+          <table className="list-table">
+            <thead>
+              <tr>
+                <th style={{ width: 40 }}>#</th>
+                <th>Produto</th>
+                <th>Produção</th>
+                <th className="num">Estoque</th>
+                <th className="num">Faturamento</th>
+                <th className="num">Velocidade</th>
+                <th>Cobertura</th>
+                <th className="num">Em Remessa</th>
+                <th className="num">Em Trânsito</th>
+              </tr>
+            </thead>
+            <tbody>
+              {produzirMais.map((p, i) => (
+                <tr key={p.row.s}>
+                  <td className="rank">{i + 1}</td>
+                  <ProductCell row={p.row} />
+                  <ProductionCell row={p.row} />
+                  <td className="num"><b>{fmtNum(p.estoque)}</b></td>
+                  <td className="num">{fmtMoney(p.revenue, market)}</td>
+                  <td className="num" style={{ fontSize: 11, color: 'var(--inv-ink-3)' }}>{p.daily.toFixed(2)} un/d</td>
+                  <td>
+                    <div className="bar-wrap">
+                      <div className="bar-track">
+                        <div className="bar-fill b-red" style={{ width: `${Math.min(100, ((p.cov || 0) / 30) * 100)}%` }} />
+                      </div>
+                      <div className="bar-num" style={{ color: 'var(--inv-red)' }}>{p.cov != null ? `${Math.round(p.cov)}d` : '—'}</div>
+                    </div>
+                  </td>
+                  <td className="num"><RemessaInfo qty={p.emRemessa} when={p.row.rp} /></td>
+                  <td className="num"><RemessaInfo qty={p.emTransito} when={p.row.tp} /></td>
+                </tr>
+              ))}
+              {produzirMais.length === 0 && (
+                <tr><td colSpan={9} style={{ textAlign: 'center', padding: 40, color: 'var(--inv-ink-3)' }}>Nenhum modelo em risco de stockout. 👍</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* 🔴 Capital parado */}
+        <div className="section-head" id="sec-capital">
+          <span className="section-pill sp-red">🔴 Capital parado</span>
+          <span className="title">Estoque &gt; 100 + venda lenta · candidatos a liquidação</span>
+          <span className="right-info">{capitalParado.length} modelos</span>
+        </div>
+        <div className="list-card">
+          <table className="list-table">
+            <thead>
+              <tr>
+                <th style={{ width: 40 }}>#</th>
+                <th>Produto</th>
+                <th>Produção</th>
+                <th className="num">Vendas 60d</th>
+                <th className="num">Faturamento</th>
+                <th className="num">Estoque</th>
+                <th className="num">Custo unit.</th>
+                <th>Capital parado</th>
+                <th className="num">Fat. previsto</th>
+                <th className="num">Em Remessa</th>
+                <th className="num">Em Trânsito</th>
+              </tr>
+            </thead>
+            <tbody>
+              {capitalParado.map((p, i) => {
+                const maxCap = capitalParado[0]?.capParado || 1;
+                return (
+                  <tr key={p.row.s}>
+                    <td className="rank">{i + 1}</td>
+                    <ProductCell row={p.row} />
+                    <ProductionCell row={p.row} />
+                    <td className="num">{fmtNum(p.row.q60 || 0)}</td>
+                    <td className="num">{fmtMoney(p.revenue, market)}</td>
+                    <td className="num"><b>{fmtNum(p.estoque)}</b></td>
+                    <td className="num">{fmtMoney(p.uc, market, false)}</td>
+                    <td>
+                      <div className="bar-wrap">
+                        <div className="bar-track">
+                          <div className="bar-fill b-red" style={{ width: `${(p.capParado / maxCap) * 100}%` }} />
+                        </div>
+                        <div className="bar-num" style={{ color: 'var(--inv-red)' }}>{fmtMoney(p.capParado, market)}</div>
+                      </div>
+                    </td>
+                    <td className="num">{fmtMoney(p.fatPrev, market)}</td>
+                    <td className="num"><RemessaInfo qty={p.emRemessa} when={p.row.rp} /></td>
+                    <td className="num"><RemessaInfo qty={p.emTransito} when={p.row.tp} /></td>
+                  </tr>
+                );
+              })}
+              {capitalParado.length === 0 && (
+                <tr><td colSpan={11} style={{ textAlign: 'center', padding: 40, color: 'var(--inv-ink-3)' }}>Nenhum modelo com capital parado significativo. 👍</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* 💰 Rentabilidade */}
+        <div className="section-head" id="sec-rent">
+          <span className="section-pill sp-orange">💰 Rentabilidade</span>
+          <span className="title">
+            Menor margem líquida · {market === 'BR'
+              ? 'após impostos (27,3%), frete (4,2%), pagamento (2,5%), devolução (8%) + marketing (27,5%)'
+              : 'após frete (9,8%), pagamento (2,5%), devolução (15%) + marketing (38,3%)'}
+          </span>
+          <span className="right-info">mínimo 5 un</span>
+        </div>
+        <div className="list-card">
+          <table className="list-table">
+            <thead>
+              <tr>
+                <th style={{ width: 40 }}>#</th>
+                <th>Produto</th>
+                <th>Produção</th>
+                <th className="num">Faturamento</th>
+                <th className="num">COGS</th>
+                <th className="num">Bruta</th>
+                <th className="num">Contrib.</th>
+                <th>Líquida</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rentabilidade.map((p, i) => {
+                const bruta = (p.marginGross ?? 0);
+                const contrib = (p.marginContrib ?? 0);
+                const liq = (p.marginNet ?? 0);
+                return (
+                  <tr key={p.row.s}>
+                    <td className="rank">{i + 1}</td>
+                    <ProductCell row={p.row} />
+                    <ProductionCell row={p.row} />
+                    <td className="num">{fmtMoney(p.revenue, market)}</td>
+                    <td className="num">{fmtMoney(p.cogs, market)}</td>
+                    <td className="num">{fmtPct(bruta)}</td>
+                    <td className="num" style={{ color: contrib < 0 ? 'var(--inv-red)' : contrib < 0.2 ? 'var(--inv-gold)' : 'var(--inv-ink)' }}>
+                      {fmtPct(contrib)}
+                    </td>
+                    <td>
+                      <div className="bar-wrap">
+                        <div className="bar-track">
+                          <div className={`bar-fill ${liq < 0 ? 'b-red' : liq < 0.1 ? 'b-gold' : 'b-green'}`}
+                            style={{ width: `${Math.min(100, Math.max(2, Math.abs(liq) * 200))}%` }} />
+                        </div>
+                        <div className="bar-num" style={{ color: liq < 0 ? 'var(--inv-red)' : liq < 0.1 ? 'var(--inv-gold)' : 'var(--inv-green)' }}>
+                          {fmtPct(liq)}
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {rentabilidade.length === 0 && (
+                <tr><td colSpan={8} style={{ textAlign: 'center', padding: 40, color: 'var(--inv-ink-3)' }}>Sem modelos suficientes para análise.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* 📋 Detalhe */}
+        <div className="section-head" id="sec-detalhe">
+          <span className="section-pill sp-purple">📋 Detalhe</span>
+          <span className="title">Tabela completa · todos os modelos · filtros + busca + paginação</span>
+          <span className="right-info">{detalheFull.length} modelos</span>
+        </div>
+        <div className="list-card">
+          <div className="table-filters">
+            <span className="label">STATUS</span>
+            <button className={`st-pill ${statusFilter === 'all' ? 'active' : ''}`} onClick={() => setStatusFilter('all')}>
+              Todos <span className="count">{matriz.counts.all}</span>
+            </button>
+            <span className="divider">·</span>
+            <button className={`st-pill ${statusFilter === 'produzir' ? 'active' : ''}`} onClick={() => setStatusFilter('produzir')}>
+              🟢 Produzir <span className="count">{matriz.counts.produzir}</span>
+            </button>
+            <button className={`st-pill ${statusFilter === 'stockout' ? 'active' : ''}`} onClick={() => setStatusFilter('stockout')}>
+              ⚠️ Stockout <span className="count">{matriz.counts.stockout}</span>
+            </button>
+            <button className={`st-pill ${statusFilter === 'manter' ? 'active' : ''}`} onClick={() => setStatusFilter('manter')}>
+              🔵 Manter <span className="count">{matriz.counts.manter}</span>
+            </button>
+            <button className={`st-pill ${statusFilter === 'avaliar' ? 'active' : ''}`} onClick={() => setStatusFilter('avaliar')}>
+              🟡 Avaliar <span className="count">{matriz.counts.avaliar}</span>
+            </button>
+            <button className={`st-pill ${statusFilter === 'encalhe' ? 'active' : ''}`} onClick={() => setStatusFilter('encalhe')}>
+              🔴 Encalhe <span className="count">{matriz.counts.encalhe}</span>
+            </button>
+            <button className={`st-pill ${statusFilter === 'margemneg' ? 'active' : ''}`} onClick={() => setStatusFilter('margemneg')}>
+              💸 Marg. neg <span className="count">{matriz.counts.margemneg}</span>
+            </button>
+            <button className={`st-pill ${statusFilter === 'reduzir' ? 'active' : ''}`} onClick={() => setStatusFilter('reduzir')}>
+              ⛔ Reduzir <span className="count">{matriz.counts.reduzir}</span>
+            </button>
+            <button className={`st-pill ${statusFilter === 'inativo' ? 'active' : ''}`} onClick={() => setStatusFilter('inativo')}>
+              💤 Inativo <span className="count">{matriz.counts.inativo}</span>
+            </button>
+          </div>
+          <table className="list-table">
+            <thead>
+              <tr>
+                <th>Produto</th>
+                <th>Status</th>
+                <th>Produção</th>
+                <th className="num">Faturamento</th>
+                <th className="num">% do tot.</th>
+                <th className="num">Unidades</th>
+                <th className="num">COGS</th>
+                <th className="num">Margem<br /><span style={{ fontWeight: 400, color: 'var(--inv-ink-4)' }}>bru · contrib · líq</span></th>
+                <th className="num">Custo unit.</th>
+                <th className="num">Estoque</th>
+                <th className="num">Cap. parado</th>
+                <th className="num">Fat. previsto</th>
+                <th className="num">Cobertura</th>
+              </tr>
+            </thead>
+            <tbody>
+              {detalhe.map(p => {
+                const pctTot = kpis.revP > 0 ? p.revenue / kpis.revP : 0;
+                return (
+                  <tr key={p.row.s}>
+                    <ProductCell row={p.row} />
+                    <td><StatusBadge status={p.status} /></td>
+                    <ProductionCell row={p.row} />
+                    <td className="num"><b>{fmtMoney(p.revenue, market)}</b></td>
+                    <td className="num">{(pctTot * 100).toFixed(2)}%</td>
+                    <td className="num">{fmtNum(p.qty)}</td>
+                    <td className="num">{fmtMoney(p.cogs, market)}</td>
+                    <td className="num" style={{ fontSize: 11 }}>
+                      {fmtPct(p.marginGross)} · {fmtPct(p.marginContrib)} · <b style={{ color: (p.marginNet ?? 0) < 0 ? 'var(--inv-red)' : (p.marginNet ?? 0) < 0.1 ? 'var(--inv-gold)' : 'var(--inv-green)' }}>{fmtPct(p.marginNet)}</b>
+                    </td>
+                    <td className="num">{fmtMoney(p.uc, market, false)}</td>
+                    <td className="num">{fmtNum(p.estoque)}</td>
+                    <td className="num">{fmtMoney(p.capParado, market)}</td>
+                    <td className="num">{fmtMoney(p.fatPrev, market)}</td>
+                    <td className="num"><CoverageBadge cov={p.cov} /></td>
+                  </tr>
+                );
+              })}
+              {detalhe.length === 0 && (
+                <tr><td colSpan={13} style={{ textAlign: 'center', padding: 40, color: 'var(--inv-ink-3)' }}>Nenhum modelo com este filtro.</td></tr>
+              )}
+            </tbody>
+          </table>
+          <div className="pagination">
+            <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}>‹ Anterior</button>
+            <span className="pg-info">
+              Página <b>{page}</b> de <b>{totalPages}</b> · mostrando {detalhe.length} de {detalheFull.length}
+            </span>
+            <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}>Próxima ›</button>
+          </div>
+        </div>
+
+        {/* 🎁 Promoções */}
+        {promocoes.length > 0 && (
+          <>
+            <div className="section-head" id="sec-promo">
+              <span className="section-pill sp-pink">🎁 Promoções sugeridas</span>
+              <span className="title">Cobertura &gt; 6 meses · 3 cenários de desconto com margem recalculada</span>
+              <span className="right-info">{promocoes.length} modelos</span>
+            </div>
+            <div className="matrix-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
+              {promocoes.map(p => {
+                const variableCost = MARGIN_COSTS[market].variable;
+                const scenarios = [0.10, 0.20, 0.30].map(disc => {
+                  const newPrice = p.ap * (1 - disc);
+                  const newMargin = newPrice > 0 ? (newPrice - p.uc - newPrice * variableCost) / newPrice : null;
+                  return { disc, newPrice, newMargin };
+                });
+                const bestIdx = scenarios.reduce((best, s, i) => (s.newMargin != null && s.newMargin > 0.15) ? i : best, -1);
+                return (
+                  <div key={p.row.s} className="promo-card">
+                    <div className="promo-name">{p.row.n}</div>
+                    <div className="promo-sku">{p.row.s}</div>
+                    <div style={{ display: 'flex', gap: 12, marginTop: 8, fontSize: 11, color: 'var(--inv-ink-3)', flexWrap: 'wrap' }}>
+                      <span>Estoque <b style={{ color: 'var(--inv-ink)' }}>{fmtNum(p.estoque)}</b></span>
+                      <span>Cobertura <b style={{ color: 'var(--inv-red)' }}>{Math.round(p.cov!)}d</b></span>
+                      <span>Custo unit. <b style={{ color: 'var(--inv-ink)' }}>{fmtMoney(p.uc, market, false)}</b></span>
+                      <span>Preço atual <b style={{ color: 'var(--inv-ink)' }}>{fmtMoney(p.ap, market, false)}</b></span>
+                    </div>
+                    <div className="promo-scenarios">
+                      {scenarios.map((s, i) => (
+                        <div key={s.disc} className="promo-scen" style={{
+                          background: i === bestIdx ? 'var(--inv-pink-soft)' : 'var(--inv-bg-soft)',
+                          border: i === bestIdx ? '1.5px solid var(--inv-pink)' : 'none'
+                        }}>
+                          <div className="scen-label">-{(s.disc * 100).toFixed(0)}%</div>
+                          <div className="scen-margin" style={{ color: (s.newMargin ?? 0) < 0 ? 'var(--inv-red)' : (s.newMargin ?? 0) < 0.1 ? 'var(--inv-gold)' : 'var(--inv-green)' }}>
+                            {fmtPct(s.newMargin)}
+                          </div>
+                          <div className="scen-price">{fmtMoney(s.newPrice, market, false)}</div>
+                        </div>
+                      ))}
+                    </div>
+                    {bestIdx >= 0 && (
+                      <div className="promo-rec">
+                        💡 Recomendação: <b>-{(scenarios[bestIdx].disc * 100).toFixed(0)}%</b> mantém margem &gt; 15%
+                      </div>
+                    )}
+                    {bestIdx < 0 && (
+                      <div className="promo-rec" style={{ color: 'var(--inv-red)' }}>
+                        ⚠️ Sem desconto rentável · considere parar de produzir
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        {/* Footer */}
+        <div className="foot">
+          Larroudé Inventory Intelligence · {data ? `gerado em ${fmtDate(data.generatedAt)}` : '—'} · BigQuery Larroudé OS
+        </div>
       </div>
     </div>
   );
 }
 
-function Kpi({ label, value, hint, tone }: { label: string; value: string; hint?: string; tone?: 'negative' }) {
-  return (
-    <div className="card" style={{ padding: '10px 12px' }}>
-      <div className="text-[10px] uppercase tracking-wider font-bold" style={{ color: 'var(--ink-soft)' }}>{label}</div>
-      <div className="font-num text-[18px] lg:text-[20px] font-bold mt-1" style={{ color: tone === 'negative' ? '#dc2626' : 'var(--ink)' }}>
-        {value}
-      </div>
-      {hint && <div className="text-[10px] mt-0.5" style={{ color: 'var(--ink-muted)' }}>{hint}</div>}
-    </div>
-  );
-}
+/* ============================== sub-componentes ============================== */
 
-function SortHeader({ label, k, current, desc, onClick, align }: {
-  label: string;
-  k: SortKey;
-  current: SortKey;
-  desc: boolean;
-  onClick: (k: SortKey) => void;
-  align: 'left' | 'right';
+function Kpi({ label, value, sub, tone, highlight }: {
+  label: string; value: string; sub?: React.ReactNode;
+  tone?: 'green' | 'purple' | 'orange' | 'gold' | 'red' | 'blue';
+  highlight?: 'red' | 'gold' | 'green';
 }) {
-  const isActive = current === k;
+  const styles: any = {};
+  if (highlight === 'red') styles.background = 'linear-gradient(180deg, var(--inv-red-soft) 0%, var(--inv-paper) 100%)';
+  if (highlight === 'gold') styles.background = 'linear-gradient(180deg, var(--inv-gold-soft) 0%, var(--inv-paper) 100%)';
+  if (highlight === 'green') styles.background = 'linear-gradient(180deg, var(--inv-green-soft) 0%, var(--inv-paper) 100%)';
+  if (highlight) styles.borderColor = `var(--inv-${highlight})`;
+  if (tone && !highlight) {
+    const c = `var(--inv-${tone}-soft)`;
+    styles.background = `linear-gradient(180deg, ${c} 0%, var(--inv-paper) 100%)`;
+  }
   return (
-    <th
-      onClick={() => onClick(k)}
-      className={`px-2 py-1.5 cursor-pointer select-none hover:opacity-70 ${align === 'right' ? 'text-right' : 'text-left'}`}
-      style={{ color: isActive ? 'var(--pink-deep)' : undefined }}
-    >
-      {label} {isActive && (desc ? '↓' : '↑')}
-    </th>
+    <div className="kpi" style={styles}>
+      <div className="label">{label}</div>
+      <div className="value">{value}</div>
+      {sub && <div className="sub">{sub}</div>}
+    </div>
   );
+}
+
+function MatrixCard({ tone, emoji, label, count, revenue, market, desc, onClick }: {
+  tone: 'green' | 'blue' | 'gold' | 'red';
+  emoji: string; label: string; count: number; revenue: number; market: Market;
+  desc: string; onClick?: () => void;
+}) {
+  return (
+    <div className={`matrix-card mc-${tone}`} onClick={onClick}>
+      <div className="quad-head">
+        <span className="emoji">{emoji}</span>
+        <span className="qlabel">{label}</span>
+      </div>
+      <div className="qcount">{fmtNum(count)}</div>
+      <div className="qrev">{fmtMoney(revenue, market)}</div>
+      <div className="qdesc">{desc}</div>
+    </div>
+  );
+}
+
+function ProductCell({ row }: { row: Row }) {
+  return (
+    <td className="product">
+      <div className="name">{row.n}</div>
+      <div className="sku">{row.s}</div>
+    </td>
+  );
+}
+
+function ProductionCell({ row }: { row: Row }) {
+  const o = origins(row);
+  const items: { label: string; cls: string }[] = [];
+  if (o.estoque) items.push({ label: 'ESTOQUE', cls: 'st-green' });
+  if (o.ondemand) items.push({ label: 'ON-DEMAND', cls: 'st-purple' });
+  if (o.frombatch) items.push({ label: 'FROM-BATCH', cls: 'st-orange' });
+  if (items.length === 0) return <td><span style={{ color: 'var(--inv-ink-4)' }}>—</span></td>;
+  return (
+    <td>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        {items.map(it => (
+          <span key={it.label} className={`status-badge ${it.cls}`} style={{ fontSize: 9, padding: '2px 8px', alignSelf: 'flex-start' }}>{it.label}</span>
+        ))}
+      </div>
+    </td>
+  );
+}
+
+function CoverageBadge({ cov }: { cov: number | null }) {
+  if (cov == null) return <span style={{ color: 'var(--inv-ink-4)' }}>—</span>;
+  const cls = cov <= 14 ? 'st-red' : cov <= 45 ? 'st-gold' : cov <= 120 ? 'st-green' : 'st-gray';
+  return <span className={`status-badge ${cls}`}>{Math.round(cov)}d</span>;
+}
+
+function RemessaInfo({ qty, when }: { qty: number; when: string | null | undefined }) {
+  if (!qty) return <span style={{ color: 'var(--inv-ink-4)' }}>—</span>;
+  return (
+    <div style={{ textAlign: 'right' }}>
+      <div style={{ fontWeight: 700, color: 'var(--inv-ink)', fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>{fmtNum(qty)}</div>
+      {when && <div style={{ fontSize: 9.5, color: 'var(--inv-ink-3)', marginTop: 2 }}>chega {fmtDate(when)}</div>}
+    </div>
+  );
+}
+
+function StatusBadge({ status }: { status: StatusClass }) {
+  const map: Record<StatusClass, { label: string; cls: string }> = {
+    all: { label: '—', cls: 'st-gray' },
+    produzir: { label: '🟢 Produzir', cls: 'st-green' },
+    stockout: { label: '⚠️ Stockout', cls: 'st-red' },
+    manter: { label: '🔵 Manter', cls: 'st-blue' },
+    avaliar: { label: '🟡 Avaliar', cls: 'st-gold' },
+    encalhe: { label: '🔴 Encalhe', cls: 'st-red' },
+    margemneg: { label: '💸 Marg. neg.', cls: 'st-red' },
+    reduzir: { label: '⛔ Reduzir', cls: 'st-gray' },
+    inativo: { label: '💤 Inativo', cls: 'st-gray' },
+  };
+  const s = map[status];
+  return <span className={`status-badge ${s.cls}`}>{s.label}</span>;
 }
