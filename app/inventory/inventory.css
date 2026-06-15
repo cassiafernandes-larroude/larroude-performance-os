@@ -279,6 +279,31 @@
   white-space: nowrap; min-width: 80px; text-align: right;
 }
 
+/* Drag-to-scroll (cursor + UX) */
+.inv-root .list-card,
+.inv-root .table-filters,
+.inv-root .filter-card .btn-row {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+.inv-root .list-card:not(.dragging):hover,
+.inv-root .table-filters:not(.dragging):hover,
+.inv-root .btn-row:not(.dragging):hover { cursor: grab; }
+.inv-root .list-card.dragging,
+.inv-root .table-filters.dragging,
+.inv-root .btn-row.dragging {
+  cursor: grabbing !important;
+  user-select: none;
+  scroll-behavior: auto;
+}
+.inv-root .list-card.dragging *,
+.inv-root .table-filters.dragging *,
+.inv-root .btn-row.dragging * {
+  cursor: grabbing !important;
+  user-select: none;
+  pointer-events: none;
+}
+
 /* Status badges */
 .inv-root .status-badge {
   display: inline-flex;

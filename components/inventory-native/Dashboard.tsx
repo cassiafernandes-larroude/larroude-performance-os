@@ -209,6 +209,107 @@ export default function InventoryDashboard() {
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [market]);
   useEffect(() => { setPage(1); }, [statusFilter, search, origin, production, period, market]);
 
+  // Drag-to-scroll: clicar e arrastar pra rolar dados nas áreas com overflow
+  // (.list-card, .table-filters, .filter-card .btn-row)
+  // Cassia 2026-06-15
+  useEffect(() => {
+    const selectors = '.inv-root .list-card, .inv-root .table-filters, .inv-root .filter-card .btn-row';
+    let attached: Array<{ el: HTMLElement; cleanup: () => void }> = [];
+
+    const attach = () => {
+      const elements = document.querySelectorAll<HTMLElement>(selectors);
+      elements.forEach(el => {
+        if ((el as any).__dragAttached) return;
+        (el as any).__dragAttached = true;
+
+        let isDown = false;
+        let startX = 0;
+        let startY = 0;
+        let scrollLeft = 0;
+        let scrollTop = 0;
+        let moved = false;
+
+        const isInteractive = (target: EventTarget | null): boolean => {
+          if (!(target instanceof HTMLElement)) return false;
+          return !!target.closest('button, a, input, select, textarea, [role="button"]');
+        };
+
+        const onDown = (e: MouseEvent) => {
+          if (isInteractive(e.target)) return;
+          if (e.button !== 0) return;
+          isDown = true;
+          moved = false;
+          el.classList.add('dragging');
+          startX = e.pageX - el.offsetLeft;
+          startY = e.pageY - el.offsetTop;
+          scrollLeft = el.scrollLeft;
+          scrollTop = el.scrollTop;
+        };
+        const onLeave = () => { isDown = false; el.classList.remove('dragging'); };
+        const onUp = () => {
+          if (isDown) {
+            isDown = false;
+            el.classList.remove('dragging');
+          }
+        };
+        const onMove = (e: MouseEvent) => {
+          if (!isDown) return;
+          e.preventDefault();
+          const x = e.pageX - el.offsetLeft;
+          const y = e.pageY - el.offsetTop;
+          const dx = (x - startX) * 1.4;
+          const dy = (y - startY) * 1.4;
+          if (Math.abs(dx) > 3 || Math.abs(dy) > 3) moved = true;
+          el.scrollLeft = scrollLeft - dx;
+          el.scrollTop = scrollTop - dy;
+        };
+        // Evita que click dispare depois de drag
+        const onClick = (e: MouseEvent) => {
+          if (moved) {
+            e.preventDefault();
+            e.stopPropagation();
+            moved = false;
+          }
+        };
+
+        el.addEventListener('mousedown', onDown);
+        el.addEventListener('mouseleave', onLeave);
+        window.addEventListener('mouseup', onUp);
+        el.addEventListener('mousemove', onMove);
+        el.addEventListener('click', onClick, true);
+
+        attached.push({
+          el,
+          cleanup: () => {
+            el.removeEventListener('mousedown', onDown);
+            el.removeEventListener('mouseleave', onLeave);
+            window.removeEventListener('mouseup', onUp);
+            el.removeEventListener('mousemove', onMove);
+            el.removeEventListener('click', onClick, true);
+            (el as any).__dragAttached = false;
+          }
+        });
+      });
+    };
+
+    // Attach na primeira render + reattach após mudanças de data/filtro
+    const t = setTimeout(attach, 50);
+
+    // MutationObserver: re-anexa quando novos blocos aparecem (paginação, status filter)
+    const observer = new MutationObserver(() => {
+      // Debounce: só re-anexa se há novos elementos sem listener
+      attach();
+    });
+    const root = document.querySelector('.inv-root');
+    if (root) observer.observe(root, { childList: true, subtree: true });
+
+    return () => {
+      clearTimeout(t);
+      observer.disconnect();
+      attached.forEach(a => a.cleanup());
+    };
+  }, []);
+
   const filtered = useMemo(() => {
     if (!data) return [] as Row[];
     let r = data.rows.slice();
