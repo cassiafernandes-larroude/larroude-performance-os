@@ -207,7 +207,8 @@ export async function fetchAdsMetadataByIds(adIds: string[]): Promise<AdMeta[]> 
   if (!adIds || adIds.length === 0) return [];
   const BATCH_SIZE = 50;
   const out: AdMeta[] = [];
-  const fields = 'id,name,status,effective_status,creative{thumbnail_url,image_url,image_hash,object_story_spec{link_data{picture,image_hash,link},video_data{image_url,call_to_action{value{link}}}},asset_feed_spec{images{url},link_urls{website_url}}}';
+  // Cassia 2026-06-14: incluir video_id e effective_object_story_id pra buscar thumbnail HD depois.
+  const fields = 'id,name,status,effective_status,creative{thumbnail_url,image_url,image_hash,video_id,effective_object_story_id,object_story_spec{link_data{picture,image_hash,link},video_data{image_url,video_id,call_to_action{value{link}}}},asset_feed_spec{images{url},link_urls{website_url}}}';
 
   for (let i = 0; i < adIds.length; i += BATCH_SIZE) {
     const chunk = adIds.slice(i, i + BATCH_SIZE);
@@ -225,19 +226,51 @@ export async function fetchAdsMetadataByIds(adIds: string[]): Promise<AdMeta[]> 
         continue;
       }
       const j: any = await r.json();
-      // Response shape: { "<ad_id>": { id, name, status, ... }, ... }
+      // Cassia 2026-06-14: video ads retornam thumbnail miniatura. Coleta video_ids
+      // e busca HD via /{video_id}/thumbnails em paralelo.
+      const videoIds: string[] = [];
+      const adRecords: any[] = [];
       for (const adId of chunk) {
         const a = j[adId];
         if (!a) continue;
+        adRecords.push(a);
+        const vId = a.creative?.video_id || a.creative?.object_story_spec?.video_data?.video_id;
+        if (vId) videoIds.push(vId);
+      }
+      const hdVideoThumbs: Record<string, string> = {};
+      if (videoIds.length > 0) {
+        await Promise.all(videoIds.map(async vid => {
+          try {
+            const tUrl = `${BASE}/${vid}/thumbnails?access_token=${token()}&fields=uri,is_preferred,width,height`;
+            const tr = await fetch(tUrl, { cache: 'no-store' });
+            if (!tr.ok) return;
+            const tj: any = await tr.json();
+            const thumbs = (tj.data || []) as any[];
+            const preferred = thumbs.find(t => t.is_preferred);
+            const sorted = thumbs.slice().sort((x, y) => ((y.width || 0) * (y.height || 0)) - ((x.width || 0) * (x.height || 0)));
+            const pick = preferred || sorted[0];
+            if (pick?.uri) hdVideoThumbs[vid] = pick.uri;
+          } catch {/* ignore */}
+        }));
+      }
+      for (const a of adRecords) {
         const c = a.creative || {};
         const oss = c.object_story_spec || {};
         const link = oss.link_data || {};
         const video = oss.video_data || {};
         const assetImages = c.asset_feed_spec?.images || [];
         const assetLinks = c.asset_feed_spec?.link_urls || [];
-        // Cassia 2026-06-14: preferir ALTA RESOLUÇÃO. thumbnail_url do Meta é só 64×64.
-        // Ordem: image_url (full) → link_data.picture → asset_feed.images[0] → video.image_url → thumbnail_url (último recurso).
+        const vId = c.video_id || video.video_id;
+        const hdVideo = vId ? hdVideoThumbs[vId] : null;
+        // ALTA RESOLUÇÃO. Ordem:
+        // 1. HD video thumbnail (/{video_id}/thumbnails, geralmente 1080p)
+        // 2. creative.image_url (full original)
+        // 3. link_data.picture
+        // 4. asset_feed.images[0]
+        // 5. video.image_url (média res)
+        // 6. thumbnail_url (último recurso, 64×64)
         const thumb =
+          hdVideo ||
           c.image_url ||
           link.picture ||
           (Array.isArray(assetImages) && assetImages[0]?.url) ||
