@@ -33,18 +33,18 @@ const LOCATIONS: Record<'US' | 'BR', { instock: string[]; ondemand: string; from
 };
 
 // Mother SKU `L471-VERO-NATU-1967` → variantes têm formato `L471-VERO-{size}-NATU-1967`.
-// O regex que o dashboard original usa: `REGEXP_REPLACE(sku, r'^(L\d+-[A-Z]+)-[\d.]+-', r'\1-')`
-// Ou seja, pra montar a busca, separamos: prefixo `L471-VERO` + sufixo `-NATU-1967`.
+// Regex padrão do lpos: `^(L\d+-[A-Z]+)-[\d.]+-` (remove o tamanho).
+// Shopify Admin search NÃO suporta wildcard no meio (`sku:abc-*-def` não funciona).
+// Estratégia: busca por PREFIXO (`sku:L471-DOLL-`) e filtra client-side os que batem com o mother.
 function buildSearchQuery(motherSku: string): string {
   const parts = motherSku.split('-');
-  if (parts.length < 4) {
-    // Fallback genérico: busca por SKU contendo o mother
-    return `sku:*${motherSku}*`;
-  }
-  const prefix = `${parts[0]}-${parts[1]}`;       // L471-VERO
-  const suffix = parts.slice(2).join('-');         // NATU-1967
-  // Shopify search aceita wildcards no meio: `L471-VERO-*-NATU-1967`
-  return `sku:${prefix}-*-${suffix}`;
+  if (parts.length < 2) return `sku:${motherSku}`;
+  return `sku:${parts[0]}-${parts[1]}-`;
+}
+
+function skuToMother(sku: string): string {
+  // L471-DOLL-7.5-NATU-1967  →  L471-DOLL-NATU-1967
+  return sku.replace(/^(L\d+-[A-Z]+)-[\d.]+-/, '$1-');
 }
 
 interface ShopifyVariantsResp {
@@ -96,7 +96,7 @@ export async function GET(_req: NextRequest, { params }: { params: { market: str
 
     const data = await shopifyGraphQL<ShopifyVariantsResp>(market, `
       query VariantsByMotherSku($q: String!) {
-        productVariants(first: 50, query: $q) {
+        productVariants(first: 100, query: $q) {
           edges {
             node {
               sku
@@ -120,27 +120,31 @@ export async function GET(_req: NextRequest, { params }: { params: { market: str
     if (!data || !data.productVariants) {
       return NextResponse.json({
         market, motherSku, generatedAt: new Date().toISOString(), variants: [],
+        debug: { searchQuery, reason: 'shopifyGraphQL retornou null' },
       });
     }
 
     const locs = LOCATIONS[market];
-    const variants = data.productVariants.edges.map(({ node }) => {
-      let inStock = 0, onDemand = 0, fromBatch = 0;
-      for (const { node: lvl } of node.inventoryItem?.inventoryLevels?.edges || []) {
-        const gid = lvl.location.id; // "gid://shopify/Location/82824921254"
-        const locId = gid.split('/').pop() || '';
-        const available = lvl.quantities?.find(q => q.name === 'available')?.quantity ?? 0;
-        if (locs.instock.includes(locId)) inStock += available;
-        else if (locId === locs.ondemand) onDemand += available;
-        else if (locId === locs.frombatch) fromBatch += available;
-      }
-      return {
-        sku: node.sku,
-        size: extractSize(node.sku) || node.title,
-        inStock, onDemand, fromBatch,
-        total: inStock + onDemand + fromBatch,
-      };
-    });
+    // Filtra apenas variantes cujo mother SKU bate (Shopify retorna todos do prefixo).
+    const variants = data.productVariants.edges
+      .filter(({ node }) => node.sku && skuToMother(node.sku) === motherSku)
+      .map(({ node }) => {
+        let inStock = 0, onDemand = 0, fromBatch = 0;
+        for (const { node: lvl } of node.inventoryItem?.inventoryLevels?.edges || []) {
+          const gid = lvl.location.id; // "gid://shopify/Location/82824921254"
+          const locId = gid.split('/').pop() || '';
+          const available = lvl.quantities?.find(q => q.name === 'available')?.quantity ?? 0;
+          if (locs.instock.includes(locId)) inStock += available;
+          else if (locId === locs.ondemand) onDemand += available;
+          else if (locId === locs.frombatch) fromBatch += available;
+        }
+        return {
+          sku: node.sku,
+          size: extractSize(node.sku) || node.title,
+          inStock, onDemand, fromBatch,
+          total: inStock + onDemand + fromBatch,
+        };
+      });
 
     // Ordena por tamanho numérico
     variants.sort((a, b) => {
