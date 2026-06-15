@@ -369,42 +369,141 @@
 .inv-root .promo-rec { font-size: 11px; color: var(--inv-ink-2); margin-top: 10px; font-weight: 600; }
 .inv-root .promo-rec b { color: var(--inv-pink); font-weight: 800; }
 
-/* Responsivo */
+/* Responsivo — desktop-first */
 @media (max-width: 1400px) {
   .inv-root .kpi-grid { grid-template-columns: repeat(5, 1fr); }
   .inv-root .kpi-grid.kpi-grid-8 { grid-template-columns: repeat(4, 1fr); }
+  .inv-root .app { padding: 32px 32px 60px; }
 }
 @media (max-width: 1100px) {
   .inv-root .kpi-grid { grid-template-columns: repeat(4, 1fr); }
   .inv-root .matrix-grid { grid-template-columns: repeat(2, 1fr); }
   .inv-root .kpi-grid.kpi-grid-4 { grid-template-columns: repeat(2, 1fr); }
 }
+@media (max-width: 900px) {
+  /* Ciclo do par começa a quebrar antes do tablet/mobile */
+  .inv-root .ciclo-arrow { display: none; }
+  .inv-root .ciclo-banner { gap: 8px; padding: 12px 14px; }
+}
 @media (max-width: 820px) {
   .inv-root .kpi-grid { grid-template-columns: repeat(3, 1fr); }
   .inv-root .kpi-grid.kpi-grid-8 { grid-template-columns: repeat(3, 1fr); }
+  .inv-root header h1 { font-size: 36px; margin-bottom: 18px; }
 }
 @media (max-width: 720px) {
-  .inv-root .app { padding: 16px; }
-  .inv-root .kpi-grid, .inv-root .kpi-grid.kpi-grid-8, .inv-root .kpi-grid.kpi-grid-4 { grid-template-columns: repeat(2, 1fr); gap: 8px; }
-  .inv-root .matrix-grid { grid-template-columns: repeat(2, 1fr); }
-  .inv-root header h1 { font-size: 28px; }
-  .inv-root .market-pill { padding: 7px 14px; font-size: 12.5px; }
-  .inv-root .filter-card { padding: 12px; }
-  .inv-root .filter-group { flex-direction: column; align-items: flex-start; gap: 6px; }
-  .inv-root .btn-pill { padding: 6px 12px; font-size: 11.5px; }
-  .inv-root .search-input { flex: 1 1 100%; margin-left: 0; }
-  .inv-root .kpi { padding: 14px 12px; }
-  .inv-root .kpi .value { font-size: 22px; }
-  .inv-root .list-table { font-size: 11.5px; min-width: 1100px; }
-  .inv-root .list-table th, .inv-root .list-table td { padding: 10px 8px; }
+  /* Tablet/mobile */
+  .inv-root .app { padding: 16px 14px 60px; max-width: 100%; }
+  .inv-root .kpi-grid,
+  .inv-root .kpi-grid.kpi-grid-8,
+  .inv-root .kpi-grid.kpi-grid-4 { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .inv-root .matrix-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .inv-root header h1 { font-size: 26px; line-height: 1.1; margin-bottom: 14px; }
+  .inv-root header h1 .sep { margin: 0 6px; }
+
+  /* Market row + botão Atualizar empilham bem */
+  .inv-root .market-row {
+    display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px;
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+    padding-bottom: 2px;
+  }
+  .inv-root .market-pill { padding: 7px 14px; font-size: 12.5px; flex-shrink: 0; }
+  .inv-root .market-row > button:last-child {
+    margin-left: auto !important; flex-shrink: 0;
+    padding: 7px 14px !important; font-size: 12px !important;
+  }
+
+  .inv-root .subtitle { font-size: 12.5px; margin-bottom: 22px; }
+
+  /* Ciclo do par vira coluna */
+  .inv-root .ciclo-banner { flex-direction: column; align-items: flex-start; gap: 6px; padding: 12px 14px; }
+  .inv-root .ciclo-pill { font-size: 10px; padding: 4px 10px; }
+  .inv-root .ciclo-pill .ciclo-desc { font-size: 9.5px; }
+
+  /* Filter card */
+  .inv-root .filter-card { padding: 12px; gap: 10px; border-radius: 14px; }
+  .inv-root .filter-group { flex-direction: column; align-items: flex-start; gap: 6px; width: 100%; }
+  .inv-root .filter-group .btn-row {
+    display: flex; flex-wrap: nowrap; gap: 5px; overflow-x: auto;
+    -webkit-overflow-scrolling: touch; width: 100%; padding-bottom: 4px;
+  }
+  .inv-root .btn-pill { padding: 6px 12px; font-size: 11.5px; flex-shrink: 0; }
+  .inv-root .search-input { flex: 1 1 100%; margin-left: 0; width: 100%; }
+
+  /* Section heads */
+  .inv-root .section-head { margin: 28px 0 12px; gap: 8px; }
+  .inv-root .section-head .right-info { width: 100%; margin-left: 0; font-size: 11px; }
+  .inv-root .section-pill { font-size: 10px; padding: 5px 10px; }
+  .inv-root .section-head .title { font-size: 12.5px; }
+
+  /* KPIs */
+  .inv-root .kpi { padding: 12px 10px !important; border-radius: 12px; }
+  .inv-root .kpi .label { font-size: 9px; min-height: 22px; margin-bottom: 6px; }
+  .inv-root .kpi .value { font-size: 19px; min-height: 22px; }
+  .inv-root .kpi .sub { font-size: 10px; }
+
+  /* Matrix cards */
+  .inv-root .matrix-card { padding: 14px 14px; border-radius: 12px; }
+  .inv-root .matrix-card .qcount { font-size: 28px; }
+  .inv-root .matrix-card .qrev { font-size: 11.5px; }
+  .inv-root .matrix-card .qdesc { font-size: 10px; }
+
+  /* Tabelas */
+  .inv-root .list-card { border-radius: 14px; -webkit-overflow-scrolling: touch; }
+  .inv-root .list-table { font-size: 11px; min-width: 900px; }
+  .inv-root .list-table th, .inv-root .list-table td { padding: 9px 7px; }
+  .inv-root .list-table th { font-size: 9.5px; }
+  .inv-root .list-table td.product .name { font-size: 11.5px; }
+  .inv-root .list-table td.product .sku { font-size: 9.5px; }
+  .inv-root .bar-track { min-width: 50px; }
+  .inv-root .bar-num { min-width: 56px; font-size: 10px; }
+
+  /* Status filter pills com scroll horizontal */
+  .inv-root .table-filters {
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap; padding: 10px 12px;
+  }
+  .inv-root .table-filters > * { flex-shrink: 0; }
+  .inv-root .st-pill { padding: 5px 10px; font-size: 10.5px; }
+
+  /* Pagination */
   .inv-root .pagination { flex-direction: column; gap: 10px; padding: 14px; }
-  .inv-root .promo-scenarios { grid-template-columns: 1fr; }
+  .inv-root .pagination button { width: 100%; max-width: 200px; padding: 9px 14px; }
+  .inv-root .pg-info { font-size: 11.5px; text-align: center; order: -1; }
+
+  /* Promo */
+  .inv-root .promo-card { padding: 14px 14px; }
+  .inv-root .promo-scenarios { grid-template-columns: repeat(3, 1fr); gap: 6px; }
 }
 @media (max-width: 460px) {
+  /* Mobile pequeno (iPhone SE / Galaxy) */
+  .inv-root .app { padding: 12px 10px 50px; }
   .inv-root .kpi-grid, .inv-root .kpi-grid.kpi-grid-8 { grid-template-columns: repeat(2, 1fr); }
   .inv-root .kpi-grid.kpi-grid-4 { grid-template-columns: 1fr; }
-  .inv-root .matrix-grid { grid-template-columns: 1fr; }
-  .inv-root header h1 { font-size: 24px; line-height: 1.1; }
-  .inv-root .market-row { gap: 6px; overflow-x: auto; padding-bottom: 4px; }
-  .inv-root .market-pill { padding: 6px 12px; font-size: 12px; flex-shrink: 0; }
+  .inv-root .matrix-grid { grid-template-columns: 1fr !important; gap: 10px; }
+  .inv-root .matrix-card .qcount { font-size: 32px; }
+  .inv-root header h1 { font-size: 22px; line-height: 1.1; }
+  .inv-root .market-pill { padding: 6px 12px; font-size: 11.5px; }
+  .inv-root .market-pill .flag { font-size: 9px; padding: 2px 5px; }
+
+  /* Ciclo: mostrar etiquetas mais compactas */
+  .inv-root .ciclo-label { font-size: 9.5px; }
+  .inv-root .ciclo-pill { font-size: 9.5px; padding: 3px 8px; }
+  .inv-root .ciclo-pill .ciclo-desc { display: none; } /* só labels em mobile pequeno */
+
+  /* KPI ainda menor */
+  .inv-root .kpi { padding: 10px 8px !important; border-radius: 10px; }
+  .inv-root .kpi .value { font-size: 17px; }
+  .inv-root .kpi .label { font-size: 8.5px; min-height: 20px; }
+  .inv-root .kpi .sub { font-size: 9.5px; }
+
+  /* Promo: 1 cenário por linha pra caber */
+  .inv-root .promo-scenarios { grid-template-columns: 1fr; }
+  .inv-root .promo-card .promo-name { font-size: 12.5px; }
+
+  /* Tabela: scroll suave + indicador */
+  .inv-root .list-table { font-size: 10.5px; min-width: 800px; }
+  .inv-root .list-table th, .inv-root .list-table td { padding: 7px 6px; }
+
+  /* Foot */
+  .inv-root .foot { font-size: 10px; margin-top: 30px; }
 }
