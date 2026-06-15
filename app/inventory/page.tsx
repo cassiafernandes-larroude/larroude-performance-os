@@ -1,12 +1,8 @@
-import { DashboardEmbed } from "@/components/dashboards/DashboardEmbed";
+// Cassia 2026-06-14: substituído o iframe pelo componente nativo.
+import InventoryDashboard from '@/components/inventory-native/Dashboard';
+
+export const dynamic = 'force-dynamic';
 
 export default function InventoryPage() {
-  return (
-    <DashboardEmbed
-      src="https://larroude-inventory-dashboard.vercel.app"
-      title="Inventory Intelligence"
-      subtitle="Stock levels, sell-through, replenishment signals"
-      externalUrl="https://larroude-inventory-dashboard.vercel.app"
-    />
-  );
+  return <InventoryDashboard />;
 }
