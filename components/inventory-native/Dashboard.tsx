@@ -613,8 +613,8 @@ export default function InventoryDashboard() {
                   <td className="num" style={{ fontSize: 11, color: 'var(--inv-ink-3)' }}>{x.p.daily.toFixed(1)} un/d</td>
                   <td className="num">{fmtNum(x.p.estoque)}</td>
                   <td className="num"><CoverageBadge cov={x.p.cov} /></td>
-                  <td className="num"><RemessaInfo qty={x.p.emRemessa} when={x.p.row.rp} /></td>
-                  <td className="num"><RemessaInfo qty={x.p.emTransito} when={x.p.row.tp} /></td>
+                  <td className="num"><RemessaInfo qty={x.p.emRemessa} when={x.p.row.rp} po={x.p.row.rnum} /></td>
+                  <td className="num"><RemessaInfo qty={x.p.emTransito} when={x.p.row.tp} po={x.p.row.tnum} tone="gold" /></td>
                 </tr>
               ))}
               {concentracao.length === 0 && (
@@ -832,7 +832,6 @@ export default function InventoryDashboard() {
             <thead>
               <tr>
                 <th>Produto</th>
-                <th>Status</th>
                 <th>Produção</th>
                 <th className="num">Faturamento</th>
                 <th className="num">% do tot.</th>
@@ -844,6 +843,9 @@ export default function InventoryDashboard() {
                 <th className="num">Cap. parado</th>
                 <th className="num">Fat. previsto</th>
                 <th className="num">Cobertura</th>
+                <th className="num" style={{ color: 'var(--inv-orange)' }}>Em Remessa</th>
+                <th className="num" style={{ color: 'var(--inv-gold)' }}>Em Trânsito</th>
+                <th>Status</th>
               </tr>
             </thead>
             <tbody>
@@ -852,7 +854,6 @@ export default function InventoryDashboard() {
                 return (
                   <tr key={p.row.s}>
                     <ProductCell row={p.row} />
-                    <td><StatusBadge status={p.status} /></td>
                     <ProductionCell row={p.row} />
                     <td className="num"><b>{fmtMoney(p.revenue, market)}</b></td>
                     <td className="num">{(pctTot * 100).toFixed(2)}%</td>
@@ -866,11 +867,14 @@ export default function InventoryDashboard() {
                     <td className="num">{fmtMoney(p.capParado, market)}</td>
                     <td className="num">{fmtMoney(p.fatPrev, market)}</td>
                     <td className="num"><CoverageBadge cov={p.cov} /></td>
+                    <td className="num"><RemessaInfo qty={p.emRemessa} when={p.row.rp} po={p.row.rnum} /></td>
+                    <td className="num"><RemessaInfo qty={p.emTransito} when={p.row.tp} po={p.row.tnum} tone="gold" /></td>
+                    <td><StatusBadge status={p.status} /></td>
                   </tr>
                 );
               })}
               {detalhe.length === 0 && (
-                <tr><td colSpan={13} style={{ textAlign: 'center', padding: 40, color: 'var(--inv-ink-3)' }}>Nenhum modelo com este filtro.</td></tr>
+                <tr><td colSpan={15} style={{ textAlign: 'center', padding: 40, color: 'var(--inv-ink-3)' }}>Nenhum modelo com este filtro.</td></tr>
               )}
             </tbody>
           </table>
@@ -1026,12 +1030,27 @@ function CoverageBadge({ cov }: { cov: number | null }) {
   return <span className={`status-badge ${cls}`}>{Math.round(cov)}d</span>;
 }
 
-function RemessaInfo({ qty, when }: { qty: number; when: string | null | undefined }) {
+function RemessaInfo({ qty, when, po, tone }: {
+  qty: number;
+  when?: string | null | undefined;
+  po?: string | null | undefined;
+  tone?: 'orange' | 'gold';
+}) {
   if (!qty) return <span style={{ color: 'var(--inv-ink-4)' }}>—</span>;
+  const color = tone === 'gold' ? 'var(--inv-gold)' : 'var(--inv-orange)';
+  // POs concatenadas vêm como "0000023262,0000023275,0000023320" do API
+  const poList = (po || '').split(',').map(p => p.trim()).filter(Boolean);
+  const visible = poList.slice(0, 2);
+  const extra = poList.length - visible.length;
   return (
-    <div style={{ textAlign: 'right' }}>
-      <div style={{ fontWeight: 700, color: 'var(--inv-ink)', fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>{fmtNum(qty)}</div>
-      {when && <div style={{ fontSize: 9.5, color: 'var(--inv-ink-3)', marginTop: 2 }}>chega {fmtDate(when)}</div>}
+    <div style={{ textAlign: 'right', minWidth: 110 }}>
+      <div style={{ fontWeight: 800, color, fontSize: 13, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>{fmtNum(qty)}</div>
+      {when && <div style={{ fontSize: 10, color: 'var(--inv-ink-3)', marginTop: 2 }}>{fmtDate(when)}</div>}
+      {visible.length > 0 && (
+        <div style={{ fontSize: 8.5, color: 'var(--inv-ink-4)', marginTop: 2, fontFamily: 'ui-monospace, monospace', letterSpacing: '-0.02em' }}>
+          {visible.join(', ')}{extra > 0 ? ` +${extra}` : ''}
+        </div>
+      )}
     </div>
   );
 }
