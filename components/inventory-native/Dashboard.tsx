@@ -183,7 +183,7 @@ function origins(r: Row): { estoque: boolean; ondemand: boolean; frombatch: bool
   };
 }
 
-const PAGE_SIZE = 30;
+const PAGE_SIZE = 25; // Cassia 2026-06-15: 25 linhas/pag em todos os blocos paginados
 
 export default function InventoryDashboard() {
   const [market, setMarket] = useState<Market>('US');
@@ -193,6 +193,11 @@ export default function InventoryDashboard() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusClass>('all');
   const [page, setPage] = useState(1);
+  // Paginas das outras tabelas (Cassia 2026-06-15: 25 linhas/pag em todas)
+  const [pageConc, setPageConc] = useState(1);
+  const [pageProd, setPageProd] = useState(1);
+  const [pageCap, setPageCap] = useState(1);
+  const [pageRent, setPageRent] = useState(1);
 
   const [data, setData] = useState<Data | null>(null);
   const [loading, setLoading] = useState(false);
@@ -207,7 +212,9 @@ export default function InventoryDashboard() {
     } catch (e: any) { setError(e.message); } finally { setLoading(false); }
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [market]);
-  useEffect(() => { setPage(1); }, [statusFilter, search, origin, production, period, market]);
+  useEffect(() => {
+    setPage(1); setPageConc(1); setPageProd(1); setPageCap(1); setPageRent(1);
+  }, [statusFilter, search, origin, production, period, market]);
 
   // Drag-to-scroll: clicar e arrastar pra rolar dados nas áreas com overflow
   // (.list-card, .table-filters, .filter-card .btn-row)
@@ -369,8 +376,9 @@ export default function InventoryDashboard() {
     return { counts, revs };
   }, [processed]);
 
-  const concentracao = useMemo(() => {
-    const sorted = [...processed].sort((a, b) => b.revenue - a.revenue).slice(0, 20);
+  // Listas COMPLETAS (sem slice — paginadas no render)
+  const concentracaoFull = useMemo(() => {
+    const sorted = [...processed].sort((a, b) => b.revenue - a.revenue);
     let acc = 0;
     return sorted.map((p, i) => {
       const pct = kpis.revP > 0 ? p.revenue / kpis.revP : 0;
@@ -379,26 +387,33 @@ export default function InventoryDashboard() {
     });
   }, [processed, kpis.revP]);
 
-  const produzirMais = useMemo(() => {
+  const produzirMaisFull = useMemo(() => {
     return [...processed]
       .filter(p => p.cov != null && p.cov < 30 && p.daily > 0.3)
-      .sort((a, b) => (a.cov! - b.cov!))
-      .slice(0, 10);
+      .sort((a, b) => (a.cov! - b.cov!));
   }, [processed]);
 
-  const capitalParado = useMemo(() => {
+  const capitalParadoFull = useMemo(() => {
     return [...processed]
       .filter(p => p.estoque > 100 && (p.noSales60 || p.daily < 0.05))
-      .sort((a, b) => b.capParado - a.capParado)
-      .slice(0, 10);
+      .sort((a, b) => b.capParado - a.capParado);
   }, [processed]);
 
-  const rentabilidade = useMemo(() => {
+  const rentabilidadeFull = useMemo(() => {
     return [...processed]
       .filter(p => p.qty >= 5 && p.marginNet != null)
-      .sort((a, b) => (a.marginNet ?? 999) - (b.marginNet ?? 999))
-      .slice(0, 10);
+      .sort((a, b) => (a.marginNet ?? 999) - (b.marginNet ?? 999));
   }, [processed]);
+
+  // Slices paginados
+  const totalPagesConc = Math.max(1, Math.ceil(concentracaoFull.length / PAGE_SIZE));
+  const totalPagesProd = Math.max(1, Math.ceil(produzirMaisFull.length / PAGE_SIZE));
+  const totalPagesCap = Math.max(1, Math.ceil(capitalParadoFull.length / PAGE_SIZE));
+  const totalPagesRent = Math.max(1, Math.ceil(rentabilidadeFull.length / PAGE_SIZE));
+  const concentracao = concentracaoFull.slice((pageConc - 1) * PAGE_SIZE, pageConc * PAGE_SIZE);
+  const produzirMais = produzirMaisFull.slice((pageProd - 1) * PAGE_SIZE, pageProd * PAGE_SIZE);
+  const capitalParado = capitalParadoFull.slice((pageCap - 1) * PAGE_SIZE, pageCap * PAGE_SIZE);
+  const rentabilidade = rentabilidadeFull.slice((pageRent - 1) * PAGE_SIZE, pageRent * PAGE_SIZE);
 
   const detalheFull = useMemo(() => {
     return [...processed]
@@ -419,12 +434,25 @@ export default function InventoryDashboard() {
     <div className="inv-root">
       <div className="app">
 
-        {/* Header */}
-        <header>
-          <h1>
-            Larroudé<span className="sep">·</span>Inventory Intelligence
-          </h1>
-          <div className="market-row">
+        {/* Header — padronizado com os demais dashboards do Performance OS */}
+        <header className="mb-6">
+          <div className="pt-8 pb-2 flex items-start justify-between gap-4 flex-wrap">
+            <h1 className="font-display text-[24px] sm:text-[28px] lg:text-[40px] font-bold leading-tight"
+                style={{ color: 'var(--inv-ink)', letterSpacing: '-0.025em' }}>
+              Inventory Intelligence
+            </h1>
+            <button onClick={load} disabled={loading} style={{
+              background: 'var(--inv-paper)',
+              border: '1.5px solid var(--inv-line)', borderRadius: 100,
+              padding: '8px 18px', fontWeight: 700, fontSize: 13,
+              color: 'var(--inv-ink-2)', cursor: loading ? 'wait' : 'pointer',
+              opacity: loading ? 0.6 : 1, fontFamily: 'inherit',
+              alignSelf: 'center',
+            }}>
+              {loading ? '⏳ Carregando…' : '↻ Atualizar'}
+            </button>
+          </div>
+          <div className="market-row" style={{ marginTop: 8 }}>
             <button className={`market-pill ${market === 'US' ? 'active' : ''}`} onClick={() => setMarket('US')}>
               <span className="flag">US</span>
               United States
@@ -432,15 +460,6 @@ export default function InventoryDashboard() {
             <button className={`market-pill ${market === 'BR' ? 'active' : ''}`} onClick={() => setMarket('BR')}>
               <span className="flag">BR</span>
               Brasil
-            </button>
-            <button onClick={load} disabled={loading} style={{
-              marginLeft: 'auto', background: 'var(--inv-paper)',
-              border: '1.5px solid var(--inv-line)', borderRadius: 100,
-              padding: '8px 18px', fontWeight: 700, fontSize: 13,
-              color: 'var(--inv-ink-2)', cursor: loading ? 'wait' : 'pointer',
-              opacity: loading ? 0.6 : 1, fontFamily: 'inherit',
-            }}>
-              {loading ? '⏳ Carregando…' : '↻ Atualizar'}
             </button>
           </div>
           <p className="subtitle">
@@ -579,8 +598,8 @@ export default function InventoryDashboard() {
         {/* 📊 Concentração */}
         <div className="section-head" id="sec-conc">
           <span className="section-pill sp-teal">📊 Concentração</span>
-          <span className="title">Top 20 modelos por faturamento · análise ABC</span>
-          <span className="right-info">% acumulado mostra Pareto</span>
+          <span className="title">Modelos por faturamento · análise ABC · % acumulado mostra Pareto</span>
+          <span className="right-info">{concentracaoFull.length} modelos</span>
         </div>
         <div className="list-card">
           <table className="list-table">
@@ -622,6 +641,7 @@ export default function InventoryDashboard() {
               )}
             </tbody>
           </table>
+          <Paginator page={pageConc} totalPages={totalPagesConc} total={concentracaoFull.length} setPage={setPageConc} />
         </div>
 
         {/* 🟢 Produzir mais */}
@@ -671,6 +691,7 @@ export default function InventoryDashboard() {
               )}
             </tbody>
           </table>
+          <Paginator page={pageProd} totalPages={totalPagesProd} total={produzirMaisFull.length} setPage={setPageProd} />
         </div>
 
         {/* 🔴 Capital parado */}
@@ -727,6 +748,7 @@ export default function InventoryDashboard() {
               )}
             </tbody>
           </table>
+          <Paginator page={pageCap} totalPages={totalPagesCap} total={capitalParadoFull.length} setPage={setPageCap} />
         </div>
 
         {/* 💰 Rentabilidade */}
@@ -788,6 +810,7 @@ export default function InventoryDashboard() {
               )}
             </tbody>
           </table>
+          <Paginator page={pageRent} totalPages={totalPagesRent} total={rentabilidadeFull.length} setPage={setPageRent} />
         </div>
 
         {/* 📋 Detalhe */}
@@ -1051,6 +1074,22 @@ function RemessaInfo({ qty, when, po, tone }: {
           {visible.join(', ')}{extra > 0 ? ` +${extra}` : ''}
         </div>
       )}
+    </div>
+  );
+}
+
+function Paginator({ page, totalPages, total, setPage }: {
+  page: number; totalPages: number; total: number;
+  setPage: (p: number) => void;
+}) {
+  if (totalPages <= 1) return null;
+  return (
+    <div className="pagination">
+      <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page <= 1}>‹ Anterior</button>
+      <span className="pg-info">
+        Página <b>{page}</b> de <b>{totalPages}</b> · {total} no total
+      </span>
+      <button onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page >= totalPages}>Próxima ›</button>
     </div>
   );
 }

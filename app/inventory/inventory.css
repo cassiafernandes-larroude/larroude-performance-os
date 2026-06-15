@@ -4,9 +4,10 @@
  * Namespaced em .inv-root pra não vazar pro resto do app. */
 
 .inv-root {
-  /* Paleta original do dashboard externo */
-  --inv-bg: #F4ECDF;
-  --inv-bg-soft: #F9F2E6;
+  /* Cassia 2026-06-15: fundo padronizado com os demais dashboards do Performance OS (--paper #F2EDE6).
+   * Mantém os tons internos do design Larroudé original pra cards/borders. */
+  --inv-bg: #F2EDE6;
+  --inv-bg-soft: #ECE6DD;
   --inv-paper: #FFFFFF;
   --inv-ink: #1A1A1A;
   --inv-ink-2: #4A4A4A;
@@ -39,20 +40,9 @@
   padding: 36px 44px 80px;
 }
 
-/* Header */
-.inv-root header h1 {
-  font-size: 46px;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  color: var(--inv-ink);
-  margin-bottom: 22px;
-  line-height: 1.05;
-}
-.inv-root header h1 .sep {
-  color: var(--inv-ink-4);
-  margin: 0 10px;
-  font-weight: 400;
-}
+/* Header — h1 vem do Tailwind no JSX (font-display text-[24px] sm:text-[28px] lg:text-[40px])
+ * para ficar igual aos demais dashboards do Performance OS.
+ * Nenhuma regra de tamanho/peso aqui pra não competir. */
 
 /* Market pills */
 .inv-root .market-row { display: flex; gap: 10px; margin-bottom: 18px; }
@@ -250,11 +240,24 @@
   font-variant-numeric: tabular-nums;
 }
 .inv-root .list-table td.num { text-align: right; }
-.inv-root .list-table td.product .name { font-weight: 700; color: var(--inv-ink); line-height: 1.3; }
+/* Coluna produto: largura mínima generosa + clamp em 2 linhas pra evitar quebras tipo "Dolly\nVerona\nLow\nSandal..." */
+.inv-root .list-table td.product { min-width: 230px; max-width: 280px; }
+.inv-root .list-table td.product .name {
+  font-weight: 700; color: var(--inv-ink); line-height: 1.25;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
 .inv-root .list-table td.product .sku {
   font-size: 10.5px; color: var(--inv-ink-3); font-weight: 600;
   margin-top: 3px; font-family: ui-monospace, monospace;
   letter-spacing: -0.02em;
+  white-space: nowrap;
 }
 .inv-root .list-table td.rank { text-align: center; font-weight: 800; color: var(--inv-ink-3); font-size: 11px; }
 .inv-root .list-table tr:hover { background: var(--inv-bg-soft); }
