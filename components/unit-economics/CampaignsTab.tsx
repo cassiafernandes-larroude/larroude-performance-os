@@ -151,6 +151,8 @@ export default function CampaignsTab() {
   const [bulkSkuPaste, setBulkSkuPaste] = useState("");
   const [showBulkPaste, setShowBulkPaste] = useState(false);
   const [bulkResult, setBulkResult] = useState<{ matched: number; missed: string[] } | null>(null);
+  // Cassia 2026-06-15: unidades totais previstas pra essa campanha
+  const [campaignUnits, setCampaignUnits] = useState<number>(0);
 
   // Cassia 2026-06-14: assumptions editáveis por market (mesmo padrão da aba Per Product)
   const [assumptionsByMarket, setAssumptionsByMarket] = useState<Record<Market, Assumptions>>({
@@ -203,6 +205,62 @@ export default function CampaignsTab() {
     return m;
   }, [products]);
 
+  // Cassia 2026-06-15: indices auxiliares pra aceitar variantes/productId/title no bulk paste.
+  // - byProductIdSuffix: ultima parte numerica do motherSku (ex: L131-DOLL-NATU-1813 → "1813")
+  // - byTitle: nome do produto em lowercase pra busca contains
+  const productLookup = useMemo(() => {
+    const byProductId = new Map<string, ProductRow>();
+    const titles: Array<{ p: ProductRow; titleLc: string }> = [];
+    for (const p of products) {
+      const parts = p.motherSku.split('-');
+      const last = parts[parts.length - 1];
+      if (last && /^\d+$/.test(last)) byProductId.set(last, p);
+      titles.push({ p, titleLc: p.productName.toLowerCase() });
+    }
+    return { byProductId, titles };
+  }, [products]);
+
+  /** Resolve qualquer input do bulk paste em um ProductRow do catalogo.
+   *  Aceita: mother SKU exato, SKU variante (extrai mother via regex),
+   *  productId numerico (sufixo do mother SKU), ou title (busca contains). */
+  function resolveProductFromInput(raw: string): ProductRow | null {
+    const input = raw.trim();
+    if (!input) return null;
+    const lc = input.toLowerCase();
+
+    // 1) Mother SKU exato
+    let hit = productsByMotherSku.get(lc);
+    if (hit) return hit;
+
+    // 2) Se parece SKU (comeca com L<digito>), tenta extrair mother removendo o tamanho
+    if (/^l\d+-/i.test(input)) {
+      // L471-DOLL-7.5-NATU-1967 → L471-DOLL-NATU-1967
+      const reduced = input.replace(/^(L\d+-[A-Z]+)-[\d.]+-/i, '$1-').toLowerCase();
+      hit = productsByMotherSku.get(reduced);
+      if (hit) return hit;
+      // Fallback: procura motherSku que tenha o input como prefixo
+      const prefixHit = products.find(p => p.motherSku.toLowerCase().startsWith(lc));
+      if (prefixHit) return prefixHit;
+    }
+
+    // 3) ProductId puramente numerico (sufixo do mother SKU)
+    if (/^\d+$/.test(input)) {
+      hit = productLookup.byProductId.get(input);
+      if (hit) return hit;
+      // Fallback: qualquer motherSku terminando com -input
+      const endHit = products.find(p => p.motherSku.endsWith(`-${input}`));
+      if (endHit) return endHit;
+    }
+
+    // 4) Title — busca exata primeiro, depois contains
+    const exactTitle = productLookup.titles.find(t => t.titleLc === lc);
+    if (exactTitle) return exactTitle.p;
+    const containsTitle = productLookup.titles.find(t => t.titleLc.includes(lc));
+    if (containsTitle) return containsTitle.p;
+
+    return null;
+  }
+
   const filteredProducts = useMemo(() => {
     if (!search) return products;
     const q = search.toLowerCase();
@@ -230,22 +288,23 @@ export default function CampaignsTab() {
   }
 
   function applyBulkPaste() {
+    // Cassia 2026-06-15: aceita mother SKU, SKU variante, productId numerico ou title.
     const lines = bulkSkuPaste
       .split(/[\n,;\t]/)
-      .map((s) => s.trim().toLowerCase())
+      .map((s) => s.trim())
       .filter(Boolean);
     const next = new Map(selected);
     const missed: string[] = [];
     let matched = 0;
-    for (const sku of lines) {
-      const product = productsByMotherSku.get(sku);
+    for (const raw of lines) {
+      const product = resolveProductFromInput(raw);
       if (product) {
         if (!next.has(product.motherSku)) {
           next.set(product.motherSku, assumptions.discountPct);
         }
         matched++;
       } else {
-        missed.push(sku);
+        missed.push(raw);
       }
     }
     setSelected(next);
@@ -393,10 +452,11 @@ export default function CampaignsTab() {
         </div>
       </div>
 
-      {/* === ASSUMPTIONS PANEL — Cassia 2026-06-14 (calculadora editável recalcula ao vivo) === */}
+      {/* === ASSUMPTIONS PANEL — Cassia 2026-06-15: useROAS troca "Marketing %" por "Target ROAS" === */}
       <AssumptionsPanel
         assumptions={assumptions}
         market={market}
+        useROAS
         onChange={(next) =>
           setAssumptionsByMarket((cur) => ({ ...cur, [market]: next }))
         }
@@ -406,6 +466,17 @@ export default function CampaignsTab() {
             [market]: { ...DEFAULT_ASSUMPTIONS[market] },
           }))
         }
+      />
+
+      {/* === FORECAST INPUT + RESULT CARDS (Cassia 2026-06-15) === */}
+      <CampaignForecastPanel
+        assumptions={assumptions}
+        market={market}
+        units={campaignUnits}
+        onUnitsChange={setCampaignUnits}
+        selectedProducts={Array.from(selected.keys())
+          .map((sku) => products.find((p) => p.motherSku === sku))
+          .filter((p): p is ProductRow => !!p)}
       />
 
       {/* === BUILDER === */}
@@ -562,12 +633,12 @@ export default function CampaignsTab() {
               className="text-[11px] uppercase tracking-wider font-semibold mb-2"
               style={{ color: "var(--ink-muted)" }}
             >
-              Paste SKUs (one per line, or separated by comma / tab)
+              Cole SKUs, SKUs de variante, IDs de produto OU títulos (um por linha, ou separados por vírgula/tab)
             </div>
             <textarea
               value={bulkSkuPaste}
               onChange={(e) => setBulkSkuPaste(e.target.value)}
-              placeholder={"FLAT001-BLK\nSANDAL027-RED\nHEEL445-CAM\n..."}
+              placeholder={"L131-DOLL-NATU-1813\nL131-DOLL-7.5-NATU-1813\n1813\nDolly Verona Sandal\n..."}
               style={{
                 width: "100%",
                 minHeight: 100,
@@ -879,5 +950,155 @@ export default function CampaignsTab() {
         </div>
       )}
     </div>
+  );
+}
+
+/* ============================================================================
+ * CampaignForecastPanel — Cassia 2026-06-15
+ * Recebe unidades totais previstas + produtos selecionados + assumptions e mostra:
+ *   - Faturamento previsto (unidades × preço médio após desconto)
+ *   - Investimento em marketing (faturamento / Target ROAS)
+ * ============================================================================ */
+function CampaignForecastPanel({
+  assumptions,
+  market,
+  units,
+  onUnitsChange,
+  selectedProducts,
+}: {
+  assumptions: Assumptions;
+  market: Market;
+  units: number;
+  onUnitsChange: (n: number) => void;
+  selectedProducts: ProductRow[];
+}) {
+  const symbol = market === "US" ? "$" : "R$";
+  const discount = assumptions.discountPct ?? 0;
+  const targetRoas = assumptions.marketingPct > 0 ? 1 / assumptions.marketingPct : 0;
+
+  // Preço médio dos produtos selecionados, já com desconto da campanha aplicado.
+  const avgPriceAfterDiscount =
+    selectedProducts.length > 0
+      ? selectedProducts.reduce((s, p) => s + p.unitGrossRevenue * (1 - discount), 0) /
+        selectedProducts.length
+      : 0;
+
+  const expectedRevenue = avgPriceAfterDiscount * units;
+  const marketingInvestment = targetRoas > 0 ? expectedRevenue / targetRoas : 0;
+
+  return (
+    <section
+      className="card"
+      style={{ padding: 18, marginTop: 16, background: "linear-gradient(180deg, #FFF8FB 0%, #FFFFFF 100%)" }}
+    >
+      <div className="flex items-baseline justify-between flex-wrap gap-2 mb-3">
+        <div>
+          <div className="text-xs font-bold uppercase tracking-wider" style={{ color: "#FF3D8B" }}>
+            🎯 PREVISÃO DA CAMPANHA
+          </div>
+          <div className="text-[11px] mt-1" style={{ color: "var(--ink-soft)" }}>
+            Informe as unidades totais previstas para calcular faturamento e investimento em marketing.
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+        <div>
+          <label
+            className="text-[11px] uppercase tracking-wider font-semibold mb-1 block"
+            style={{ color: "var(--ink-muted)" }}
+          >
+            Unidades totais previstas
+          </label>
+          <input
+            type="number"
+            min={0}
+            step={1}
+            value={units || ""}
+            onChange={(e) => onUnitsChange(parseInt(e.target.value, 10) || 0)}
+            placeholder="ex: 500"
+            style={{
+              width: "100%",
+              padding: "12px 14px",
+              borderRadius: 8,
+              border: "1.5px solid #FF3D8B",
+              background: "white",
+              fontSize: 16,
+              fontWeight: 700,
+              fontVariantNumeric: "tabular-nums",
+            }}
+          />
+          <div className="text-[10px] mt-1" style={{ color: "var(--ink-muted)" }}>
+            {selectedProducts.length} produtos selecionados · preço médio s/ desconto{" "}
+            <b>{symbol}{(avgPriceAfterDiscount / Math.max(1 - discount, 0.001)).toFixed(0)}</b>
+            {" "}· c/ desconto <b>{symbol}{avgPriceAfterDiscount.toFixed(0)}</b>
+          </div>
+        </div>
+
+        <div
+          style={{
+            padding: 14,
+            borderRadius: 12,
+            background: "#FFFFFF",
+            border: "1.5px solid #DCFCE7",
+          }}
+        >
+          <div className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: "#166534" }}>
+            Faturamento previsto
+          </div>
+          <div
+            style={{
+              fontSize: 26,
+              fontWeight: 800,
+              color: "#166534",
+              fontVariantNumeric: "tabular-nums",
+              marginTop: 4,
+            }}
+          >
+            {symbol}
+            {expectedRevenue >= 1_000_000
+              ? (expectedRevenue / 1_000_000).toFixed(2) + "M"
+              : expectedRevenue >= 1_000
+              ? (expectedRevenue / 1_000).toFixed(1) + "k"
+              : expectedRevenue.toFixed(0)}
+          </div>
+          <div className="text-[10px] mt-1" style={{ color: "var(--ink-muted)" }}>
+            {units || 0} un × {symbol}{avgPriceAfterDiscount.toFixed(0)} c/ desconto {(discount * 100).toFixed(0)}%
+          </div>
+        </div>
+
+        <div
+          style={{
+            padding: 14,
+            borderRadius: 12,
+            background: "#FFFFFF",
+            border: "1.5px solid #DBEAFE",
+          }}
+        >
+          <div className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: "#1E40AF" }}>
+            Investimento em marketing
+          </div>
+          <div
+            style={{
+              fontSize: 26,
+              fontWeight: 800,
+              color: "#1E40AF",
+              fontVariantNumeric: "tabular-nums",
+              marginTop: 4,
+            }}
+          >
+            {symbol}
+            {marketingInvestment >= 1_000_000
+              ? (marketingInvestment / 1_000_000).toFixed(2) + "M"
+              : marketingInvestment >= 1_000
+              ? (marketingInvestment / 1_000).toFixed(1) + "k"
+              : marketingInvestment.toFixed(0)}
+          </div>
+          <div className="text-[10px] mt-1" style={{ color: "var(--ink-muted)" }}>
+            Faturamento ÷ ROAS alvo <b>{targetRoas.toFixed(1)}x</b>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }

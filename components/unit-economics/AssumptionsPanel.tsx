@@ -8,9 +8,12 @@ interface Props {
   market: Market;
   onChange: (next: Assumptions) => void;
   onReset: () => void;
+  /** Cassia 2026-06-15: na aba Campaigns, troca "Marketing %" por "Target ROAS"
+   *  (1 / marketingPct). Mantém compat com aba Per Product. */
+  useROAS?: boolean;
 }
 
-export default function AssumptionsPanel({ assumptions, market, onChange, onReset }: Props) {
+export default function AssumptionsPanel({ assumptions, market, onChange, onReset, useROAS }: Props) {
   const currency = market === 'US' ? '$' : 'R$';
 
   function update<K extends keyof Assumptions>(key: K, value: Assumptions[K]) {
@@ -54,13 +57,24 @@ export default function AssumptionsPanel({ assumptions, market, onChange, onRese
           step={1}
           hint="Applied AFTER Shopify discount"
         />
-        <Field
-          label="Marketing %"
-          suffix="% revenue"
-          value={assumptions.marketingPct * 100}
-          onChange={(n) => update('marketingPct', n / 100)}
-          step={1}
-        />
+        {useROAS ? (
+          <Field
+            label="Target ROAS"
+            suffix="x"
+            value={assumptions.marketingPct > 0 ? Number((1 / assumptions.marketingPct).toFixed(2)) : 0}
+            onChange={(n) => update('marketingPct', n > 0 ? 1 / n : 0)}
+            step={0.1}
+            hint="Marketing = revenue / ROAS"
+          />
+        ) : (
+          <Field
+            label="Marketing %"
+            suffix="% revenue"
+            value={assumptions.marketingPct * 100}
+            onChange={(n) => update('marketingPct', n / 100)}
+            step={1}
+          />
+        )}
         <Field
           label="Fulfillment"
           prefix={currency}
