@@ -228,6 +228,142 @@
 }
 .prod-root .section-head .right-info b { color: var(--p-ink); font-weight: 800; }
 
+/* === Produção realizada — bar chart por setor === */
+.prod-root .prod-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-bottom: 16px;
+}
+.prod-root .prod-card {
+  background: var(--p-paper);
+  border: 1.5px solid var(--p-line);
+  border-radius: 14px;
+  padding: 16px 18px;
+}
+.prod-root .prod-card-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 12px; margin-bottom: 4px;
+}
+.prod-root .prod-card-title {
+  font-size: 12px; font-weight: 800; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--p-ink);
+}
+.prod-root .prod-card-pico { white-space: nowrap; }
+.prod-root .prod-card-meta {
+  font-size: 11px; color: var(--p-ink-3);
+  margin-bottom: 14px;
+}
+.prod-root .prod-card-meta b { color: var(--p-ink-2); font-weight: 700; }
+
+.prod-root .prod-chart {
+  position: relative;
+  height: 100px;
+  margin: 6px 0 4px;
+}
+.prod-root .prod-chart-bars {
+  display: flex; align-items: stretch; gap: 3px;
+  height: 100%;
+  position: relative;
+}
+.prod-root .prod-chart-col {
+  flex: 1;
+  display: flex; flex-direction: column; justify-content: flex-end;
+  position: relative;
+  min-width: 4px;
+}
+.prod-root .prod-chart-bar {
+  width: 100%;
+  border-radius: 2px 2px 0 0;
+  transition: opacity .12s;
+}
+.prod-root .prod-chart-col:hover .prod-chart-bar { opacity: 0.75; }
+.prod-root .prod-chart-mean {
+  position: absolute;
+  left: 0; right: 0; height: 1px;
+  border-top: 1px dashed var(--p-ink-3);
+  z-index: 2; pointer-events: none;
+}
+.prod-root .prod-chart-mean-label {
+  position: absolute; right: 0; bottom: 1px;
+  font-size: 9px; color: var(--p-ink-3); font-weight: 700;
+  background: var(--p-paper); padding: 0 3px;
+}
+.prod-root .prod-chart-last-label {
+  position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+  font-size: 10px; font-weight: 800; color: var(--p-ink);
+  white-space: nowrap; margin-bottom: 2px;
+  font-variant-numeric: tabular-nums;
+}
+.prod-root .prod-chart-xaxis {
+  display: flex; justify-content: space-between;
+  font-size: 9.5px; color: var(--p-ink-3); font-weight: 700;
+  margin-top: 4px;
+}
+
+/* Chart toggle (mini tabs) */
+.prod-root .tab-btn-mini {
+  padding: 5px 12px;
+  font-size: 11.5px; font-weight: 700;
+  background: var(--p-paper);
+  color: var(--p-ink-3);
+  border: 1.5px solid var(--p-line);
+  border-radius: 100px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.prod-root .tab-btn-mini:hover { color: var(--p-ink); border-color: var(--p-ink-3); }
+.prod-root .tab-btn-mini.active {
+  background: var(--p-ink); color: #FFF; border-color: var(--p-ink);
+}
+
+/* Filter card */
+.prod-root .filter-card {
+  background: var(--p-paper);
+  border: 1.5px solid var(--p-line);
+  border-radius: 18px;
+  padding: 16px 22px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 18px;
+  margin-bottom: 16px;
+}
+.prod-root .filter-label {
+  font-size: 11px; font-weight: 800; color: var(--p-ink-3);
+  letter-spacing: .12em; text-transform: uppercase;
+}
+.prod-root .filter-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.prod-root .btn-pill {
+  padding: 8px 16px; border: 1.5px solid var(--p-line); background: transparent;
+  border-radius: 100px; font-weight: 700; font-size: 13px;
+  color: var(--p-ink-2); cursor: pointer; transition: all .12s;
+  font-family: inherit;
+}
+.prod-root .btn-pill:hover { border-color: var(--p-ink-3); color: var(--p-ink); }
+.prod-root .btn-pill.active { background: var(--p-ink); color: #FFF; border-color: var(--p-ink); }
+.prod-root .search-input {
+  flex: 1; min-width: 220px; margin-left: auto;
+  padding: 9px 16px;
+  border: 1.5px solid var(--p-line); border-radius: 100px;
+  background: var(--p-paper);
+  font-weight: 500; font-size: 13px; color: var(--p-ink);
+  font-family: inherit;
+}
+.prod-root .search-input:focus { outline: none; border-color: var(--p-ink); }
+
+/* Section head extras */
+.prod-root .section-head .right-info {
+  margin-left: auto; font-size: 12px; color: var(--p-ink-3); font-weight: 600;
+}
+.prod-root .section-head .right-info b { color: var(--p-ink); font-weight: 800; }
+
+/* Responsivo prod-grid */
+@media (max-width: 1100px) {
+  .prod-root .prod-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 720px) {
+  .prod-root .prod-grid { grid-template-columns: 1fr; }
+  .prod-root .prod-card { padding: 12px 14px; }
+}
+
 /* Refresh button */
 .prod-root .refresh-btn {
   background: var(--p-paper);
