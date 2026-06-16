@@ -1,0 +1,12 @@
+﻿
+> larroude-performance-os@0.2.0 build
+> next build
+
+node.exe : 'next' não é reconhecido como um comando interno
+No linha:1 caractere:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ('next' não é re...comando interno:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+ou externo, um programa operável ou um arquivo em lotes.

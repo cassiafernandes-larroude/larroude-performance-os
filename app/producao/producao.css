@@ -649,3 +649,62 @@
   .prod-root .kpi .value { font-size: 18px; }
   .prod-root .list-table { font-size: 10.5px; min-width: 720px; }
 }
+
+/* ====== Diagnóstico — cards por setor (Cassia 2026-06-15) ====== */
+.prod-root .diag-setor-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 14px 0 6px;
+}
+.prod-root .diag-setor-card {
+  background: #fff; border: 1px solid var(--p-ink-4, #d6cfc1); border-left: 4px solid var(--p-ink-3, #b0a892);
+  border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px;
+}
+.prod-root .diag-setor-card.diag-gargalo { border-left-color: var(--p-red); }
+.prod-root .diag-setor-card.diag-sobrecarga { border-left-color: var(--p-orange); }
+.prod-root .diag-setor-card.diag-sequenciamento { border-left-color: var(--p-gold); }
+.prod-root .diag-setor-card.diag-saudavel { border-left-color: var(--p-green); }
+.prod-root .diag-setor-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.prod-root .diag-setor-nome { font-weight: 800; font-size: 13px; letter-spacing: .02em; color: var(--p-ink); text-transform: uppercase; }
+.prod-root .diag-setor-chip { font-size: 9.5px; font-weight: 800; padding: 4px 10px; border-radius: 999px; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
+.prod-root .diag-setor-stats { font-size: 12px; color: var(--p-ink-2); }
+.prod-root .diag-setor-razao { font-size: 11.5px; color: var(--p-ink-2); font-weight: 600; }
+.prod-root .diag-setor-reco {
+  background: #fffbe9; border-left: 3px solid var(--p-gold);
+  padding: 8px 12px; border-radius: 6px; font-size: 11px; line-height: 1.45; color: var(--p-ink-2);
+}
+.prod-root .diag-setor-foot {
+  display: flex; gap: 14px; font-size: 11px; color: var(--p-ink-3); padding-top: 4px;
+  border-top: 1px dashed var(--p-ink-4); flex-wrap: wrap;
+}
+.prod-root .diag-setor-foot b { color: var(--p-ink); }
+
+/* ====== Diagnóstico — 2 gráficos horizontais lado a lado ====== */
+.prod-root .diag-charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 10px; }
+.prod-root .diag-chart-card { padding: 18px 20px; }
+.prod-root .diag-chart-title { font-size: 14px; font-weight: 800; color: var(--p-ink); }
+.prod-root .diag-chart-sub { font-size: 11px; color: var(--p-ink-3); margin: 4px 0 14px; }
+.prod-root .diag-hbar-list { display: flex; flex-direction: column; gap: 6px; }
+.prod-root .diag-hbar-row { display: grid; grid-template-columns: 170px 1fr 60px; gap: 8px; align-items: center; font-size: 11.5px; }
+.prod-root .diag-hbar-label { font-weight: 700; color: var(--p-ink-2); text-transform: uppercase; letter-spacing: .04em; font-size: 10.5px; text-align: right; }
+.prod-root .diag-hbar-track { display: flex; height: 18px; background: var(--p-cream-2, #ece4d6); border-radius: 4px; overflow: hidden; }
+.prod-root .diag-hbar-fill { height: 100%; transition: width 0.3s ease; }
+.prod-root .diag-hbar-value { font-weight: 800; color: var(--p-ink); font-size: 12px; font-variant-numeric: tabular-nums; }
+.prod-root .diag-chart-legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 14px; font-size: 11px; color: var(--p-ink-2); }
+.prod-root .diag-chart-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.prod-root .diag-chart-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+
+/* ====== Linhas clicáveis (Top remessas em risco + Open Orders) ====== */
+.prod-root .list-table tr.clickable { cursor: pointer; }
+.prod-root .list-table tr.clickable:hover td { background: var(--p-cream-2, #ece4d6); }
+.prod-root .risk-table tr td { vertical-align: middle; }
+
+/* ====== Mobile ====== */
+@media (max-width: 900px) {
+  .prod-root .diag-setor-grid { grid-template-columns: 1fr 1fr; }
+  .prod-root .diag-charts-row { grid-template-columns: 1fr; }
+  .prod-root .diag-hbar-row { grid-template-columns: 110px 1fr 50px; }
+}
+@media (max-width: 560px) {
+  .prod-root .diag-setor-grid { grid-template-columns: 1fr; }
+  .prod-root .diag-hbar-row { grid-template-columns: 90px 1fr 46px; font-size: 10.5px; }
+  .prod-root .diag-hbar-label { font-size: 9.5px; }
+}
