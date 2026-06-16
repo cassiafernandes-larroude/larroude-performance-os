@@ -125,8 +125,8 @@ export default function ProducaoDashboard() {
   const [searchToc, setSearchToc] = useState('');
   const [searchRemessas, setSearchRemessas] = useState('');
   const [searchOpen, setSearchOpen] = useState('');
-  // Modal de Open Orders por SKU mae
-  const [selectedSku, setSelectedSku] = useState<{ sku: string; nome: string } | null>(null);
+  // Modal de Open Orders por SKU mae (com lista de remessas pra alocacao FIFO)
+  const [selectedSku, setSelectedSku] = useState<{ sku: string; nome: string; remessasInProd?: Array<{ remessa: string; pares: number; data_inclusao?: string | null; dt_entrega?: string | null; atraso: number }> } | null>(null);
 
   // Lazy load Open Orders quando muda pra aba
   useEffect(() => {
@@ -692,18 +692,30 @@ export default function ProducaoDashboard() {
               const filtered = searchOpen.trim()
                 ? rows.filter(r => norm(r.mother_sku || r.sku).includes(qLow) || norm(r.nome || r.produto).includes(qLow))
                 : rows;
-              // Cassia 2026-06-15: cruza com Producao 2.0 — paresEmRemessa + nrs das remessas + max atraso (dias)
-              const remessasPorSku = new Map<string, { pares: number; remessas: Set<string>; maxAtraso: number; qtdAtrasadas: number }>();
+              // Cassia 2026-06-15: cruza com Producao 2.0 — paresEmRemessa + nrs + max atraso + lista FIFO
+              type RemessaItem = { remessa: string; pares: number; data_inclusao?: string | null; dt_entrega?: string | null; atraso: number };
+              const remessasPorSku = new Map<string, { pares: number; remessas: Set<string>; maxAtraso: number; qtdAtrasadas: number; lista: RemessaItem[] }>();
+              const dedupeKey = new Set<string>();
               [...(data?.remessas || []), ...(data?.remessasTop || []), ...(data?.remessasGargalo || [])].forEach((r) => {
-                if (!r.sku) return;
-                const cur = remessasPorSku.get(r.sku) || { pares: 0, remessas: new Set<string>(), maxAtraso: 0, qtdAtrasadas: 0 };
+                if (!r.sku || !r.remessa) return;
+                const k = `${r.sku}__${r.remessa}`;
+                if (dedupeKey.has(k)) return;
+                dedupeKey.add(k);
+                const cur = remessasPorSku.get(r.sku) || { pares: 0, remessas: new Set<string>(), maxAtraso: 0, qtdAtrasadas: 0, lista: [] };
                 cur.pares += r.pares_pendentes || 0;
-                if (r.remessa) cur.remessas.add(r.remessa);
+                cur.remessas.add(r.remessa);
                 const atrasoDias = (r.dias_para_entrega != null && r.dias_para_entrega < 0) ? Math.abs(r.dias_para_entrega) : 0;
                 if (atrasoDias > 0) {
                   cur.qtdAtrasadas += 1;
                   if (atrasoDias > cur.maxAtraso) cur.maxAtraso = atrasoDias;
                 }
+                cur.lista.push({
+                  remessa: r.remessa,
+                  pares: r.pares_pendentes || 0,
+                  data_inclusao: r.data_inclusao,
+                  dt_entrega: r.dt_entrega,
+                  atraso: atrasoDias,
+                });
                 remessasPorSku.set(r.sku, cur);
               });
               return (
@@ -741,7 +753,11 @@ export default function ProducaoDashboard() {
                           onChange={e => setSearchOpen(e.target.value)}
                         />
                       </div>
-                      <OpenOrdersTable rows={filtered} remessasPorSku={remessasPorSku} onRowClick={(r) => setSelectedSku({ sku: r.mother_sku || r.sku || '', nome: r.nome || r.produto || '' })} />
+                      <OpenOrdersTable rows={filtered} remessasPorSku={remessasPorSku} onRowClick={(r) => {
+                        const sku = r.mother_sku || r.sku || '';
+                        const info = remessasPorSku.get(sku);
+                        setSelectedSku({ sku, nome: r.nome || r.produto || '', remessasInProd: info?.lista || [] });
+                      }} />
                     </>
                   )}
                 </>
@@ -1023,6 +1039,7 @@ export default function ProducaoDashboard() {
         <OpenOrdersModal
           sku={selectedSku.sku}
           nome={selectedSku.nome}
+          remessasInProd={selectedSku.remessasInProd}
           onClose={() => setSelectedSku(null)}
         />
       )}
@@ -1126,9 +1143,10 @@ function ProducaoCard({ setor, series, total, media, pico, ultimo, mode }: {
   );
 }
 
+type RemessaListItem = { remessa: string; pares: number; data_inclusao?: string | null; dt_entrega?: string | null; atraso: number };
 function OpenOrdersTable({ rows, remessasPorSku, onRowClick }: {
   rows: any[];
-  remessasPorSku?: Map<string, { pares: number; remessas: Set<string>; maxAtraso: number; qtdAtrasadas: number }>;
+  remessasPorSku?: Map<string, { pares: number; remessas: Set<string>; maxAtraso: number; qtdAtrasadas: number; lista: RemessaListItem[] }>;
   onRowClick?: (r: any) => void;
 }) {
   // Cassia 2026-06-15: 25 linhas/pag, mesmo padrao da RemessasTable
@@ -1395,7 +1413,10 @@ function TopRemessasRiscoTable({ rows, onRowClick }: {
 }
 
 /* ============= Modal Open Orders por SKU ============= */
-function OpenOrdersModal({ sku, nome, onClose }: { sku: string; nome: string; onClose: () => void }) {
+function OpenOrdersModal({ sku, nome, remessasInProd, onClose }: {
+  sku: string; nome: string; onClose: () => void;
+  remessasInProd?: Array<{ remessa: string; pares: number; data_inclusao?: string | null; dt_entrega?: string | null; atraso: number }>;
+}) {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<any | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1410,6 +1431,47 @@ function OpenOrdersModal({ sku, nome, onClose }: { sku: string; nome: string; on
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [sku]);
+
+  // Cassia 2026-06-15: alocacao FIFO — order mais antiga -> remessa mais antiga em producao
+  const ordersAlocadas = useMemo(() => {
+    if (!data?.orders || !remessasInProd?.length) {
+      return (data?.orders || []).map((o: any) => ({ ...o, remessaAlocada: null as string | null, dtRemessa: null as string | null }));
+    }
+    // remessas mais antigas primeiro (FIFO)
+    const fila = remessasInProd
+      .filter(r => r.pares > 0)
+      .slice()
+      .sort((a, b) => {
+        const da = a.data_inclusao || a.dt_entrega || '';
+        const db = b.data_inclusao || b.dt_entrega || '';
+        return da.localeCompare(db);
+      })
+      .map(r => ({ ...r, capacidadeRestante: r.pares }));
+
+    // orders ordenadas pela mais antiga (created_at asc = days_open desc, mas vamos garantir)
+    const ordersOrdenadas = (data.orders as any[]).slice().sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''));
+    const alocacoes = new Map<string, { remessa: string; dt_entrega: string | null }>();
+    let idx = 0;
+    for (const o of ordersOrdenadas) {
+      let restante = o.qty_for_sku || 0;
+      while (restante > 0 && idx < fila.length) {
+        const cur = fila[idx];
+        if (cur.capacidadeRestante <= 0) { idx++; continue; }
+        // Aloca essa order pra remessa atual (a primeira remessa que cobre)
+        if (!alocacoes.has(o.order_name)) {
+          alocacoes.set(o.order_name, { remessa: cur.remessa, dt_entrega: cur.dt_entrega || null });
+        }
+        const usado = Math.min(restante, cur.capacidadeRestante);
+        cur.capacidadeRestante -= usado;
+        restante -= usado;
+        if (cur.capacidadeRestante <= 0) idx++;
+      }
+    }
+    return (data.orders as any[]).map((o) => {
+      const a = alocacoes.get(o.order_name);
+      return { ...o, remessaAlocada: a?.remessa || null, dtRemessa: a?.dt_entrega || null };
+    });
+  }, [data, remessasInProd]);
 
   useEffect(() => {
     const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -1460,12 +1522,13 @@ function OpenOrdersModal({ sku, nome, onClose }: { sku: string; nome: string; on
                     <th className="num">Total</th>
                     <th>Criada em</th>
                     <th className="num">Atraso</th>
+                    <th>Remessa (FIFO)</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {(data.orders || []).length === 0 ? (
-                    <tr><td colSpan={7} style={{ padding: 40, textAlign: 'center', color: 'var(--p-ink-3)' }}>Nenhuma order aberta encontrada pra este SKU.</td></tr>
-                  ) : data.orders.map((o: any, i: number) => {
+                  {ordersAlocadas.length === 0 ? (
+                    <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: 'var(--p-ink-3)' }}>Nenhuma order aberta encontrada pra este SKU.</td></tr>
+                  ) : ordersAlocadas.map((o: any, i: number) => {
                     const atrasoBadge = o.days_open >= 5 ? 'var(--p-red)' : o.days_open >= 2 ? 'var(--p-orange)' : 'var(--p-ink-3)';
                     return (
                       <tr key={i}>
@@ -1476,6 +1539,16 @@ function OpenOrdersModal({ sku, nome, onClose }: { sku: string; nome: string; on
                         <td className="num">{o.currency === 'USD' ? '$' : 'R$'} {fmtNum(o.total)}</td>
                         <td>{fmtDate(o.created_at)}</td>
                         <td className="num" style={{ color: atrasoBadge, fontWeight: 700 }}>{fmtNum(o.days_open)}d</td>
+                        <td>
+                          {o.remessaAlocada ? (
+                            <>
+                              <div style={{ fontFamily: 'ui-monospace, monospace', fontWeight: 700, fontSize: 11 }}>{o.remessaAlocada}</div>
+                              {o.dtRemessa && <div style={{ fontSize: 10, color: 'var(--p-ink-3)', marginTop: 2 }}>entrega {fmtDate(o.dtRemessa)}</div>}
+                            </>
+                          ) : (
+                            <span style={{ fontSize: 10, color: 'var(--p-red)', fontWeight: 700 }} title="Não há remessa em produção suficiente pra cobrir essa order">SEM ALOCAÇÃO</span>
+                          )}
+                        </td>
                       </tr>
                     );
                   })}
