@@ -1184,13 +1184,12 @@ function OpenOrdersTable({ rows, remessasPorSku, onRowClick }: {
                     </>
                   ) : '—'}
                 </td>
-                <td style={{ maxWidth: 220 }}>
+                <td style={{ minWidth: 240, maxWidth: 420 }}>
                   {nrsRemessas.length === 0 ? (
                     <span style={{ color: 'var(--p-ink-3)', fontSize: 10 }}>—</span>
                   ) : (
-                    <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 10, color: 'var(--p-ink-2)', lineHeight: 1.4 }} title={nrsRemessas.join(', ')}>
-                      {nrsRemessas.slice(0, 3).join(', ')}
-                      {nrsRemessas.length > 3 && <span style={{ fontWeight: 700, marginLeft: 4 }}>+{nrsRemessas.length - 3}</span>}
+                    <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 10, color: 'var(--p-ink-2)', lineHeight: 1.5, whiteSpace: 'normal', wordBreak: 'break-word' }}>
+                      {nrsRemessas.join(', ')}
                     </span>
                   )}
                 </td>
