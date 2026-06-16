@@ -98,6 +98,15 @@ async function ordersForMarket(market: Market, motherSku: string, debug = false)
   ];
   const log: any[] = [];
 
+  // Cassia 2026-06-15: tenta também sem hifens (caso Shopify use formato sem hifens)
+  const motherSkuSemHifen = motherSku.replace(/[-_.]/g, '');
+  const motherReSemHifen = new RegExp(motherSkuSemHifen.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+
+  // Extrai partes significativas do SKU mae (ex: "L545", "CYPR", "BROW", "2544")
+  const partes = motherSku.split(/[-_.]/).filter(p => p.length >= 3);
+  const corePart = partes.length >= 2 ? `${partes[0]}.*${partes[partes.length - 1]}` : motherSku;
+  const motherReParts = new RegExp(corePart.replace(/[.+?^${}()|[\]\\]/g, '\\$&'), 'i');
+
   for (let i = 0; i < attempts.length; i++) {
     const queryStr = attempts[i];
     let nodes: OrderNode[] = [];
@@ -107,8 +116,24 @@ async function ordersForMarket(market: Market, motherSku: string, debug = false)
       log.push({ i, queryStr, err: e?.message });
       continue;
     }
-    const rows = nodes.map((n) => nodeToRow(n, market, motherRe)).filter((x): x is OrderRow => x !== null);
-    log.push({ i, queryStr, nodesReturned: nodes.length, matched: rows.length });
+    // Cassia 2026-06-15: tenta 3 estrategias de match local
+    const rowsExact = nodes.map((n) => nodeToRow(n, market, motherRe)).filter((x): x is OrderRow => x !== null);
+    const rowsSemHifen = rowsExact.length === 0 ? nodes.map((n) => nodeToRow(n, market, motherReSemHifen)).filter((x): x is OrderRow => x !== null) : [];
+    const rowsParts = rowsExact.length === 0 && rowsSemHifen.length === 0 ? nodes.map((n) => nodeToRow(n, market, motherReParts)).filter((x): x is OrderRow => x !== null) : [];
+    const rows = rowsExact.length > 0 ? rowsExact : rowsSemHifen.length > 0 ? rowsSemHifen : rowsParts;
+
+    // Coleta SKUs reais das line items pra debug (so do primeiro lote)
+    const skusReais = debug && i === 0 && nodes.length > 0
+      ? Array.from(new Set(nodes.flatMap(n => n.lineItems.edges.map(le => le.node.sku || '')))).filter(Boolean).slice(0, 20)
+      : undefined;
+
+    log.push({
+      i, queryStr,
+      nodesReturned: nodes.length,
+      matched: { exact: rowsExact.length, semHifen: rowsSemHifen.length, parts: rowsParts.length },
+      skusReais,
+      regexUsado: { exact: motherRe.source, semHifen: motherReSemHifen.source, parts: motherReParts.source },
+    });
     if (rows.length > 0) {
       return { rows, meta: debug ? { tries: log, winnerAttempt: i } : undefined };
     }
