@@ -102,10 +102,12 @@ async function ordersForMarket(market: Market, motherSku: string, debug = false)
   const motherSkuSemHifen = motherSku.replace(/[-_.]/g, '');
   const motherReSemHifen = new RegExp(motherSkuSemHifen.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
 
-  // Extrai partes significativas do SKU mae (ex: "L545", "CYPR", "BROW", "2544")
-  const partes = motherSku.split(/[-_.]/).filter(p => p.length >= 3);
-  const corePart = partes.length >= 2 ? `${partes[0]}.*${partes[partes.length - 1]}` : motherSku;
-  const motherReParts = new RegExp(corePart.replace(/[.+?^${}()|[\]\\]/g, '\\$&'), 'i');
+  // Cassia 2026-06-15: SKU mae no formato L<id>-<MODEL>-<COR>-<COD> (4 partes), Shopify
+  // usa L<id>-<MODEL>-<SIZE>-<COR>-<COD> (5 partes com tamanho). Insere ".*" entre cada
+  // segmento do mae pra match: L545-CYPR-BROW-2544 -> /L545.*CYPR.*BROW.*2544/i
+  const partes = motherSku.split(/[-_.]/).filter(p => p.length >= 2);
+  const corePattern = partes.length >= 2 ? partes.map(p => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.*') : motherSku;
+  const motherReParts = new RegExp(corePattern, 'i');
 
   for (let i = 0; i < attempts.length; i++) {
     const queryStr = attempts[i];
