@@ -692,6 +692,20 @@ export default function ProducaoDashboard() {
               const filtered = searchOpen.trim()
                 ? rows.filter(r => norm(r.mother_sku || r.sku).includes(qLow) || norm(r.nome || r.produto).includes(qLow))
                 : rows;
+              // Cassia 2026-06-15: cruza com Producao 2.0 — paresEmRemessa + nrs das remessas + max atraso (dias)
+              const remessasPorSku = new Map<string, { pares: number; remessas: Set<string>; maxAtraso: number; qtdAtrasadas: number }>();
+              [...(data?.remessas || []), ...(data?.remessasTop || []), ...(data?.remessasGargalo || [])].forEach((r) => {
+                if (!r.sku) return;
+                const cur = remessasPorSku.get(r.sku) || { pares: 0, remessas: new Set<string>(), maxAtraso: 0, qtdAtrasadas: 0 };
+                cur.pares += r.pares_pendentes || 0;
+                if (r.remessa) cur.remessas.add(r.remessa);
+                const atrasoDias = (r.dias_para_entrega != null && r.dias_para_entrega < 0) ? Math.abs(r.dias_para_entrega) : 0;
+                if (atrasoDias > 0) {
+                  cur.qtdAtrasadas += 1;
+                  if (atrasoDias > cur.maxAtraso) cur.maxAtraso = atrasoDias;
+                }
+                remessasPorSku.set(r.sku, cur);
+              });
               return (
                 <>
                   <div className="section-head">
@@ -727,7 +741,7 @@ export default function ProducaoDashboard() {
                           onChange={e => setSearchOpen(e.target.value)}
                         />
                       </div>
-                      <OpenOrdersTable rows={filtered} onRowClick={(r) => setSelectedSku({ sku: r.mother_sku || r.sku || '', nome: r.nome || r.produto || '' })} />
+                      <OpenOrdersTable rows={filtered} remessasPorSku={remessasPorSku} onRowClick={(r) => setSelectedSku({ sku: r.mother_sku || r.sku || '', nome: r.nome || r.produto || '' })} />
                     </>
                   )}
                 </>
@@ -1112,7 +1126,11 @@ function ProducaoCard({ setor, series, total, media, pico, ultimo, mode }: {
   );
 }
 
-function OpenOrdersTable({ rows, onRowClick }: { rows: any[]; onRowClick?: (r: any) => void }) {
+function OpenOrdersTable({ rows, remessasPorSku, onRowClick }: {
+  rows: any[];
+  remessasPorSku?: Map<string, { pares: number; remessas: Set<string>; maxAtraso: number; qtdAtrasadas: number }>;
+  onRowClick?: (r: any) => void;
+}) {
   // Cassia 2026-06-15: 25 linhas/pag, mesmo padrao da RemessasTable
   const PAGE_SIZE = 25;
   const [page, setPage] = useState(1);
@@ -1130,21 +1148,55 @@ function OpenOrdersTable({ rows, onRowClick }: { rows: any[]; onRowClick?: (r: a
             <th>Produto</th>
             <th className="num">US</th>
             <th className="num">BR</th>
-            <th className="num">Total</th>
+            <th className="num">Total pedidos</th>
+            <th className="num">Em remessa</th>
+            <th className="num">Atraso</th>
+            <th>Remessas</th>
           </tr>
         </thead>
         <tbody>
           {visible.length === 0 ? (
-            <tr><td colSpan={5} style={{ padding: 40, textAlign: 'center', color: 'var(--p-ink-3)' }}>Nenhum pedido encontrado.</td></tr>
-          ) : visible.map((r, i) => (
-            <tr key={i} className={onRowClick ? 'clickable' : undefined} onClick={() => onRowClick?.(r)} title={onRowClick ? 'Clique pra ver orders abertas' : undefined}>
-              <td><span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 11 }}>{r.mother_sku || r.sku || '—'}</span></td>
-              <td>{r.nome || r.produto || '—'}</td>
-              <td className="num" style={{ color: 'var(--p-blue)', fontWeight: 700 }}>{fmtNum(r.pares_us ?? r.us)}</td>
-              <td className="num" style={{ color: 'var(--p-green)', fontWeight: 700 }}>{fmtNum(r.pares_br ?? r.br)}</td>
-              <td className="num"><b>{fmtNum(r.total)}</b></td>
-            </tr>
-          ))}
+            <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: 'var(--p-ink-3)' }}>Nenhum pedido encontrado.</td></tr>
+          ) : visible.map((r, i) => {
+            const sku = r.mother_sku || r.sku || '';
+            const emRem = remessasPorSku?.get(sku);
+            const paresEmRemessa = emRem?.pares || 0;
+            const nrsRemessas = emRem ? Array.from(emRem.remessas) : [];
+            const maxAtraso = emRem?.maxAtraso || 0;
+            const qtdAtrasadas = emRem?.qtdAtrasadas || 0;
+            // Cor por severidade do atraso
+            const corAtraso = maxAtraso >= 30 ? 'var(--p-red)' : maxAtraso >= 10 ? 'var(--p-orange)' : maxAtraso > 0 ? 'var(--p-gold)' : 'var(--p-ink-3)';
+            return (
+              <tr key={i} className={onRowClick ? 'clickable' : undefined} onClick={() => onRowClick?.(r)} title={onRowClick ? 'Clique pra ver orders abertas' : undefined}>
+                <td><span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 11 }}>{sku || '—'}</span></td>
+                <td>{r.nome || r.produto || '—'}</td>
+                <td className="num" style={{ color: 'var(--p-blue)', fontWeight: 700 }}>{fmtNum(r.pares_us ?? r.us)}</td>
+                <td className="num" style={{ color: 'var(--p-green)', fontWeight: 700 }}>{fmtNum(r.pares_br ?? r.br)}</td>
+                <td className="num"><b>{fmtNum(r.total)}</b></td>
+                <td className="num" style={{ color: paresEmRemessa > 0 ? 'var(--p-orange)' : 'var(--p-ink-3)', fontWeight: 700 }}>
+                  {paresEmRemessa > 0 ? fmtNum(paresEmRemessa) : '—'}
+                </td>
+                <td className="num" style={{ color: corAtraso, fontWeight: 700 }} title={qtdAtrasadas > 0 ? `${qtdAtrasadas} remessa(s) atrasada(s)` : undefined}>
+                  {maxAtraso > 0 ? (
+                    <>
+                      <span>{maxAtraso}d</span>
+                      {qtdAtrasadas > 1 && <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--p-ink-3)', marginLeft: 4 }}>×{qtdAtrasadas}</span>}
+                    </>
+                  ) : '—'}
+                </td>
+                <td style={{ maxWidth: 220 }}>
+                  {nrsRemessas.length === 0 ? (
+                    <span style={{ color: 'var(--p-ink-3)', fontSize: 10 }}>—</span>
+                  ) : (
+                    <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 10, color: 'var(--p-ink-2)', lineHeight: 1.4 }} title={nrsRemessas.join(', ')}>
+                      {nrsRemessas.slice(0, 3).join(', ')}
+                      {nrsRemessas.length > 3 && <span style={{ fontWeight: 700, marginLeft: 4 }}>+{nrsRemessas.length - 3}</span>}
+                    </span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
       {totalPages > 1 && (
