@@ -16,6 +16,16 @@
 import { useEffect, useMemo, useState } from 'react';
 
 type ChartMode = 'diario' | 'semanal' | 'mensal';
+type PageTab = 'producao' | 'producao-realizada' | 'remessas' | 'open-orders' | 'demanda' | 'diagnostico';
+// Mesmos presets do Main Dashboard (lpos/lib/main-dashboard/periods)
+type PeriodKey = '1d' | '7d' | '14d' | '28d' | '3M' | '6M' | '12M' | 'custom';
+const PERIOD_LABEL: Record<PeriodKey, string> = {
+  '1d': 'D-1', '7d': '7D', '14d': '14D', '28d': '28D',
+  '3M': '3M', '6M': '6M', '12M': '12M', 'custom': 'Personalizado',
+};
+const PERIOD_DAYS: Record<Exclude<PeriodKey, 'custom'>, number> = {
+  '1d': 1, '7d': 7, '14d': 14, '28d': 28, '3M': 90, '6M': 180, '12M': 365,
+};
 
 interface Totals {
   paresPendentes?: number;
@@ -102,9 +112,27 @@ export default function ProducaoDashboard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [chartMode, setChartMode] = useState<ChartMode>('diario');
+  // Filtro de período (igual Main Dashboard) — só usado na aba Produção realizada
+  const [periodKey, setPeriodKey] = useState<PeriodKey>('28d');
+  const [customStart, setCustomStart] = useState<string>('');
+  const [customEnd, setCustomEnd] = useState<string>('');
+  // Cassia 2026-06-15: nav por abas no topo (Produção / Produção realizada / Remessas / Open Orders / Demanda / Diagnóstico)
+  const [pageTab, setPageTab] = useState<PageTab>('producao');
+  // Open Orders (lazy load)
+  const [openOrders, setOpenOrders] = useState<any | null>(null);
   // Cassia 2026-06-15: busca no bloco Risco Crítico + Modal de detalhe da remessa
   const [searchRisco, setSearchRisco] = useState('');
   const [searchToc, setSearchToc] = useState('');
+  const [searchRemessas, setSearchRemessas] = useState('');
+
+  // Lazy load Open Orders quando muda pra aba
+  useEffect(() => {
+    if (pageTab !== 'open-orders' || openOrders) return;
+    fetch('/api/producao/open-orders')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => setOpenOrders(d || { totals: {}, rows: [] }))
+      .catch(() => setOpenOrders({ totals: {}, rows: [] }));
+  }, [pageTab, openOrders]);
   const [selectedRemessa, setSelectedRemessa] = useState<Remessa | null>(null);
   const [modalProducts, setModalProducts] = useState<Remessa[] | null>(null);
   const [modalLoading, setModalLoading] = useState(false);
@@ -165,12 +193,40 @@ export default function ProducaoDashboard() {
 
   const t = data?.totals || {};
 
-  // Agrupar producaoDiaria por setor → série de barras
+  // Range de datas baseado no preset
+  const dateRange = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (periodKey === 'custom' && customStart && customEnd) {
+      return { start: customStart, end: customEnd };
+    }
+    if (periodKey === 'custom') {
+      // Sem datas válidas → fallback 28d
+      const start = new Date(today); start.setDate(start.getDate() - 28);
+      return { start: start.toISOString().slice(0, 10), end: today.toISOString().slice(0, 10) };
+    }
+    const days = PERIOD_DAYS[periodKey];
+    const start = new Date(today);
+    if (periodKey === '1d') start.setDate(start.getDate() - 1);
+    else start.setDate(start.getDate() - days);
+    return { start: start.toISOString().slice(0, 10), end: today.toISOString().slice(0, 10) };
+  }, [periodKey, customStart, customEnd]);
+
+  // Auto-ajusta chartMode conforme periodo: 3M+ = semanal, 12M = mensal
+  useEffect(() => {
+    if (periodKey === '3M' || periodKey === '6M') setChartMode('semanal');
+    else if (periodKey === '12M') setChartMode('mensal');
+    else setChartMode('diario');
+  }, [periodKey]);
+
+  // Agrupar producaoDiaria por setor → série de barras (filtra pelo range)
   const producaoPorSetor = useMemo(() => {
     if (!data?.producaoDiaria) return [] as Array<{ setor: string; series: Array<{ key: string; pares: number }>; total: number; media: number; pico: number; ultimo?: { key: string; pares: number } }>;
     const bySetor = new Map<string, Map<string, number>>();
     for (const p of data.producaoDiaria) {
       if (!p.setor || !p.dia) continue;
+      // Aplica filtro de periodo
+      if (p.dia < dateRange.start || p.dia > dateRange.end) continue;
       const d = new Date(p.dia + 'T00:00:00');
       const key = chartMode === 'diario' ? p.dia : chartMode === 'semanal' ? isoWeekKey(d) : monthKey(d);
       if (!bySetor.has(p.setor)) bySetor.set(p.setor, new Map());
@@ -190,7 +246,15 @@ export default function ProducaoDashboard() {
       })
       .filter(x => x.total > 0)
       .sort((a, b) => b.total - a.total);
-  }, [data, chartMode]);
+  }, [data, chartMode, dateRange]);
+
+  // Regra do Main Dashboard: > 14 barras → 1 chart por linha (cards full-width).
+  // Aqui adaptado: > 14 barras → 2 colunas (em vez de 3) pra dar espaço aos rótulos.
+  const maxBarrasNoSetor = useMemo(
+    () => producaoPorSetor.reduce((m, s) => Math.max(m, s.series.length), 0),
+    [producaoPorSetor]
+  );
+  const prodGridCols = maxBarrasNoSetor > 14 ? 2 : 3;
 
   return (
     <div className="prod-root">
@@ -214,6 +278,26 @@ export default function ProducaoDashboard() {
             {data?.generatedAt && <> · dados de <b>{fmtDate(data.generatedAt)}</b></>}
             {' · '}<span style={{ color: 'var(--p-ink-3)' }}>BigQuery DM_SUPPLY_CHAIN.fct_remessas_producao</span>
           </p>
+
+          {/* Nav por abas (pills) — Cassia 2026-06-15 */}
+          <div className="page-tabs">
+            {([
+              { id: 'producao', label: '🏭 Produção' },
+              { id: 'producao-realizada', label: '📊 Produção realizada' },
+              { id: 'remessas', label: '📅 Remessas' },
+              { id: 'open-orders', label: '🛍 Open Orders' },
+              { id: 'demanda', label: '📈 Demanda' },
+              { id: 'diagnostico', label: '🩺 Diagnóstico' },
+            ] as { id: PageTab; label: string }[]).map(t => (
+              <button
+                key={t.id}
+                onClick={() => setPageTab(t.id)}
+                className={`page-tab-pill ${pageTab === t.id ? 'active' : ''}`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
         </header>
 
         {error && (
@@ -226,6 +310,8 @@ export default function ProducaoDashboard() {
 
         {data && (
           <>
+            {/* ====== ABA PRODUÇÃO (default) — Visão geral, Fábricas, Setores, Produção realizada ====== */}
+            {pageTab === 'producao' && <>
             {/* ====== 🥇 Visão geral ====== */}
             <div className="section-head">
               <span className="section-pill sp-gold">🥇 Visão geral</span>
@@ -358,28 +444,93 @@ export default function ProducaoDashboard() {
               </>
             )}
 
-            {/* ====== 📊 Produção realizada — bar chart diário por setor ====== */}
-            {producaoPorSetor.length > 0 && (
+            {/* Produção realizada movida para aba dedicada (producao-realizada) */}
+
+            </>}
+
+            {/* ====== ABA PRODUÇÃO REALIZADA — bar charts por setor com filtro de período ====== */}
+            {pageTab === 'producao-realizada' && (
               <>
-                <div className="section-head" style={{ marginTop: 40 }}>
+                <div className="section-head">
                   <span className="section-pill sp-green">📊 Produção realizada</span>
-                  <span className="title">Produção diária por setor — campo <b>baixados_pares</b> agregado por dia, últimos 30 dias · Senda 4</span>
-                  <span className="chart-toggle" style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
-                    {(['diario', 'semanal', 'mensal'] as ChartMode[]).map(m => (
-                      <button key={m} className={`tab-btn-mini ${chartMode === m ? 'active' : ''}`} onClick={() => setChartMode(m)}>
-                        {m === 'diario' ? 'Diário' : m === 'semanal' ? 'Semanal' : 'Mensal'}
-                      </button>
-                    ))}
+                  <span className="title">
+                    Produção por setor · campo <b>baixados_pares</b> · janela{' '}
+                    <b>{periodKey === 'custom' ? `${fmtDate(dateRange.start)} → ${fmtDate(dateRange.end)}` : PERIOD_LABEL[periodKey]}</b>
                   </span>
                 </div>
-                <div className="prod-grid">
-                  {producaoPorSetor.map((s, i) => (
-                    <ProducaoCard key={i} setor={s.setor} series={s.series} total={s.total} media={s.media} pico={s.pico} ultimo={s.ultimo} />
+
+                {/* Filtro de período (mesmos presets do Main Dashboard) */}
+                <div className="period-filter">
+                  <span className="filter-label">PERÍODO</span>
+                  <div className="period-row">
+                    {(['1d', '7d', '14d', '28d', '3M', '6M', '12M'] as Exclude<PeriodKey, 'custom'>[]).map(p => (
+                      <button
+                        key={p}
+                        onClick={() => setPeriodKey(p)}
+                        className={`period-pill ${periodKey === p ? 'active' : ''}`}
+                      >
+                        {PERIOD_LABEL[p]}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="period-custom">
+                    <input
+                      type="date"
+                      value={customStart}
+                      onChange={(e) => setCustomStart(e.target.value)}
+                      placeholder="dd/mm/aaaa"
+                      className="period-date"
+                    />
+                    <span style={{ color: 'var(--p-ink-3)', fontSize: 13 }}>até</span>
+                    <input
+                      type="date"
+                      value={customEnd}
+                      onChange={(e) => setCustomEnd(e.target.value)}
+                      placeholder="dd/mm/aaaa"
+                      className="period-date"
+                    />
+                    <button
+                      onClick={() => { if (customStart && customEnd) setPeriodKey('custom'); }}
+                      disabled={!customStart || !customEnd}
+                      className="period-apply"
+                    >
+                      Aplicar
+                    </button>
+                    <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--p-ink-3)', fontStyle: 'italic' }}>
+                      {periodKey === 'custom'
+                        ? `${fmtDate(dateRange.start)} → ${fmtDate(dateRange.end)}`
+                        : `Últimos ${PERIOD_LABEL[periodKey].replace('D', ' dias').replace('M', ' meses').replace('D-1', '1 dia')}`}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Toggle granularidade (Diário/Semanal/Mensal) — auto-ajusta com período mas editável */}
+                <div className="chart-mode-row">
+                  <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--p-ink-3)', letterSpacing: '.1em', textTransform: 'uppercase' }}>
+                    Granularidade
+                  </span>
+                  {(['diario', 'semanal', 'mensal'] as ChartMode[]).map(m => (
+                    <button key={m} className={`tab-btn-mini ${chartMode === m ? 'active' : ''}`} onClick={() => setChartMode(m)}>
+                      {m === 'diario' ? 'Diário' : m === 'semanal' ? 'Semanal' : 'Mensal'}
+                    </button>
                   ))}
                 </div>
+
+                {/* Grid de cards — regra: > 14 barras → 2 cols, senão 3 cols */}
+                {producaoPorSetor.length === 0 ? (
+                  <div className="loading-box">Sem dados de produção no período selecionado.</div>
+                ) : (
+                  <div className="prod-grid" style={{ gridTemplateColumns: `repeat(${prodGridCols}, 1fr)` }}>
+                    {producaoPorSetor.map((s, i) => (
+                      <ProducaoCard key={i} setor={s.setor} series={s.series} total={s.total} media={s.media} pico={s.pico} ultimo={s.ultimo} />
+                    ))}
+                  </div>
+                )}
               </>
             )}
 
+            {/* ====== ABA REMESSAS — Cronograma + Risco crítico + TOC ====== */}
+            {pageTab === 'remessas' && <>
             {/* ====== 📅 Próximas 8 semanas ====== */}
             {data.semanasEntrega && data.semanasEntrega.length > 0 && (
               <>
@@ -486,6 +637,190 @@ export default function ProducaoDashboard() {
                     />
                   </div>
                   <RemessasTable rows={filtered} showTocStatus onRowClick={setSelectedRemessa} />
+                </>
+              );
+            })()}
+
+            </>}
+
+            {/* ====== ABA OPEN ORDERS ====== */}
+            {pageTab === 'open-orders' && (
+              <>
+                <div className="section-head">
+                  <span className="section-pill sp-pink">🛍 Open Orders</span>
+                  <span className="title">Pedidos abertos · US + BR</span>
+                </div>
+                {!openOrders ? (
+                  <div className="loading-box">⏳ Carregando pedidos abertos…</div>
+                ) : (
+                  <>
+                    <div className="kpi-grid kpi-grid-4">
+                      <Kpi label="Pares US" value={fmtNum(openOrders.totals?.paresUS)} accent="blue" />
+                      <Kpi label="Pares BR" value={fmtNum(openOrders.totals?.paresBR)} accent="green" />
+                      <Kpi label="Total" value={fmtNum(openOrders.totals?.total)} />
+                      <Kpi label="SKUs únicos" value={fmtNum(openOrders.totals?.skusUnicos)} />
+                    </div>
+                    <div className="section-head" style={{ marginTop: 24 }}>
+                      <span className="section-pill sp-teal">📋 Pedidos por SKU</span>
+                      <span className="title">{openOrders.rows?.length || 0} SKUs com pedidos abertos</span>
+                    </div>
+                    <div className="list-card">
+                      <table className="list-table">
+                        <thead>
+                          <tr>
+                            <th>SKU</th>
+                            <th>Produto</th>
+                            <th className="num">US</th>
+                            <th className="num">BR</th>
+                            <th className="num">Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(openOrders.rows || []).slice(0, 200).map((r: any, i: number) => (
+                            <tr key={i}>
+                              <td><span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 11 }}>{r.sku || '—'}</span></td>
+                              <td>{r.produto || '—'}</td>
+                              <td className="num" style={{ color: 'var(--p-blue)', fontWeight: 700 }}>{fmtNum(r.us)}</td>
+                              <td className="num" style={{ color: 'var(--p-green)', fontWeight: 700 }}>{fmtNum(r.br)}</td>
+                              <td className="num"><b>{fmtNum(r.total)}</b></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+
+            {/* ====== ABA DEMANDA ====== */}
+            {pageTab === 'demanda' && (
+              <div className="list-card" style={{ padding: 60, textAlign: 'center', marginTop: 20 }}>
+                <div style={{ fontSize: 48, marginBottom: 12 }}>🔒</div>
+                <div style={{ fontWeight: 800, fontSize: 17, marginBottom: 6, color: 'var(--p-ink)' }}>
+                  Aguardando IAM <code style={{ fontSize: 13 }}>larroude-os</code>
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--p-ink-2)', maxWidth: 540, margin: '0 auto', lineHeight: 1.5 }}>
+                  Quando a SA <code>power-bi@larroude-data-prod</code> for aprovada no projeto{' '}
+                  <code>larroude-os</code>, esta aba carrega o modelo de demanda{' '}
+                  <code>gold.demand_model_v2</code> com 500+ SKUs e seu health score.
+                </div>
+              </div>
+            )}
+
+            {/* ====== ABA DIAGNÓSTICO ====== */}
+            {pageTab === 'diagnostico' && (() => {
+              if (!data.setores) return null;
+              const classifs = data.setores.map(s => {
+                const lotes = s.lotes_no_setor || 0;
+                const gargalo = s.total_em_gargalo || 0;
+                const diasDentro = s.avg_dias_no_setor || 0;
+                const diasEspera = s.avg_dias_espera || 0;
+                const pctGargalo = lotes > 0 ? gargalo / lotes : 0;
+                let c: 'GARGALO' | 'SOBRECARGA' | 'SEQUENCIAMENTO' | 'SAUDAVEL';
+                let razao = '';
+                let color = '';
+                if (pctGargalo >= 0.5 && diasDentro >= 4) {
+                  c = 'GARGALO'; color = 'var(--p-red)';
+                  razao = `${Math.round(pctGargalo * 100)}% lotes em gargalo · ${fmtDec(diasDentro)}d parados`;
+                } else if (diasDentro >= 5) {
+                  c = 'SOBRECARGA'; color = 'var(--p-orange)';
+                  razao = `${fmtDec(diasDentro)}d médios dentro do setor`;
+                } else if (diasEspera >= 7) {
+                  c = 'SEQUENCIAMENTO'; color = 'var(--p-gold)';
+                  razao = `${fmtDec(diasEspera)}d médios de espera entre setores`;
+                } else {
+                  c = 'SAUDAVEL'; color = 'var(--p-green)';
+                  razao = `${fmtDec(diasDentro)}d dentro · ${fmtDec(diasEspera)}d espera`;
+                }
+                return { s, c, razao, color };
+              });
+              const counts = {
+                GARGALO: classifs.filter(x => x.c === 'GARGALO').length,
+                SOBRECARGA: classifs.filter(x => x.c === 'SOBRECARGA').length,
+                SEQUENCIAMENTO: classifs.filter(x => x.c === 'SEQUENCIAMENTO').length,
+                SAUDAVEL: classifs.filter(x => x.c === 'SAUDAVEL').length,
+              };
+              const remessasRisco = (data.remessas || data.remessasTop || [])
+                .filter(r => r.is_bottleneck || (r.dias_para_entrega != null && r.dias_para_entrega < 0))
+                .sort((a, b) => (b.pares_pendentes || 0) - (a.pares_pendentes || 0))
+                .slice(0, 10);
+
+              return (
+                <>
+                  <div className="section-head">
+                    <span className="section-pill sp-red">🩺 Diagnóstico TOC</span>
+                    <span className="title">Classificação automática dos {data.setores.length} setores</span>
+                  </div>
+                  <div className="diag-grid">
+                    <div className="diag-card dc-red">
+                      <div className="emoji">🔴</div>
+                      <div className="qlabel">Gargalo</div>
+                      <div className="qcount">{counts.GARGALO}</div>
+                      <div className="qdesc">≥50% lotes em gargalo + ≥4d parados</div>
+                    </div>
+                    <div className="diag-card dc-orange">
+                      <div className="emoji">🟠</div>
+                      <div className="qlabel">Sobrecarga</div>
+                      <div className="qcount">{counts.SOBRECARGA}</div>
+                      <div className="qdesc">≥5d médios dentro do setor</div>
+                    </div>
+                    <div className="diag-card dc-gold">
+                      <div className="emoji">🟡</div>
+                      <div className="qlabel">Sequenciamento</div>
+                      <div className="qcount">{counts.SEQUENCIAMENTO}</div>
+                      <div className="qdesc">≥7d esperando entre setores</div>
+                    </div>
+                    <div className="diag-card dc-green">
+                      <div className="emoji">🟢</div>
+                      <div className="qlabel">Saudável</div>
+                      <div className="qcount">{counts.SAUDAVEL}</div>
+                      <div className="qdesc">Sem gargalos significativos</div>
+                    </div>
+                  </div>
+
+                  <div className="section-head" style={{ marginTop: 28 }}>
+                    <span className="section-pill sp-orange">🚨 Top 10 remessas em risco</span>
+                    <span className="title">Gargalo ativo ou prazo de entrega ultrapassado</span>
+                  </div>
+                  <RemessasTable rows={remessasRisco} showTocStatus onRowClick={setSelectedRemessa} />
+
+                  <div className="section-head" style={{ marginTop: 28 }}>
+                    <span className="section-pill sp-teal">📊 Classificação por setor</span>
+                    <span className="title">Diagnóstico automático TOC · ordenado por pares pendentes</span>
+                  </div>
+                  <div className="list-card">
+                    <table className="list-table">
+                      <thead>
+                        <tr>
+                          <th>Setor</th>
+                          <th className="num">Lotes</th>
+                          <th className="num">Pendente</th>
+                          <th className="num">Dias setor</th>
+                          <th className="num">Dias espera</th>
+                          <th>Classificação</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {classifs
+                          .slice()
+                          .sort((a, b) => (b.s.pares_pendentes || 0) - (a.s.pares_pendentes || 0))
+                          .map((x, i) => (
+                            <tr key={i}>
+                              <td style={{ fontWeight: 700 }}>{x.s.nome_setor || '—'}</td>
+                              <td className="num">{fmtNum(x.s.lotes_no_setor)}</td>
+                              <td className="num"><b>{fmtNum(x.s.pares_pendentes)}</b></td>
+                              <td className="num">{x.s.avg_dias_no_setor != null ? `${fmtDec(x.s.avg_dias_no_setor)}d` : '—'}</td>
+                              <td className="num">{x.s.avg_dias_espera != null ? `${fmtDec(x.s.avg_dias_espera)}d` : '—'}</td>
+                              <td>
+                                <div style={{ fontSize: 11, fontWeight: 800, color: x.color }}>{x.c}</div>
+                                <div style={{ fontSize: 10, color: 'var(--p-ink-3)', marginTop: 2 }}>{x.razao}</div>
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </>
               );
             })()}
