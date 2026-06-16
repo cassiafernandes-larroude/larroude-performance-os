@@ -1,19 +1,6 @@
 'use client';
-// Cassia 2026-06-15: clone nativo do larroude-producao-dashboard.vercel.app.
-// Shape do upstream inspecionado e mapeado (snake_case PT-BR).
-//
-// /api/producao → { generatedAt, totals, fabricas[], setores[], remessas[] }
-//   totals: paresPendentes, paresBaixados, remessasAtivas, remessasGargalo,
-//           remessasBloqueadas, remessasAtrasadas, leadTimeMedio, proximaEntrega
-//   fabricas[]: nome_fabrica, remessas, pares_pendentes, pares_baixados,
-//               avg_lead_time, remessas_em_gargalo
-//   setores[]: nome_setor, sequencia, lotes_no_setor, pares_pendentes,
-//              avg_dias_no_setor, avg_dias_espera, total_em_gargalo
-//   remessas[]: remessa, nome, sku, cod_ref, fabrica, pares_pendentes,
-//               pares_baixados, pares_totais, dt_entrega, setor_atual,
-//               is_bottleneck, toc_status, dias_no_setor, status_entrega
-//
-// /api/producao/open-orders → { totals: {paresUS,paresBR,total,skusUnicos}, rows[] }
+// Cassia 2026-06-15: clone visual 1:1 do larroude-producao-dashboard.vercel.app
+// usando design system Larroudé namespaced (.prod-root) + dados via proxy.
 
 import { useEffect, useMemo, useState } from 'react';
 
@@ -29,56 +16,28 @@ interface Totals {
   leadTimeMedio?: number;
   proximaEntrega?: string | null;
 }
-
 interface Fabrica {
-  nome_fabrica?: string;
-  remessas?: number;
-  pares_pendentes?: number;
-  pares_baixados?: number;
-  avg_lead_time?: number;
-  remessas_em_gargalo?: number;
+  nome_fabrica?: string; remessas?: number; pares_pendentes?: number;
+  pares_baixados?: number; avg_lead_time?: number; remessas_em_gargalo?: number;
 }
-
 interface Setor {
-  nome_setor?: string;
-  sequencia?: number;
-  lotes_no_setor?: number;
-  pares_pendentes?: number;
-  avg_dias_no_setor?: number;
-  avg_dias_espera?: number;
+  nome_setor?: string; sequencia?: number; lotes_no_setor?: number;
+  pares_pendentes?: number; avg_dias_no_setor?: number; avg_dias_espera?: number;
   total_em_gargalo?: number;
 }
-
 interface Remessa {
-  remessa?: string;
-  nome?: string;
-  sku?: string;
-  cod_ref?: string;
-  fabrica?: string;
-  pares_pendentes?: number;
-  pares_baixados?: number;
-  pares_totais?: number;
-  dt_entrega?: string | null;
-  data_inclusao?: string | null;
-  setor_atual?: string;
-  is_bottleneck?: boolean;
-  toc_status?: string | null;
-  dias_no_setor?: number;
-  dias_espera_entre_setores?: number;
-  dias_sem_movimentacao?: number;
+  remessa?: string; nome?: string; sku?: string; cod_ref?: string; fabrica?: string;
+  pares_pendentes?: number; pares_baixados?: number; pares_totais?: number;
+  dt_entrega?: string | null; setor_atual?: string;
+  is_bottleneck?: boolean; toc_status?: string | null;
+  dias_no_setor?: number; dias_espera_entre_setores?: number;
   lead_time_acumulado_dias?: number;
-  status_entrega?: string;
-  dias_para_entrega?: number;
+  status_entrega?: string; dias_para_entrega?: number;
 }
-
 interface ProducaoData {
-  generatedAt?: string;
-  totals?: Totals;
-  fabricas?: Fabrica[];
-  setores?: Setor[];
-  remessas?: Remessa[];
+  generatedAt?: string; totals?: Totals;
+  fabricas?: Fabrica[]; setores?: Setor[]; remessas?: Remessa[];
 }
-
 interface OpenOrdersData {
   generatedAt?: string;
   totals?: { paresUS?: number; paresBR?: number; total?: number; skusUnicos?: number };
@@ -101,24 +60,22 @@ function fmtDate(v: string | null | undefined): string {
   } catch { return v; }
 }
 
-/** Classificação TOC dos setores (Cassia documentou). */
-function classifSetor(s: Setor): { c: 'GARGALO' | 'SOBRECARGA' | 'SEQUENCIAMENTO' | 'SAUDÁVEL'; razao: string; color: string } {
+function classifSetor(s: Setor): { c: 'GARGALO' | 'SOBRECARGA' | 'SEQUENCIAMENTO' | 'SAUDAVEL'; razao: string; color: string } {
   const lotes = s.lotes_no_setor || 0;
   const gargalo = s.total_em_gargalo || 0;
   const diasNoSetor = s.avg_dias_no_setor || 0;
   const diasEspera = s.avg_dias_espera || 0;
   const pctGargalo = lotes > 0 ? gargalo / lotes : 0;
-
   if (pctGargalo >= 0.5 && diasNoSetor >= 4) {
-    return { c: 'GARGALO', razao: `${Math.round(pctGargalo * 100)}% lotes em gargalo · ${fmtDec(diasNoSetor)}d parados`, color: '#DC2626' };
+    return { c: 'GARGALO', razao: `${Math.round(pctGargalo * 100)}% lotes em gargalo · ${fmtDec(diasNoSetor)}d parados`, color: 'var(--p-red)' };
   }
   if (diasNoSetor >= 5) {
-    return { c: 'SOBRECARGA', razao: `${fmtDec(diasNoSetor)}d médios dentro do setor`, color: '#D97706' };
+    return { c: 'SOBRECARGA', razao: `${fmtDec(diasNoSetor)}d médios dentro do setor`, color: 'var(--p-orange)' };
   }
   if (diasEspera >= 7) {
-    return { c: 'SEQUENCIAMENTO', razao: `${fmtDec(diasEspera)}d médios de espera entre setores`, color: '#CA8A04' };
+    return { c: 'SEQUENCIAMENTO', razao: `${fmtDec(diasEspera)}d médios de espera entre setores`, color: 'var(--p-gold)' };
   }
-  return { c: 'SAUDÁVEL', razao: `${fmtDec(diasNoSetor)}d dentro · ${fmtDec(diasEspera)}d espera`, color: '#16A34A' };
+  return { c: 'SAUDAVEL', razao: `${fmtDec(diasNoSetor)}d dentro · ${fmtDec(diasEspera)}d espera`, color: 'var(--p-green)' };
 }
 
 export default function ProducaoDashboard() {
@@ -133,11 +90,9 @@ export default function ProducaoDashboard() {
     try {
       const r = await fetch('/api/producao');
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const d = await r.json();
-      setData(d || null);
+      setData((await r.json()) || null);
     } catch (e: any) { setError(e?.message || 'erro'); } finally { setLoading(false); }
   };
-
   const loadOpenOrders = async () => {
     if (openOrders) return;
     try {
@@ -152,21 +107,13 @@ export default function ProducaoDashboard() {
     /* eslint-disable-next-line */
   }, [tab]);
 
-  // Diagnóstico — classifica setores
   const diagnostico = useMemo(() => {
-    if (!data?.setores) return { gargalo: [], sobrecarga: [], sequenciamento: [], saudavel: [] };
-    const groups: any = { GARGALO: [], SOBRECARGA: [], SEQUENCIAMENTO: [], SAUDÁVEL: [] };
-    for (const s of data.setores) {
-      const cls = classifSetor(s);
-      groups[cls.c].push({ s, cls });
-    }
-    return {
-      gargalo: groups.GARGALO, sobrecarga: groups.SOBRECARGA,
-      sequenciamento: groups.SEQUENCIAMENTO, saudavel: groups.SAUDÁVEL,
-    };
+    if (!data?.setores) return { GARGALO: [], SOBRECARGA: [], SEQUENCIAMENTO: [], SAUDAVEL: [] };
+    const g: any = { GARGALO: [], SOBRECARGA: [], SEQUENCIAMENTO: [], SAUDAVEL: [] };
+    for (const s of data.setores) { g[classifSetor(s).c].push(s); }
+    return g;
   }, [data]);
 
-  // Top remessas em risco — gargalo + atrasadas
   const remessasRisco = useMemo(() => {
     if (!data?.remessas) return [];
     return data.remessas
@@ -178,416 +125,455 @@ export default function ProducaoDashboard() {
   const t = data?.totals || {};
 
   return (
-    <div className="px-4 lg:px-8 py-5 lg:py-8 max-w-[1500px] mx-auto">
-      {/* Header padronizado */}
-      <header className="mb-5">
-        <div className="pt-2 pb-2 flex items-start justify-between gap-4 flex-wrap">
-          <h1
-            className="font-display text-[24px] sm:text-[28px] lg:text-[40px] font-bold leading-tight"
-            style={{ color: 'var(--ink)', letterSpacing: '-0.025em' }}
-          >
-            Produção 2.0
-          </h1>
-          <button
-            onClick={load}
-            disabled={loading}
-            className="pill pill-ghost px-3 py-1.5 text-[12px]"
-            style={{ opacity: loading ? 0.6 : 1 }}
-          >
-            {loading ? '⏳ Carregando…' : '↻ Atualizar'}
-          </button>
-        </div>
-        <p className="text-[13px] mt-2" style={{ color: 'var(--ink-soft)' }}>
-          Parque produtivo TOC · <b>LARROUDE FILIAL SAPIRANGA 4 - 1</b> (Senda 4)
-          {data?.generatedAt && <> · gerado em <b>{fmtDate(data.generatedAt)}</b></>}
-          {' · '}<span style={{ color: 'var(--ink-muted)' }}>fonte: DM_SUPPLY_CHAIN.fct_remessas_producao</span>
-        </p>
-      </header>
+    <div className="prod-root">
+      <div className="app">
 
-      {/* Tab nav */}
-      <div className="flex gap-1 mb-5 flex-wrap" style={{ borderBottom: '1.5px solid var(--border)' }}>
-        {([
-          { id: 'producao', label: '🏭 Produção' },
-          { id: 'remessas', label: '📦 Remessas' },
-          { id: 'open-orders', label: '🛒 Open Orders' },
-          { id: 'demanda', label: '📈 Demanda' },
-          { id: 'diagnostico', label: '🔍 Diagnóstico' },
-        ] as { id: Tab; label: string }[]).map(it => (
-          <button
-            key={it.id}
-            onClick={() => setTab(it.id)}
-            style={{
-              padding: '10px 16px',
-              fontSize: 13,
-              fontWeight: 600,
-              background: tab === it.id ? 'var(--card)' : 'transparent',
-              color: tab === it.id ? 'var(--ink)' : 'var(--ink-soft)',
-              border: tab === it.id ? '1.5px solid var(--border)' : '1.5px solid transparent',
-              borderBottomColor: tab === it.id ? 'var(--card)' : 'transparent',
-              borderRadius: '10px 10px 0 0',
-              marginBottom: -1.5,
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-            }}
-          >
-            {it.label}
-          </button>
-        ))}
-      </div>
-
-      {error && (
-        <div className="card mb-4" style={{ background: '#FEE2E2', color: '#DC2626', fontWeight: 600, fontSize: 13 }}>
-          ⚠️ Erro: {error}
-        </div>
-      )}
-
-      {/* ====== Tab: Produção ====== */}
-      {tab === 'producao' && (
-        <>
-          {loading && !data && (
-            <div className="card text-center" style={{ padding: 80, color: 'var(--ink-muted)' }}>⏳ Carregando produção…</div>
-          )}
-
-          {data && (
-            <>
-              {/* KPIs */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8 gap-2 mb-5">
-                <Kpi label="Em Remessa" value={fmtNum(t.paresPendentes)} sub="pares pendentes" tone="orange" />
-                <Kpi label="Baixados" value={fmtNum(t.paresBaixados)} sub="produzidos" tone="green" />
-                <Kpi label="Remessas ativas" value={fmtNum(t.remessasAtivas)} />
-                <Kpi label="Em Gargalo TOC" value={fmtNum(t.remessasGargalo)} tone="red" />
-                <Kpi label="Bloqueadas TOC" value={fmtNum(t.remessasBloqueadas)} tone="red" />
-                <Kpi label="Atrasadas" value={fmtNum(t.remessasAtrasadas)} tone="gold" />
-                <Kpi label="Lead time médio" value={t.leadTimeMedio != null ? `${fmtDec(t.leadTimeMedio)}d` : '—'} />
-                <Kpi label="Próxima entrega" value={fmtDate(t.proximaEntrega)} tone="blue" />
-              </div>
-
-              {/* Fábricas */}
-              {data.fabricas && data.fabricas.length > 0 && (
-                <Section title="🏭 Fábricas" subtitle={`${data.fabricas.length} fábricas · ordenadas por pares pendentes`}>
-                  <Table
-                    headers={['Fábrica', 'Remessas', 'Pendente', 'Baixados', 'Lead time', 'Gargalo']}
-                    rows={data.fabricas
-                      .slice()
-                      .sort((a, b) => (b.pares_pendentes || 0) - (a.pares_pendentes || 0))
-                      .map(f => [
-                        <span key="n" style={{ fontWeight: 600 }}>{f.nome_fabrica || '—'}</span>,
-                        fmtNum(f.remessas),
-                        <b key="p">{fmtNum(f.pares_pendentes)}</b>,
-                        <span key="b" style={{ color: 'var(--ink-soft)' }}>{fmtNum(f.pares_baixados)}</span>,
-                        f.avg_lead_time != null ? `${fmtDec(f.avg_lead_time)}d` : '—',
-                        <span key="g" style={{ color: (f.remessas_em_gargalo || 0) > 0 ? '#DC2626' : 'var(--ink-soft)', fontWeight: (f.remessas_em_gargalo || 0) > 0 ? 700 : 400 }}>
-                          {fmtNum(f.remessas_em_gargalo)}
-                        </span>,
-                      ])}
-                  />
-                </Section>
-              )}
-
-              {/* Setores */}
-              {data.setores && data.setores.length > 0 && (
-                <Section title="⚙️ Setores · sequência industrial" subtitle={`${data.setores.length} setores · ordenados pela sequência`}>
-                  <Table
-                    headers={['#', 'Setor', 'Lotes', 'Pendente', 'Dias no setor', 'Dias espera', 'Gargalo']}
-                    rows={data.setores
-                      .slice()
-                      .sort((a, b) => (a.sequencia || 0) - (b.sequencia || 0))
-                      .map(s => [
-                        <span key="seq" style={{ color: 'var(--ink-muted)', fontSize: 11 }}>{s.sequencia ?? '—'}</span>,
-                        <span key="n" style={{ fontWeight: 600 }}>{s.nome_setor || '—'}</span>,
-                        fmtNum(s.lotes_no_setor),
-                        <b key="p">{fmtNum(s.pares_pendentes)}</b>,
-                        <span key="d" style={{ color: (s.avg_dias_no_setor || 0) >= 5 ? '#D97706' : 'var(--ink)' }}>
-                          {s.avg_dias_no_setor != null ? `${fmtDec(s.avg_dias_no_setor)}d` : '—'}
-                        </span>,
-                        <span key="e" style={{ color: (s.avg_dias_espera || 0) >= 7 ? '#CA8A04' : 'var(--ink-soft)' }}>
-                          {s.avg_dias_espera != null ? `${fmtDec(s.avg_dias_espera)}d` : '—'}
-                        </span>,
-                        <span key="g" style={{ color: (s.total_em_gargalo || 0) > 0 ? '#DC2626' : 'var(--ink-soft)', fontWeight: (s.total_em_gargalo || 0) > 0 ? 700 : 400 }}>
-                          {fmtNum(s.total_em_gargalo)}
-                        </span>,
-                      ])}
-                  />
-                </Section>
-              )}
-            </>
-          )}
-        </>
-      )}
-
-      {/* ====== Tab: Remessas ====== */}
-      {tab === 'remessas' && (
-        <>
-          {!data ? (
-            <div className="card text-center" style={{ padding: 80, color: 'var(--ink-muted)' }}>⏳ Carregando remessas…</div>
-          ) : (
-            <Section title="📦 Lista de remessas" subtitle={`${data.remessas?.length || 0} remessas`}>
-              <Table
-                headers={['Remessa', 'SKU', 'Produto', 'Fábrica', 'Setor atual', 'Pendente', 'Dias no setor', 'Lead time', 'Entrega', 'Status']}
-                rows={(data.remessas || []).slice(0, 100).map(r => [
-                  <span key="n" style={{ fontFamily: 'ui-monospace, monospace', fontSize: 10.5, fontWeight: 700 }}>
-                    {r.remessa || '—'}{r.is_bottleneck && <span style={{ marginLeft: 6, color: '#DC2626', fontWeight: 800 }}>⚠️</span>}
-                  </span>,
-                  <span key="s" style={{ fontFamily: 'ui-monospace, monospace', fontSize: 10, color: 'var(--ink-muted)' }}>{r.sku || '—'}</span>,
-                  <span key="p" style={{ fontSize: 11 }}>{r.nome || r.cod_ref || '—'}</span>,
-                  <span key="f" style={{ fontSize: 10, color: 'var(--ink-soft)' }}>{r.fabrica || '—'}</span>,
-                  r.setor_atual || '—',
-                  <b key="pn">{fmtNum(r.pares_pendentes)}</b>,
-                  <span key="d" style={{ color: (r.dias_no_setor || 0) >= 5 ? '#D97706' : 'var(--ink)' }}>{r.dias_no_setor != null ? `${r.dias_no_setor}d` : '—'}</span>,
-                  r.lead_time_acumulado_dias != null ? `${r.lead_time_acumulado_dias}d` : '—',
-                  fmtDate(r.dt_entrega),
-                  <StatusBadge key="st" status={r.status_entrega} dias={r.dias_para_entrega} />,
-                ])}
-              />
-            </Section>
-          )}
-        </>
-      )}
-
-      {/* ====== Tab: Open Orders ====== */}
-      {tab === 'open-orders' && (
-        <>
-          {!openOrders ? (
-            <div className="card text-center" style={{ padding: 80, color: 'var(--ink-muted)' }}>⏳ Carregando pedidos abertos…</div>
-          ) : (
-            <>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-5">
-                <Kpi label="Pares US" value={fmtNum(openOrders.totals?.paresUS)} tone="blue" />
-                <Kpi label="Pares BR" value={fmtNum(openOrders.totals?.paresBR)} tone="green" />
-                <Kpi label="Total" value={fmtNum(openOrders.totals?.total)} />
-                <Kpi label="SKUs únicos" value={fmtNum(openOrders.totals?.skusUnicos)} />
-              </div>
-              <Section title="🛒 Pedidos por SKU" subtitle={`${openOrders.rows?.length || 0} SKUs`}>
-                <Table
-                  headers={['SKU', 'Produto', 'US', 'BR', 'Total']}
-                  rows={(openOrders.rows || []).slice(0, 200).map(r => [
-                    <span key="s" style={{ fontFamily: 'ui-monospace, monospace', fontSize: 11 }}>{r.sku || '—'}</span>,
-                    r.produto || '—',
-                    <span key="u" style={{ color: '#1E40AF', fontWeight: 600 }}>{fmtNum(r.us)}</span>,
-                    <span key="b" style={{ color: '#16A34A', fontWeight: 600 }}>{fmtNum(r.br)}</span>,
-                    <b key="t">{fmtNum(r.total)}</b>,
-                  ])}
-                />
-              </Section>
-            </>
-          )}
-        </>
-      )}
-
-      {/* ====== Tab: Demanda ====== */}
-      {tab === 'demanda' && (
-        <div className="card text-center" style={{ padding: 60 }}>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>🔒</div>
-          <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 6, color: 'var(--ink)' }}>
-            Aguardando IAM <code style={{ fontSize: 13 }}>larroude-os</code>
+        {/* Header — h1 padronizado lpos (consistente com Inventory) */}
+        <header className="mb-4">
+          <div className="pt-2 pb-2 flex items-start justify-between gap-4 flex-wrap">
+            <h1 className="font-display text-[24px] sm:text-[28px] lg:text-[40px] font-bold leading-tight"
+                style={{ color: 'var(--p-ink)', letterSpacing: '-0.025em' }}>
+              Produção 2.0
+            </h1>
+            <button onClick={load} disabled={loading} className="refresh-btn">
+              {loading ? '⏳ Carregando…' : '↻ Atualizar'}
+            </button>
           </div>
-          <div style={{ fontSize: 13, color: 'var(--ink-soft)', maxWidth: 520, margin: '0 auto', lineHeight: 1.5 }}>
-            Quando a SA <code>power-bi@larroude-data-prod</code> for aprovada no projeto{' '}
-            <code>larroude-os</code>, esta aba carrega o modelo de demanda{' '}
-            <code>gold.demand_model_v2</code> com 500+ SKUs e seu health score.
-          </div>
+          <p className="subtitle">
+            Parque produtivo TOC · <b>LARROUDE FILIAL SAPIRANGA 4 - 1</b> (Senda 4)
+            {data?.generatedAt && <> · gerado em <b>{fmtDate(data.generatedAt)}</b></>}
+            {' · '}<span style={{ color: 'var(--p-ink-3)' }}>fonte: DM_SUPPLY_CHAIN.fct_remessas_producao</span>
+          </p>
+        </header>
+
+        {/* Tab nav */}
+        <div className="tab-nav">
+          {([
+            { id: 'producao', label: '🏭 Produção' },
+            { id: 'remessas', label: '📦 Remessas' },
+            { id: 'open-orders', label: '🛒 Open Orders' },
+            { id: 'demanda', label: '📈 Demanda' },
+            { id: 'diagnostico', label: '🔍 Diagnóstico' },
+          ] as { id: Tab; label: string }[]).map(it => (
+            <button
+              key={it.id}
+              onClick={() => setTab(it.id)}
+              className={`tab-btn ${tab === it.id ? 'active' : ''}`}
+            >
+              {it.label}
+            </button>
+          ))}
         </div>
-      )}
 
-      {/* ====== Tab: Diagnóstico ====== */}
-      {tab === 'diagnostico' && (
-        <>
-          {!data ? (
-            <div className="card text-center" style={{ padding: 80, color: 'var(--ink-muted)' }}>⏳ Carregando diagnóstico…</div>
-          ) : (
-            <>
-              {/* 4 cards de classificação */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-                <DiagCard
-                  icon="🔴" label="GARGALO" count={diagnostico.gargalo.length}
-                  desc="≥50% lotes em gargalo + dias parados altos"
-                  color="#DC2626"
-                />
-                <DiagCard
-                  icon="🟠" label="SOBRECARGA" count={diagnostico.sobrecarga.length}
-                  desc="Setor processando lento (≥5d médios)"
-                  color="#D97706"
-                />
-                <DiagCard
-                  icon="🟡" label="SEQUENCIAMENTO" count={diagnostico.sequenciamento.length}
-                  desc="Espera entre setores ≥7d"
-                  color="#CA8A04"
-                />
-                <DiagCard
-                  icon="🟢" label="SAUDÁVEL" count={diagnostico.saudavel.length}
-                  desc="Sem gargalos significativos"
-                  color="#16A34A"
-                />
-              </div>
+        {error && (
+          <div className="list-card" style={{ background: 'var(--p-red-soft)', padding: '14px 18px', color: 'var(--p-red)', fontWeight: 600, fontSize: 13 }}>
+            ⚠️ Erro: {error}
+          </div>
+        )}
 
-              {/* Top 10 remessas em risco */}
-              <Section title="🚨 Top 10 remessas em risco" subtitle="Gargalo ativo ou prazo de entrega ultrapassado">
-                {remessasRisco.length === 0 ? (
-                  <div style={{ padding: 30, textAlign: 'center', color: 'var(--ink-muted)' }}>
-                    👍 Nenhuma remessa em risco crítico no momento.
-                  </div>
-                ) : (
-                  <Table
-                    headers={['Remessa', 'Produto', 'Setor atual', 'Pendente', 'Dias atraso', 'Ação sugerida']}
-                    rows={remessasRisco.map(r => {
-                      const atraso = r.dias_para_entrega != null && r.dias_para_entrega < 0 ? Math.abs(r.dias_para_entrega) : 0;
-                      const acao =
-                        r.is_bottleneck && atraso > 14 ? { label: '🔴 ESCALAR', sub: 'terceirizar ou reduzir', color: '#DC2626' } :
-                        r.is_bottleneck ? { label: '🟠 PRIORIZAR', sub: 'empurrar no gargalo', color: '#D97706' } :
-                        atraso > 7 ? { label: '🟡 RENEGOCIAR', sub: 'nova data', color: '#CA8A04' } :
-                        { label: '🟢 MONITORAR', sub: '', color: '#16A34A' };
-                      return [
-                        <span key="r" style={{ fontFamily: 'ui-monospace, monospace', fontSize: 11, fontWeight: 700 }}>{r.remessa || '—'}</span>,
-                        <span key="p" style={{ fontSize: 11 }}>{r.nome || r.sku || '—'}</span>,
-                        r.setor_atual || '—',
-                        <b key="pn">{fmtNum(r.pares_pendentes)}</b>,
-                        atraso > 0 ? <span key="a" style={{ color: '#DC2626', fontWeight: 700 }}>{atraso}d</span> : '—',
-                        <div key="acao">
-                          <div style={{ fontSize: 11, fontWeight: 700, color: acao.color }}>{acao.label}</div>
-                          {acao.sub && <div style={{ fontSize: 10, color: 'var(--ink-soft)' }}>{acao.sub}</div>}
-                        </div>,
-                      ];
-                    })}
-                  />
+        {/* ====== Tab: Produção ====== */}
+        {tab === 'producao' && (
+          <>
+            {loading && !data && <div className="loading-box">⏳ Carregando produção…</div>}
+
+            {data && (
+              <>
+                {/* Section: Visão Geral */}
+                <div className="section-head">
+                  <span className="section-pill sp-gold">🥇 Visão Geral</span>
+                  <span className="title"><b>Senda 4</b> · cabines de produção e remessas ativas</span>
+                </div>
+                <div className="kpi-grid kpi-grid-8">
+                  <Kpi label="Em Remessa" value={fmtNum(t.paresPendentes)} sub="pares pendentes" />
+                  <Kpi label="Baixados" value={fmtNum(t.paresBaixados)} sub="produzidos" />
+                  <Kpi label="Remessas ativas" value={fmtNum(t.remessasAtivas)} />
+                  <Kpi label="Em Gargalo TOC" value={fmtNum(t.remessasGargalo)} accent="red" />
+                  <Kpi label="Bloqueadas TOC" value={fmtNum(t.remessasBloqueadas)} accent="red" />
+                  <Kpi label="Atrasadas" value={fmtNum(t.remessasAtrasadas)} accent="gold" />
+                  <Kpi label="Lead time médio" value={t.leadTimeMedio != null ? `${fmtDec(t.leadTimeMedio)}d` : '—'} />
+                  <Kpi label="Próxima entrega" value={fmtDate(t.proximaEntrega)} />
+                </div>
+
+                {/* Fábricas */}
+                {data.fabricas && data.fabricas.length > 0 && (
+                  <>
+                    <div className="section-head">
+                      <span className="section-pill sp-teal">🏭 Fábricas</span>
+                      <span className="title">{data.fabricas.length} fábricas · ordenadas por pares pendentes</span>
+                    </div>
+                    <div className="list-card">
+                      <table className="list-table">
+                        <thead>
+                          <tr>
+                            <th>Fábrica</th>
+                            <th className="num">Remessas</th>
+                            <th className="num">Pendente</th>
+                            <th className="num">Baixados</th>
+                            <th className="num">Lead time</th>
+                            <th className="num">Gargalo</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {data.fabricas
+                            .slice()
+                            .sort((a, b) => (b.pares_pendentes || 0) - (a.pares_pendentes || 0))
+                            .map((f, i) => (
+                              <tr key={i}>
+                                <td style={{ fontWeight: 700 }}>{f.nome_fabrica || '—'}</td>
+                                <td className="num">{fmtNum(f.remessas)}</td>
+                                <td className="num"><b>{fmtNum(f.pares_pendentes)}</b></td>
+                                <td className="num" style={{ color: 'var(--p-ink-3)' }}>{fmtNum(f.pares_baixados)}</td>
+                                <td className="num">{f.avg_lead_time != null ? `${fmtDec(f.avg_lead_time)}d` : '—'}</td>
+                                <td className="num" style={{
+                                  color: (f.remessas_em_gargalo || 0) > 0 ? 'var(--p-red)' : 'var(--p-ink-3)',
+                                  fontWeight: (f.remessas_em_gargalo || 0) > 0 ? 800 : 500,
+                                }}>
+                                  {fmtNum(f.remessas_em_gargalo)}
+                                </td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
                 )}
-              </Section>
 
-              {/* Lista de setores classificados */}
-              {data.setores && data.setores.length > 0 && (
-                <Section title="📊 Classificação por setor" subtitle="Diagnóstico automático TOC">
-                  <Table
-                    headers={['Setor', 'Lotes', 'Pendente', 'Dias setor', 'Dias espera', 'Classificação']}
-                    rows={data.setores
-                      .slice()
-                      .sort((a, b) => (b.pares_pendentes || 0) - (a.pares_pendentes || 0))
-                      .map(s => {
-                        const cls = classifSetor(s);
-                        return [
-                          <span key="n" style={{ fontWeight: 600 }}>{s.nome_setor || '—'}</span>,
-                          fmtNum(s.lotes_no_setor),
-                          <b key="p">{fmtNum(s.pares_pendentes)}</b>,
-                          s.avg_dias_no_setor != null ? `${fmtDec(s.avg_dias_no_setor)}d` : '—',
-                          s.avg_dias_espera != null ? `${fmtDec(s.avg_dias_espera)}d` : '—',
-                          <div key="c">
-                            <div style={{ fontSize: 11, fontWeight: 700, color: cls.color }}>{cls.c}</div>
-                            <div style={{ fontSize: 10, color: 'var(--ink-soft)' }}>{cls.razao}</div>
-                          </div>,
-                        ];
-                      })}
-                  />
-                </Section>
-              )}
-            </>
-          )}
-        </>
-      )}
+                {/* Setores */}
+                {data.setores && data.setores.length > 0 && (
+                  <>
+                    <div className="section-head">
+                      <span className="section-pill sp-blue">⚙️ Setores</span>
+                      <span className="title">{data.setores.length} setores · sequência industrial</span>
+                    </div>
+                    <div className="list-card">
+                      <table className="list-table">
+                        <thead>
+                          <tr>
+                            <th>#</th>
+                            <th>Setor</th>
+                            <th className="num">Lotes</th>
+                            <th className="num">Pendente</th>
+                            <th className="num">Dias no setor</th>
+                            <th className="num">Dias espera</th>
+                            <th className="num">Gargalo</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {data.setores
+                            .slice()
+                            .sort((a, b) => (a.sequencia || 0) - (b.sequencia || 0))
+                            .map((s, i) => (
+                              <tr key={i}>
+                                <td className="rank">{s.sequencia ?? '—'}</td>
+                                <td style={{ fontWeight: 700 }}>{s.nome_setor || '—'}</td>
+                                <td className="num">{fmtNum(s.lotes_no_setor)}</td>
+                                <td className="num"><b>{fmtNum(s.pares_pendentes)}</b></td>
+                                <td className="num" style={{ color: (s.avg_dias_no_setor || 0) >= 5 ? 'var(--p-orange)' : 'var(--p-ink)' }}>
+                                  {s.avg_dias_no_setor != null ? `${fmtDec(s.avg_dias_no_setor)}d` : '—'}
+                                </td>
+                                <td className="num" style={{ color: (s.avg_dias_espera || 0) >= 7 ? 'var(--p-gold)' : 'var(--p-ink-3)' }}>
+                                  {s.avg_dias_espera != null ? `${fmtDec(s.avg_dias_espera)}d` : '—'}
+                                </td>
+                                <td className="num" style={{
+                                  color: (s.total_em_gargalo || 0) > 0 ? 'var(--p-red)' : 'var(--p-ink-3)',
+                                  fontWeight: (s.total_em_gargalo || 0) > 0 ? 800 : 500,
+                                }}>
+                                  {fmtNum(s.total_em_gargalo)}
+                                </td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+          </>
+        )}
+
+        {/* ====== Tab: Remessas ====== */}
+        {tab === 'remessas' && (
+          <>
+            {!data ? (
+              <div className="loading-box">⏳ Carregando remessas…</div>
+            ) : (
+              <>
+                <div className="section-head">
+                  <span className="section-pill sp-purple">📦 Remessas</span>
+                  <span className="title">{data.remessas?.length || 0} remessas · até 100 exibidas</span>
+                </div>
+                <div className="list-card">
+                  <table className="list-table">
+                    <thead>
+                      <tr>
+                        <th>Remessa</th>
+                        <th>SKU</th>
+                        <th>Produto</th>
+                        <th>Setor atual</th>
+                        <th className="num">Pendente</th>
+                        <th className="num">Dias no setor</th>
+                        <th className="num">Lead time</th>
+                        <th className="num">Entrega</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(data.remessas || []).slice(0, 100).map((r, i) => (
+                        <tr key={i}>
+                          <td style={{ fontFamily: 'ui-monospace, monospace', fontSize: 11, fontWeight: 700 }}>
+                            {r.remessa || '—'}
+                            {r.is_bottleneck && <span style={{ marginLeft: 6, color: 'var(--p-red)', fontWeight: 800 }}>⚠️</span>}
+                          </td>
+                          <td><span className="sku-mini">{r.sku || '—'}</span></td>
+                          <td style={{ fontSize: 12 }}>{r.nome || r.cod_ref || '—'}</td>
+                          <td style={{ fontSize: 12 }}>{r.setor_atual || '—'}</td>
+                          <td className="num"><b>{fmtNum(r.pares_pendentes)}</b></td>
+                          <td className="num" style={{ color: (r.dias_no_setor || 0) >= 5 ? 'var(--p-orange)' : 'var(--p-ink)' }}>
+                            {r.dias_no_setor != null ? `${r.dias_no_setor}d` : '—'}
+                          </td>
+                          <td className="num">{r.lead_time_acumulado_dias != null ? `${r.lead_time_acumulado_dias}d` : '—'}</td>
+                          <td className="num">{fmtDate(r.dt_entrega)}</td>
+                          <td><StatusBadge status={r.status_entrega} dias={r.dias_para_entrega} /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </>
+        )}
+
+        {/* ====== Tab: Open Orders ====== */}
+        {tab === 'open-orders' && (
+          <>
+            {!openOrders ? (
+              <div className="loading-box">⏳ Carregando pedidos abertos…</div>
+            ) : (
+              <>
+                <div className="section-head">
+                  <span className="section-pill sp-pink">🛒 Open Orders</span>
+                  <span className="title">Pedidos abertos · US + BR</span>
+                </div>
+                <div className="kpi-grid kpi-grid-4">
+                  <Kpi label="Pares US" value={fmtNum(openOrders.totals?.paresUS)} accent="blue" />
+                  <Kpi label="Pares BR" value={fmtNum(openOrders.totals?.paresBR)} accent="green" />
+                  <Kpi label="Total" value={fmtNum(openOrders.totals?.total)} />
+                  <Kpi label="SKUs únicos" value={fmtNum(openOrders.totals?.skusUnicos)} />
+                </div>
+                <div className="section-head">
+                  <span className="section-pill sp-teal">📋 Pedidos por SKU</span>
+                  <span className="title">{openOrders.rows?.length || 0} SKUs</span>
+                </div>
+                <div className="list-card">
+                  <table className="list-table">
+                    <thead>
+                      <tr>
+                        <th>SKU</th>
+                        <th>Produto</th>
+                        <th className="num">US</th>
+                        <th className="num">BR</th>
+                        <th className="num">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(openOrders.rows || []).slice(0, 200).map((r, i) => (
+                        <tr key={i}>
+                          <td><span className="sku-mini">{r.sku || '—'}</span></td>
+                          <td>{r.produto || '—'}</td>
+                          <td className="num" style={{ color: 'var(--p-blue)', fontWeight: 700 }}>{fmtNum(r.us)}</td>
+                          <td className="num" style={{ color: 'var(--p-green)', fontWeight: 700 }}>{fmtNum(r.br)}</td>
+                          <td className="num"><b>{fmtNum(r.total)}</b></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </>
+        )}
+
+        {/* ====== Tab: Demanda ====== */}
+        {tab === 'demanda' && (
+          <div className="list-card" style={{ padding: 60, textAlign: 'center' }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>🔒</div>
+            <div style={{ fontWeight: 800, fontSize: 17, marginBottom: 6, color: 'var(--p-ink)' }}>
+              Aguardando IAM <code style={{ fontSize: 13 }}>larroude-os</code>
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--p-ink-2)', maxWidth: 540, margin: '0 auto', lineHeight: 1.5 }}>
+              Quando a SA <code>power-bi@larroude-data-prod</code> for aprovada no projeto{' '}
+              <code>larroude-os</code>, esta aba carrega o modelo de demanda{' '}
+              <code>gold.demand_model_v2</code> com 500+ SKUs e seu health score.
+            </div>
+          </div>
+        )}
+
+        {/* ====== Tab: Diagnóstico ====== */}
+        {tab === 'diagnostico' && (
+          <>
+            {!data ? (
+              <div className="loading-box">⏳ Carregando diagnóstico…</div>
+            ) : (
+              <>
+                <div className="section-head">
+                  <span className="section-pill sp-red">🔍 Diagnóstico TOC</span>
+                  <span className="title">Classificação automática dos {data.setores?.length || 0} setores</span>
+                </div>
+
+                <div className="diag-grid">
+                  <DiagCard tone="red" emoji="🔴" label="Gargalo" count={diagnostico.GARGALO.length}
+                    desc="≥50% lotes em gargalo + ≥4d parados" />
+                  <DiagCard tone="orange" emoji="🟠" label="Sobrecarga" count={diagnostico.SOBRECARGA.length}
+                    desc="≥5d médios dentro do setor" />
+                  <DiagCard tone="gold" emoji="🟡" label="Sequenciamento" count={diagnostico.SEQUENCIAMENTO.length}
+                    desc="≥7d esperando entre setores" />
+                  <DiagCard tone="green" emoji="🟢" label="Saudável" count={diagnostico.SAUDAVEL.length}
+                    desc="Sem gargalos significativos" />
+                </div>
+
+                {/* Top 10 remessas em risco */}
+                <div className="section-head">
+                  <span className="section-pill sp-orange">🚨 Top 10 remessas em risco</span>
+                  <span className="title">Gargalo ativo ou prazo de entrega ultrapassado</span>
+                </div>
+                <div className="list-card">
+                  {remessasRisco.length === 0 ? (
+                    <div style={{ padding: 40, textAlign: 'center', color: 'var(--p-ink-3)' }}>
+                      👍 Nenhuma remessa em risco crítico no momento.
+                    </div>
+                  ) : (
+                    <table className="list-table">
+                      <thead>
+                        <tr>
+                          <th>Remessa</th>
+                          <th>Produto</th>
+                          <th>Setor atual</th>
+                          <th className="num">Pendente</th>
+                          <th className="num">Dias atraso</th>
+                          <th>Ação sugerida</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {remessasRisco.map((r, i) => {
+                          const atraso = r.dias_para_entrega != null && r.dias_para_entrega < 0 ? Math.abs(r.dias_para_entrega) : 0;
+                          const acao =
+                            r.is_bottleneck && atraso > 14 ? { label: '🔴 ESCALAR', sub: 'terceirizar ou reduzir', cls: 'st-red' as const } :
+                            r.is_bottleneck ? { label: '🟠 PRIORIZAR', sub: 'empurrar no gargalo', cls: 'st-orange' as const } :
+                            atraso > 7 ? { label: '🟡 RENEGOCIAR', sub: 'nova data', cls: 'st-gold' as const } :
+                            { label: '🟢 MONITORAR', sub: '', cls: 'st-green' as const };
+                          return (
+                            <tr key={i}>
+                              <td style={{ fontFamily: 'ui-monospace, monospace', fontSize: 11, fontWeight: 700 }}>{r.remessa || '—'}</td>
+                              <td style={{ fontSize: 12 }}>{r.nome || r.sku || '—'}</td>
+                              <td style={{ fontSize: 12 }}>{r.setor_atual || '—'}</td>
+                              <td className="num"><b>{fmtNum(r.pares_pendentes)}</b></td>
+                              <td className="num" style={{ color: atraso > 0 ? 'var(--p-red)' : 'var(--p-ink-3)', fontWeight: atraso > 0 ? 800 : 500 }}>
+                                {atraso > 0 ? `${atraso}d` : '—'}
+                              </td>
+                              <td>
+                                <span className={`status-badge ${acao.cls}`}>{acao.label}</span>
+                                {acao.sub && <div style={{ fontSize: 10, color: 'var(--p-ink-3)', marginTop: 3 }}>{acao.sub}</div>}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+
+                {/* Classificação por setor */}
+                {data.setores && data.setores.length > 0 && (
+                  <>
+                    <div className="section-head">
+                      <span className="section-pill sp-teal">📊 Classificação por setor</span>
+                      <span className="title">Diagnóstico automático TOC · ordenado por pares pendentes</span>
+                    </div>
+                    <div className="list-card">
+                      <table className="list-table">
+                        <thead>
+                          <tr>
+                            <th>Setor</th>
+                            <th className="num">Lotes</th>
+                            <th className="num">Pendente</th>
+                            <th className="num">Dias setor</th>
+                            <th className="num">Dias espera</th>
+                            <th>Classificação</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {data.setores
+                            .slice()
+                            .sort((a, b) => (b.pares_pendentes || 0) - (a.pares_pendentes || 0))
+                            .map((s, i) => {
+                              const cls = classifSetor(s);
+                              return (
+                                <tr key={i}>
+                                  <td style={{ fontWeight: 700 }}>{s.nome_setor || '—'}</td>
+                                  <td className="num">{fmtNum(s.lotes_no_setor)}</td>
+                                  <td className="num"><b>{fmtNum(s.pares_pendentes)}</b></td>
+                                  <td className="num">{s.avg_dias_no_setor != null ? `${fmtDec(s.avg_dias_no_setor)}d` : '—'}</td>
+                                  <td className="num">{s.avg_dias_espera != null ? `${fmtDec(s.avg_dias_espera)}d` : '—'}</td>
+                                  <td>
+                                    <div style={{ fontSize: 11, fontWeight: 800, color: cls.color }}>{cls.c}</div>
+                                    <div style={{ fontSize: 10, color: 'var(--p-ink-3)', marginTop: 2 }}>{cls.razao}</div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+          </>
+        )}
+
+        {/* Footer */}
+        <div className="foot">
+          Larroudé Produção 2.0 · {data?.generatedAt ? `gerado em ${fmtDate(data.generatedAt)}` : '—'} · DM_SUPPLY_CHAIN.fct_remessas_producao
+        </div>
+      </div>
     </div>
   );
 }
 
 /* ============================== sub-componentes ============================== */
-function Kpi({ label, value, sub, tone }: {
-  label: string; value: string; sub?: string;
-  tone?: 'green' | 'red' | 'orange' | 'blue' | 'gold';
-}) {
-  const palette: Record<string, { bg: string; bd: string; col: string }> = {
-    green: { bg: 'rgba(16,185,129,0.06)', bd: '#16A34A', col: '#166534' },
-    red: { bg: 'rgba(239,68,68,0.06)', bd: '#DC2626', col: '#991B1B' },
-    orange: { bg: 'rgba(251,146,60,0.06)', bd: '#FB923C', col: '#9A3412' },
-    blue: { bg: 'rgba(37,99,184,0.06)', bd: '#2563B8', col: '#1E40AF' },
-    gold: { bg: 'rgba(202,138,4,0.06)', bd: '#CA8A04', col: '#854D0E' },
+function Kpi({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: 'red' | 'green' | 'gold' | 'blue' | 'orange' }) {
+  const colorMap: Record<string, string> = {
+    red: 'var(--p-red)', green: 'var(--p-green)', gold: 'var(--p-gold)',
+    blue: 'var(--p-blue)', orange: 'var(--p-orange)',
   };
-  const p = tone ? palette[tone] : null;
   return (
-    <div className="card" style={{ padding: '14px 12px', background: p?.bg || 'white', borderLeft: p ? `3px solid ${p.bd}` : undefined }}>
-      <div className="text-[10px] uppercase tracking-wider font-bold leading-tight" style={{ color: p?.col || 'var(--ink-soft)' }}>{label}</div>
-      <div className="font-num font-bold mt-1.5" style={{ fontSize: 22, color: 'var(--ink)', letterSpacing: '-0.02em' }}>{value}</div>
-      {sub && <div className="text-[10.5px] mt-1" style={{ color: 'var(--ink-muted)' }}>{sub}</div>}
+    <div className="kpi">
+      <div className="label">{label}</div>
+      <div className="value" style={accent ? { color: colorMap[accent] } : undefined}>{value}</div>
+      {sub && <div className="sub">{sub}</div>}
     </div>
   );
 }
 
-function DiagCard({ icon, label, count, desc, color }: { icon: string; label: string; count: number; desc: string; color: string }) {
+function DiagCard({ tone, emoji, label, count, desc }: { tone: 'green' | 'gold' | 'orange' | 'red'; emoji: string; label: string; count: number; desc: string }) {
   return (
-    <div className="card" style={{ padding: 16, borderTop: `3px solid ${color}` }}>
-      <div style={{ fontSize: 18, marginBottom: 6 }}>{icon}</div>
-      <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', color }}>{label}</div>
-      <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--ink)', marginTop: 4, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>{count}</div>
-      <div style={{ fontSize: 10, color: 'var(--ink-muted)', marginTop: 6, lineHeight: 1.4 }}>{desc}</div>
+    <div className={`diag-card dc-${tone}`}>
+      <div className="emoji">{emoji}</div>
+      <div className="qlabel">{label}</div>
+      <div className="qcount">{count.toLocaleString('pt-BR')}</div>
+      <div className="qdesc">{desc}</div>
     </div>
   );
 }
 
 function StatusBadge({ status, dias }: { status?: string; dias?: number }) {
-  if (!status) return <span style={{ color: 'var(--ink-muted)', fontSize: 11 }}>—</span>;
+  if (!status) return <span style={{ color: 'var(--p-ink-3)', fontSize: 11 }}>—</span>;
   const isLate = dias != null && dias < 0;
-  const palette = isLate
-    ? { bg: '#FEE2E2', col: '#DC2626' }
-    : { bg: '#DCFCE7', col: '#166534' };
   return (
-    <span style={{
-      display: 'inline-block', padding: '2px 8px', borderRadius: 999,
-      fontSize: 10, fontWeight: 700, background: palette.bg, color: palette.col,
-      letterSpacing: '0.04em', textTransform: 'uppercase' as const,
-    }}>
+    <span className={`status-badge ${isLate ? 'st-red' : 'st-green'}`}>
       {status}{isLate && dias != null ? ` ${Math.abs(dias)}d` : ''}
     </span>
-  );
-}
-
-function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
-  return (
-    <section className="mb-5">
-      <div className="flex items-baseline justify-between gap-2 flex-wrap mb-2">
-        <h2 className="font-display" style={{ fontSize: 17, fontWeight: 700, color: 'var(--ink)' }}>{title}</h2>
-        {subtitle && <span className="text-[11px]" style={{ color: 'var(--ink-soft)' }}>{subtitle}</span>}
-      </div>
-      <div className="card" style={{ padding: 0, overflowX: 'auto' }}>{children}</div>
-    </section>
-  );
-}
-
-function Table({ headers, rows }: { headers: string[]; rows: React.ReactNode[][] }) {
-  return (
-    <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse', minWidth: 700 }}>
-      <thead style={{ background: 'var(--paper)', borderBottom: '1.5px solid var(--border)' }}>
-        <tr>
-          {headers.map((h, i) => (
-            <th
-              key={i}
-              style={{
-                padding: '10px 12px',
-                textAlign: i <= 2 ? 'left' : 'right',
-                fontSize: 10, fontWeight: 700, color: 'var(--ink-muted)',
-                textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap',
-              }}
-            >
-              {h}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.length === 0 ? (
-          <tr><td colSpan={headers.length} style={{ padding: 30, textAlign: 'center', color: 'var(--ink-muted)' }}>Sem dados.</td></tr>
-        ) : rows.map((r, i) => (
-          <tr key={i} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-            {r.map((cell, j) => (
-              <td
-                key={j}
-                style={{
-                  padding: '9px 12px',
-                  textAlign: j <= 2 ? 'left' : 'right',
-                  fontVariantNumeric: 'tabular-nums',
-                  verticalAlign: 'top',
-                }}
-              >
-                {cell}
-              </td>
-            ))}
-          </tr>
-        ))}
-      </tbody>
-    </table>
   );
 }
