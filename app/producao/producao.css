@@ -190,6 +190,44 @@
 .prod-root .st-orange { background: var(--p-orange-soft); color: var(--p-orange); }
 .prod-root .st-gray { background: var(--p-line); color: var(--p-ink-3); }
 
+/* Filter card */
+.prod-root .filter-card {
+  background: var(--p-paper);
+  border: 1.5px solid var(--p-line);
+  border-radius: 18px;
+  padding: 16px 22px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 18px;
+  margin-bottom: 16px;
+}
+.prod-root .filter-label {
+  font-size: 11px; font-weight: 800; color: var(--p-ink-3);
+  letter-spacing: .12em; text-transform: uppercase;
+}
+.prod-root .filter-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.prod-root .btn-pill {
+  padding: 8px 16px; border: 1.5px solid var(--p-line); background: transparent;
+  border-radius: 100px; font-weight: 700; font-size: 13px;
+  color: var(--p-ink-2); cursor: pointer; transition: all .12s;
+  font-family: inherit;
+}
+.prod-root .btn-pill:hover { border-color: var(--p-ink-3); color: var(--p-ink); }
+.prod-root .btn-pill.active { background: var(--p-ink); color: #FFF; border-color: var(--p-ink); }
+.prod-root .search-input {
+  flex: 1; min-width: 220px; margin-left: auto;
+  padding: 9px 16px 9px 16px;
+  border: 1.5px solid var(--p-line); border-radius: 100px;
+  background: var(--p-paper);
+  font-weight: 500; font-size: 13px; color: var(--p-ink);
+  font-family: inherit;
+}
+.prod-root .search-input:focus { outline: none; border-color: var(--p-ink); }
+
+/* Section head extras */
+.prod-root .section-head .right-info {
+  margin-left: auto; font-size: 12px; color: var(--p-ink-3); font-weight: 600;
+}
+.prod-root .section-head .right-info b { color: var(--p-ink); font-weight: 800; }
+
 /* Refresh button */
 .prod-root .refresh-btn {
   background: var(--p-paper);
