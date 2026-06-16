@@ -102,6 +102,56 @@ export default function ProducaoDashboard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [chartMode, setChartMode] = useState<ChartMode>('diario');
+  // Cassia 2026-06-15: busca no bloco Risco Crítico + Modal de detalhe da remessa
+  const [searchRisco, setSearchRisco] = useState('');
+  const [searchToc, setSearchToc] = useState('');
+  const [selectedRemessa, setSelectedRemessa] = useState<Remessa | null>(null);
+  const [modalProducts, setModalProducts] = useState<Remessa[] | null>(null);
+  const [modalLoading, setModalLoading] = useState(false);
+
+  // Carrega produtos da remessa selecionada
+  useEffect(() => {
+    if (!selectedRemessa?.remessa) return;
+    let cancelled = false;
+    setModalLoading(true); setModalProducts(null);
+    fetch(`/api/producao/remessas/${encodeURIComponent(selectedRemessa.remessa)}`)
+      .then(r => r.ok ? r.json() : { items: [], remessa: null })
+      .then(d => {
+        if (cancelled) return;
+        const items = Array.isArray(d?.items) ? d.items : (Array.isArray(d?.produtos) ? d.produtos : (Array.isArray(d?.skus) ? d.skus : []));
+        if (items.length > 0) {
+          setModalProducts(items);
+        } else {
+          // Fallback: filtra localmente todas as linhas com mesmo numero de remessa
+          const all = [
+            ...(data?.remessas || []),
+            ...(data?.remessasTop || []),
+            ...(data?.remessasGargalo || []),
+          ];
+          const seen = new Set<string>();
+          const local = all.filter(r => r.remessa === selectedRemessa.remessa && r.sku && !seen.has(r.sku) && seen.add(r.sku));
+          setModalProducts(local.length > 0 ? local : [selectedRemessa]);
+        }
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setModalProducts([selectedRemessa]);
+      })
+      .finally(() => { if (!cancelled) setModalLoading(false); });
+    return () => { cancelled = true; };
+  }, [selectedRemessa, data]);
+
+  // ESC fecha modal
+  useEffect(() => {
+    if (!selectedRemessa) return;
+    const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') setSelectedRemessa(null); };
+    window.addEventListener('keydown', onEsc);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onEsc);
+      document.body.style.overflow = '';
+    };
+  }, [selectedRemessa]);
 
   const load = async () => {
     setLoading(true); setError(null);
@@ -377,28 +427,68 @@ export default function ProducaoDashboard() {
             )}
 
             {/* ====== 🚨 Risco crítico ====== */}
-            {data.remessasTop && data.remessasTop.length > 0 && (
-              <>
-                <div className="section-head" style={{ marginTop: 40 }}>
-                  <span className="section-pill sp-red">🚨 Risco crítico</span>
-                  <span className="title">Remessas atrasadas com pendente &gt; 50 pares — ordenadas pela mais atrasada</span>
-                  <span className="right-info">{data.remessasTop.length} remessas</span>
-                </div>
-                <RemessasTable rows={data.remessasTop.slice(0, 100)} />
-              </>
-            )}
+            {data.remessasTop && data.remessasTop.length > 0 && (() => {
+              const q = searchRisco.trim().toLowerCase();
+              const filtered = q
+                ? data.remessasTop.filter(r =>
+                    (r.sku || '').toLowerCase().includes(q) ||
+                    (r.remessa || '').toLowerCase().includes(q) ||
+                    (r.nome || '').toLowerCase().includes(q) ||
+                    (r.cod_ref || '').toLowerCase().includes(q)
+                  )
+                : data.remessasTop;
+              return (
+                <>
+                  <div className="section-head" style={{ marginTop: 40 }}>
+                    <span className="section-pill sp-red">🚨 Risco crítico</span>
+                    <span className="title">Remessas atrasadas com pendente &gt; 50 pares — ordenadas pela mais atrasada</span>
+                    <span className="right-info">{filtered.length} de {data.remessasTop.length} remessas</span>
+                  </div>
+                  <div className="search-bar">
+                    <input
+                      type="text"
+                      value={searchRisco}
+                      onChange={(e) => setSearchRisco(e.target.value)}
+                      placeholder="🔍 Buscar por SKU, número da remessa ou nome do produto…"
+                      className="search-input"
+                    />
+                  </div>
+                  <RemessasTable rows={filtered} onRowClick={setSelectedRemessa} />
+                </>
+              );
+            })()}
 
             {/* ====== 🔥 TOC ====== */}
-            {data.remessasGargalo && data.remessasGargalo.length > 0 && (
-              <>
-                <div className="section-head" style={{ marginTop: 40 }}>
-                  <span className="section-pill sp-orange">🔥 TOC</span>
-                  <span className="title">Remessas em <b>GARGALO</b> ou bloqueadas pelo gargalo — top 50 por volume</span>
-                  <span className="right-info">{data.remessasGargalo.length} remessas</span>
-                </div>
-                <RemessasTable rows={data.remessasGargalo.slice(0, 50)} showTocStatus />
-              </>
-            )}
+            {data.remessasGargalo && data.remessasGargalo.length > 0 && (() => {
+              const q = searchToc.trim().toLowerCase();
+              const filtered = q
+                ? data.remessasGargalo.filter(r =>
+                    (r.sku || '').toLowerCase().includes(q) ||
+                    (r.remessa || '').toLowerCase().includes(q) ||
+                    (r.nome || '').toLowerCase().includes(q) ||
+                    (r.cod_ref || '').toLowerCase().includes(q)
+                  )
+                : data.remessasGargalo;
+              return (
+                <>
+                  <div className="section-head" style={{ marginTop: 40 }}>
+                    <span className="section-pill sp-orange">🔥 TOC</span>
+                    <span className="title">Remessas em <b>GARGALO</b> ou bloqueadas pelo gargalo — todas, por volume</span>
+                    <span className="right-info">{filtered.length} de {data.remessasGargalo.length} remessas</span>
+                  </div>
+                  <div className="search-bar">
+                    <input
+                      type="text"
+                      value={searchToc}
+                      onChange={(e) => setSearchToc(e.target.value)}
+                      placeholder="🔍 Buscar por SKU, número da remessa ou nome do produto…"
+                      className="search-input"
+                    />
+                  </div>
+                  <RemessasTable rows={filtered} showTocStatus onRowClick={setSelectedRemessa} />
+                </>
+              );
+            })()}
 
             <div className="foot">
               Larroudé Produção 2.0 · {data?.generatedAt ? `gerado em ${fmtDate(data.generatedAt)}` : '—'} · DM_SUPPLY_CHAIN.fct_remessas_producao
@@ -406,6 +496,16 @@ export default function ProducaoDashboard() {
           </>
         )}
       </div>
+
+      {/* Modal de detalhe da remessa */}
+      {selectedRemessa && (
+        <RemessaModal
+          remessa={selectedRemessa}
+          products={modalProducts}
+          loading={modalLoading}
+          onClose={() => setSelectedRemessa(null)}
+        />
+      )}
     </div>
   );
 }
@@ -498,7 +598,18 @@ function ProducaoCard({ setor, series, total, media, pico, ultimo }: {
   );
 }
 
-function RemessasTable({ rows, showTocStatus }: { rows: Remessa[]; showTocStatus?: boolean }) {
+function RemessasTable({ rows, showTocStatus, onRowClick }: {
+  rows: Remessa[]; showTocStatus?: boolean;
+  onRowClick?: (r: Remessa) => void;
+}) {
+  // Cassia 2026-06-15: 25 linhas/pag
+  const PAGE_SIZE = 25;
+  const [page, setPage] = useState(1);
+  useEffect(() => { setPage(1); }, [rows.length]);
+  const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const start = (safePage - 1) * PAGE_SIZE;
+  const visible = rows.slice(start, start + PAGE_SIZE);
   return (
     <div className="list-card">
       <table className="list-table">
@@ -517,10 +628,19 @@ function RemessasTable({ rows, showTocStatus }: { rows: Remessa[]; showTocStatus
           </tr>
         </thead>
         <tbody>
-          {rows.map((r, i) => (
-            <tr key={i}>
+          {visible.length === 0 ? (
+            <tr><td colSpan={showTocStatus ? 10 : 9} style={{ padding: 40, textAlign: 'center', color: 'var(--p-ink-3)' }}>Nenhuma remessa encontrada.</td></tr>
+          ) : visible.map((r, i) => (
+            <tr
+              key={i}
+              onClick={onRowClick ? () => onRowClick(r) : undefined}
+              style={onRowClick ? { cursor: 'pointer' } : undefined}
+              title={onRowClick ? 'Clique para ver os produtos da remessa' : undefined}
+            >
               <td>
-                <div style={{ fontFamily: 'ui-monospace, monospace', fontSize: 11, fontWeight: 700 }}>{r.remessa || '—'}</div>
+                <div style={{ fontFamily: 'ui-monospace, monospace', fontSize: 11, fontWeight: 700, color: onRowClick ? 'var(--p-blue)' : 'var(--p-ink)' }}>
+                  {r.remessa || '—'}
+                </div>
                 <div style={{ fontSize: 10, color: 'var(--p-ink-3)', fontFamily: 'ui-monospace, monospace' }}>{r.sku || r.cod_ref || '—'}</div>
               </td>
               <td style={{ fontSize: 11 }}>{r.nome?.trim() || '—'}</td>
@@ -551,6 +671,117 @@ function RemessasTable({ rows, showTocStatus }: { rows: Remessa[]; showTocStatus
           ))}
         </tbody>
       </table>
+      {totalPages > 1 && (
+        <div className="pagination">
+          <button onClick={() => setPage(Math.max(1, safePage - 1))} disabled={safePage <= 1}>‹ Anterior</button>
+          <span className="pg-info">
+            Página <b>{safePage}</b> de <b>{totalPages}</b> · {fmtNum(rows.length)} no total
+          </span>
+          <button onClick={() => setPage(Math.min(totalPages, safePage + 1))} disabled={safePage >= totalPages}>Próxima ›</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ============= Modal de detalhe da remessa ============= */
+function RemessaModal({ remessa, products, loading, onClose }: {
+  remessa: Remessa; products: Remessa[] | null; loading: boolean;
+  onClose: () => void;
+}) {
+  const totalPendente = (products || []).reduce((s, p) => s + (p.pares_pendentes || 0), 0);
+  const totalBaixados = (products || []).reduce((s, p) => s + (p.pares_baixados || 0), 0);
+  const totalProdutos = (products || []).reduce((s, p) => s + (p.pares_totais || 0), 0);
+
+  return (
+    <div className="prod-modal-overlay" onClick={onClose}>
+      <div className="prod-modal-card" onClick={e => e.stopPropagation()}>
+        <button className="prod-modal-close" onClick={onClose} aria-label="Fechar">×</button>
+
+        <div className="prod-modal-label">REMESSA</div>
+        <h2 className="prod-modal-title">
+          <span style={{ fontFamily: 'ui-monospace, monospace' }}>{remessa.remessa}</span>
+        </h2>
+        <div className="prod-modal-meta">
+          <span><b>Fábrica:</b> {remessa.fabrica || '—'}</span>
+          <span><b>Setor atual:</b> {remessa.setor_atual || '—'}</span>
+          {remessa.dt_entrega && <span><b>Entrega:</b> {fmtDate(remessa.dt_entrega)}</span>}
+          {remessa.toc_status && (
+            <span className={`status-badge ${remessa.toc_status.toUpperCase().includes('GARGALO') ? 'st-red' : 'st-orange'}`}>
+              🔥 {remessa.toc_status}
+            </span>
+          )}
+          {remessa.dias_para_entrega != null && remessa.dias_para_entrega < 0 && (
+            <span className="status-badge st-red">{Math.abs(remessa.dias_para_entrega)}d atraso</span>
+          )}
+        </div>
+
+        {loading && (
+          <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--p-ink-3)', fontWeight: 600 }}>
+            ⏳ Carregando produtos da remessa…
+          </div>
+        )}
+
+        {!loading && products && products.length > 0 && (
+          <>
+            <div className="prod-modal-summary">
+              <div>
+                <div className="prod-modal-summary-label">PRODUTOS</div>
+                <div className="prod-modal-summary-value">{products.length}</div>
+              </div>
+              <div>
+                <div className="prod-modal-summary-label">PENDENTE</div>
+                <div className="prod-modal-summary-value" style={{ color: 'var(--p-red)' }}>{fmtNum(totalPendente)}</div>
+              </div>
+              <div>
+                <div className="prod-modal-summary-label">BAIXADOS</div>
+                <div className="prod-modal-summary-value" style={{ color: 'var(--p-green)' }}>{fmtNum(totalBaixados)}</div>
+              </div>
+              <div>
+                <div className="prod-modal-summary-label">TOTAL</div>
+                <div className="prod-modal-summary-value">{fmtNum(totalProdutos)}</div>
+              </div>
+            </div>
+
+            <div className="prod-modal-table-wrap">
+              <table className="prod-modal-table">
+                <thead>
+                  <tr>
+                    <th>SKU</th>
+                    <th>Produto</th>
+                    <th>Setor atual</th>
+                    <th className="num">Pendente</th>
+                    <th className="num">Baixados</th>
+                    <th className="num">Total</th>
+                    <th className="num">Dias no setor</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {products.map((p, i) => (
+                    <tr key={i}>
+                      <td style={{ fontFamily: 'ui-monospace, monospace', fontSize: 10.5, fontWeight: 700 }}>{p.sku || '—'}</td>
+                      <td style={{ fontSize: 11.5 }}>{p.nome?.trim() || p.cod_ref || '—'}</td>
+                      <td style={{ fontSize: 11 }}>{p.setor_atual || '—'}</td>
+                      <td className="num"><b>{fmtNum(p.pares_pendentes)}</b></td>
+                      <td className="num" style={{ color: 'var(--p-ink-3)' }}>{fmtNum(p.pares_baixados)}</td>
+                      <td className="num">{fmtNum(p.pares_totais)}</td>
+                      <td className="num" style={{ color: (p.dias_no_setor || 0) >= 5 ? 'var(--p-orange)' : 'var(--p-ink)' }}>
+                        {p.dias_no_setor != null ? `${p.dias_no_setor}d` : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+
+        {!loading && (!products || products.length === 0) && (
+          <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--p-ink-3)' }}>
+            Nenhum produto encontrado para esta remessa.
+          </div>
+        )}
+      </div>
     </div>
   );
 }
