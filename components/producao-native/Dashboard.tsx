@@ -598,14 +598,10 @@ export default function ProducaoDashboard() {
                             <td>{fmtDate(s.data_inicio)}</td>
                             <td className="num"><b>{fmtNum(s.pares)}</b></td>
                             <td className="num">{fmtNum(s.remessas)}</td>
-                            <td style={{ minWidth: 220 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                <div style={{ flex: 1, height: 8, background: 'var(--p-line)', borderRadius: 100, overflow: 'hidden' }}>
-                                  <div style={{ height: '100%', width: `${((s.pares || 0) / maxPares) * 100}%`, background: 'var(--p-teal)', borderRadius: 100 }} />
-                                </div>
-                                <span style={{ fontSize: 11, fontWeight: 700, minWidth: 80, textAlign: 'right' }}>
-                                  {fmtNum(s.pares)} pares
-                                </span>
+                            <td style={{ minWidth: 180 }}>
+                              {/* Cassia 2026-06-15: removido label redundante "X pares" — ja existe na coluna Pares programados */}
+                              <div style={{ height: 8, background: 'var(--p-line)', borderRadius: 100, overflow: 'hidden' }}>
+                                <div style={{ height: '100%', width: `${((s.pares || 0) / maxPares) * 100}%`, background: 'var(--p-teal)', borderRadius: 100 }} />
                               </div>
                             </td>
                           </tr>
