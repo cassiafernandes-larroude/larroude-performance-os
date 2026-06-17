@@ -19,6 +19,8 @@ import {
 import { queryMetaAdsDaily } from '@/lib/main-dashboard/meta-ads';
 import type { Market as MainMarket } from '@/lib/main-dashboard/types';
 import { getMetaSpendAdjustmentByDay } from '@/lib/shared/meta-adjustments';
+// Cassia 2026-06-17: filtros DTC vem da fonte unica (regra de ouro)
+import { EXCLUDED_TAGS_REGEX, DTC_MAX_ORDER_VALUE as MAX_ORDER_VALUE, excludeExchangesSQL } from '@/lib/shared/dtc-filters';
 // Cassia 2026-06-14: REGRA — spend total = Meta+Google+Klaviyo+Attentive+Criteo+Agent.shop+Awin+ShopMy
 import { computeTotalSpend } from '@/lib/channel-costs-bq';
 import type {
@@ -253,8 +255,7 @@ export async function getMonthlySeries(market: Market): Promise<MonthlyPoint[]> 
 
 // ------- Helpers para getProductCac (BQ direto) -------
 
-const MAX_ORDER_VALUE: Record<Market, number> = { US: 30000, BR: 25000 };
-const EXCLUDED_TAGS_REGEX = 'b2b|wholesale|marketplace|redo';
+// MAX_ORDER_VALUE / EXCLUDED_TAGS_REGEX importados de @/lib/shared/dtc-filters (fonte unica)
 
 function ordersDataset(market: Market): string {
   return market === 'US' ? 'stg_shopify' : 'stg_shopify_br';
@@ -278,6 +279,7 @@ function shopifyFilters(market: Market, alias = 'o'): string {
     AND (JSON_VALUE(${alias}.customer, '$.tags') IS NULL OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(${alias}.customer, '$.tags')), r'${EXCLUDED_TAGS_REGEX}'))
     AND CAST(${alias}.total_price AS NUMERIC) < ${MAX_ORDER_VALUE[market]}
     ${pixFilter}
+    ${excludeExchangesSQL(alias)}
   `;
 }
 

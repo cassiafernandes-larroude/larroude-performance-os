@@ -1,4 +1,5 @@
 import type { Market } from "@/types/metric";
+import { dtcCoreFilters } from "@/lib/shared/dtc-filters";
 
 const TZ: Record<Market, string> = {
   US: "America/New_York",
@@ -34,28 +35,11 @@ export function aggregatedKpisSQL(market: Market) {
     ? `LEFT JOIN \`larroude-data-prod.gold.fx_rates_monthly\` fx ON fx.month = FORMAT_DATE('%Y-%m', ad.date)`
     : "";
 
-  // Filtro de exclusao (US e BR):
-  //   - B2B/wholesale/marketplace/redo: orders com essas tags na order OU no customer
-  //   - Cap de valor: orders com total_price > $30k US ou > R$25k BR (atacado/marketplace)
-  const MAX_VALUE = market === "US" ? 30000 : 25000;
-  const B2B_FILTER = `
-    AND (
-      JSON_VALUE(customer, '$.tags') IS NULL
-      OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(customer, '$.tags')), r'b2b|wholesale|marketplace|redo')
-    )
-    AND NOT REGEXP_CONTAINS(LOWER(IFNULL(tags, '')), r'b2b|wholesale|marketplace|redo')
-    AND CAST(total_price AS NUMERIC) < ${MAX_VALUE}
-  `;
-
-  // Filtro PIX nao pago (so BR): exclui orders com gateway PIX em status pending/expired
-  const PIX_FILTER = market === "BR"
-    ? `
-    AND LOWER(IFNULL(financial_status, '')) NOT IN ('pending', 'expired', 'authorized')
-  `
-    : "";
-
-  // Combinacao dos filtros padrao para CTEs sobre orders
-  const ORDER_FILTERS = `financial_status NOT IN ('voided','refunded') ${B2B_FILTER} ${PIX_FILTER}`;
+  // Cassia 2026-06-17: filtros DTC via fonte unica (lib/shared/dtc-filters) — regra de
+  // ouro (REGRAS secao 1/10). Inclui agora tag `influencer`, cancelled/test, PIX nao-pago
+  // BR e exclusao de trocas (Loop/TroquEcommerce) — antes faltavam aqui e o Overview
+  // divergia de Main/CAC/LTV. O voided/refunded base continua inline.
+  const ORDER_FILTERS = `financial_status NOT IN ('voided','refunded') ${dtcCoreFilters(market)}`;
 
   return `
     WITH
@@ -76,15 +60,7 @@ export function aggregatedKpisSQL(market: Market) {
            UNNEST(JSON_QUERY_ARRAY(line_items)) li
       WHERE DATE(o.created_at) BETWEEN @start AND @end
         AND o.financial_status NOT IN ('voided','refunded')
-        AND (
-          JSON_VALUE(o.customer, '$.tags') IS NULL
-          OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(o.customer, '$.tags')), r'b2b|wholesale|marketplace|redo')
-        )
-        AND NOT REGEXP_CONTAINS(LOWER(IFNULL(o.tags, '')), r'b2b|wholesale|marketplace|redo')
-        AND CAST(o.total_price AS NUMERIC) < ${MAX_VALUE}
-        ${market === "BR" ? `
-        AND LOWER(IFNULL(o.financial_status, '')) NOT IN ('pending', 'expired', 'authorized')
-        ` : ""}
+        ${dtcCoreFilters(market, 'o')}
     ),
     refunds_raw AS (
       SELECT
@@ -128,15 +104,7 @@ export function aggregatedKpisSQL(market: Market) {
       JOIN first_order_per_customer fo ON JSON_VALUE(o.customer, '$.id') = fo.cust_id
       WHERE DATE(o.created_at) BETWEEN @start AND @end
         AND o.financial_status NOT IN ('voided','refunded')
-        AND (
-          JSON_VALUE(o.customer, '$.tags') IS NULL
-          OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(o.customer, '$.tags')), r'b2b|wholesale|marketplace|redo')
-        )
-        AND NOT REGEXP_CONTAINS(LOWER(IFNULL(o.tags, '')), r'b2b|wholesale|marketplace|redo')
-        AND CAST(o.total_price AS NUMERIC) < ${MAX_VALUE}
-        ${market === "BR" ? `
-        AND LOWER(IFNULL(o.financial_status, '')) NOT IN ('pending', 'expired', 'authorized')
-        ` : ""}
+        ${dtcCoreFilters(market, 'o')}
     )
     SELECT
       s.gross_sales,

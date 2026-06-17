@@ -37,6 +37,7 @@
  */
 
 import { runQuery } from './bigquery';
+import { EXCLUDED_TAGS_REGEX } from '@/lib/shared/dtc-filters';
 import { getMetaSpendByDay } from './connectors/meta-ads';
 import { getGoogleAdsSpendByDay } from './connectors/google-ads';
 import { motherSkuOf, productTypeOf } from './connectors/shopify';
@@ -82,9 +83,9 @@ const COMMON_FILTERS_BASE = `
   AND JSON_VALUE(customer, '$.id') != '5025734230182'
   AND (
     JSON_VALUE(customer, '$.tags') IS NULL
-    OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(customer, '$.tags')), r'b2b|wholesale|marketplace|redo|influencer')
+    OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(customer, '$.tags')), r'${EXCLUDED_TAGS_REGEX}')
   )
-  AND NOT REGEXP_CONTAINS(LOWER(IFNULL(tags, '')), r'b2b|wholesale|marketplace|redo|influencer')
+  AND NOT REGEXP_CONTAINS(LOWER(IFNULL(tags, '')), r'${EXCLUDED_TAGS_REGEX}')
   AND NOT (
     -- BR: TroquEcommerce
     LOWER(IFNULL(tags, '')) LIKE '%troquecommerce%'

@@ -1,4 +1,5 @@
 import type { Market } from "@/types/metric";
+import { EXCLUDED_TAGS_REGEX } from "@/lib/shared/dtc-filters";
 import { runQuery, hasBigQueryCredentials } from "@/lib/bigquery/client";
 import { getMetaSpendApi, hasMetaCredentials } from "@/lib/meta-api";
 import { cached } from "@/lib/cache";
@@ -51,10 +52,10 @@ function commonFilters(market: Market): string {
     AND (
       JSON_VALUE(customer, '$.tags') IS NULL
       OR (
-        NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(customer, '$.tags')), r'b2b|wholesale|marketplace|redo')
+        NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(customer, '$.tags')), r'${EXCLUDED_TAGS_REGEX}')
       )
     )
-    AND NOT REGEXP_CONTAINS(LOWER(IFNULL(tags, '')), r'b2b|wholesale|marketplace|redo')
+    AND NOT REGEXP_CONTAINS(LOWER(IFNULL(tags, '')), r'${EXCLUDED_TAGS_REGEX}')
     AND CAST(total_price AS NUMERIC) < ${cap}
     AND NOT (
       LOWER(IFNULL(tags, '')) LIKE '%troquecommerce%'
