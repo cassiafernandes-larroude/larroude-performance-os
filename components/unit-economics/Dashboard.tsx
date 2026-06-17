@@ -10,6 +10,7 @@ import KpiCards from './KpiCards';
 import ProductSelector from './ProductSelector';
 import RecommendationsPanel from './RecommendationsPanel';
 import TodaySalesCard from './TodaySalesCard';
+import ProductUeTimeline from './ProductUeTimeline';
 
 interface ApiResponse {
   market: Market;
@@ -364,6 +365,17 @@ export default function Dashboard({ freshness }: { freshness: string }) {
               )}
             </div>
           </div>
+
+          {/* Cassia 2026-06-17: unit economics do produto selecionado ao longo do tempo */}
+          {selectedProduct && (
+            <ProductUeTimeline
+              market={state.market}
+              product={selectedProduct}
+              assumptions={assumptions}
+              marketingPerUnit={data.marketingPerUnit}
+              currency={data.currency}
+            />
+          )}
 
           <AssumptionsPanel
             assumptions={assumptions}
