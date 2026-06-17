@@ -75,26 +75,26 @@ export default function ProductUeTimeline({ market, product, assumptions, market
     };
   }, [market, product?.motherSku, period, applied]);
 
-  // Constrói a cascata POR BUCKET reaproveitando os campos estruturais do snapshot
-  // (COGS, taxas 30d, pixShare) — abordagem híbrida (Cassia 2026-06-17).
+  // Constrói a cascata POR BUCKET com preço e DESCONTO REAIS do período (das orders).
+  // Cassia 2026-06-17: base = preço médio efetivamente vendido no bucket; desconto =
+  // total_discount real das orders do bucket. COGS, taxas 30d (return/troca/PIX) e
+  // marketing/un seguem estruturais (snapshot) — abordagem híbrida.
   const points: BarPoint[] = useMemo(() => {
-    const listPrice = product.unitGrossRevenue; // base = preço de lista (snapshot)
     const returnRate = product.returnRate30d ?? 0;
     return buckets
       .filter((b) => b.units > 0)
       .map((b) => {
-        const soldPricePerUnit = b.grossRevenue / b.units;
-        const siteDiscount = Math.max(0, listPrice - soldPricePerUnit);
-        const couponDiscount = b.discount / b.units;
+        const soldPricePerUnit = b.grossRevenue / b.units; // preço bruto real do período
+        const realDiscountPerUnit = b.discount / b.units;  // desconto real aplicado no período
         const bucketProduct: ProductUnitEconomics = {
           ...product,
           totalUnits: b.units,
           totalOrders: 0,
-          unitGrossRevenue: listPrice,
-          unitDiscount: siteDiscount + couponDiscount,
+          unitGrossRevenue: soldPricePerUnit,
+          unitDiscount: realDiscountPerUnit,
           unitTax: b.tax / b.units,
           unitDuties: b.duties / b.units,
-          unitRefund: listPrice * returnRate, // taxa 30d estrutural
+          unitRefund: soldPricePerUnit * returnRate, // taxa 30d estrutural × preço real
         };
         const c = computeCascade(bucketProduct, assumptions, market, marketingPerUnit);
         return {
