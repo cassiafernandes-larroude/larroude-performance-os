@@ -325,6 +325,26 @@ export interface UeTimeseriesBucket {
   duties: number;
 }
 
+// Cassia 2026-06-17: mother SKU IGUAL ao do catalogo (lib/unit-economics/shopify-catalog.ts
+// motherSkuOf) — mantem o codigo final (5 partes: L497-BIAR-10.0-LIGH-2039 -> L497-BIAR-LIGH-2039).
+// A MOTHER_SKU_EXPR antiga descartava o codigo (-> L497-BIAR-LIGH), o que NAO casava com o
+// motherSku que o ProductSelector envia, retornando serie vazia.
+const CATALOG_MOTHER_SKU_EXPR = `
+  CASE
+    WHEN variant_sku IS NULL OR ARRAY_LENGTH(SPLIT(variant_sku, '-')) < 3 THEN NULL
+    WHEN ARRAY_LENGTH(SPLIT(variant_sku, '-')) >= 4
+         AND REGEXP_CONTAINS(SPLIT(variant_sku, '-')[SAFE_OFFSET(2)], r'^\\d+(\\.\\d+)?$')
+    THEN CASE
+      WHEN ARRAY_LENGTH(SPLIT(variant_sku, '-')) >= 5 AND IFNULL(SPLIT(variant_sku, '-')[SAFE_OFFSET(4)], '') != ''
+      THEN CONCAT(SPLIT(variant_sku, '-')[SAFE_OFFSET(0)], '-', SPLIT(variant_sku, '-')[SAFE_OFFSET(1)], '-', SPLIT(variant_sku, '-')[SAFE_OFFSET(3)], '-', SPLIT(variant_sku, '-')[SAFE_OFFSET(4)])
+      ELSE CONCAT(SPLIT(variant_sku, '-')[SAFE_OFFSET(0)], '-', SPLIT(variant_sku, '-')[SAFE_OFFSET(1)], '-', SPLIT(variant_sku, '-')[SAFE_OFFSET(3)])
+    END
+    WHEN ARRAY_LENGTH(SPLIT(variant_sku, '-')) >= 4 AND IFNULL(SPLIT(variant_sku, '-')[SAFE_OFFSET(3)], '') != ''
+    THEN CONCAT(SPLIT(variant_sku, '-')[SAFE_OFFSET(0)], '-', SPLIT(variant_sku, '-')[SAFE_OFFSET(1)], '-', SPLIT(variant_sku, '-')[SAFE_OFFSET(2)], '-', SPLIT(variant_sku, '-')[SAFE_OFFSET(3)])
+    ELSE CONCAT(SPLIT(variant_sku, '-')[SAFE_OFFSET(0)], '-', SPLIT(variant_sku, '-')[SAFE_OFFSET(1)], '-', SPLIT(variant_sku, '-')[SAFE_OFFSET(2)])
+  END
+`;
+
 function bucketDateExpr(granularity: UeBucketGranularity): string {
   if (granularity === 'month') return `FORMAT_DATE('%Y-%m', DATE_TRUNC(i.order_date, MONTH))`;
   if (granularity === 'week') return `FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(i.order_date, WEEK(MONDAY)))`;
@@ -378,7 +398,7 @@ export async function getProductUeTimeseries(
         UNNEST(JSON_QUERY_ARRAY(o.line_items)) AS li
     ),
     items AS (
-      SELECT i.*, ${MOTHER_SKU_EXPR} AS mother_sku FROM items_raw i
+      SELECT i.*, ${CATALOG_MOTHER_SKU_EXPR} AS mother_sku FROM items_raw i
     )
     SELECT
       ${bucketExpr.replace(/i\.order_date/g, 'order_date')} AS bucket,
