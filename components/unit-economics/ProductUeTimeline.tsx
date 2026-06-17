@@ -193,9 +193,11 @@ export default function ProductUeTimeline({ market, product, assumptions, market
             bare
           />
           <div className="text-[11px] mt-2" style={{ color: '#9ca3af' }}>
-            Preço, desconto, tax e unidades são reais de cada período (orders Shopify).
-            COGS, taxa de devolução/troca (30d), PIX share e marketing por unidade são estruturais
-            (snapshot atual), aplicados como constantes. Barras verdes = MCL positiva, vermelhas = negativa.
+            Preço, desconto, tax, duties e unidades: reais de cada período (orders Shopify).
+            COGS (inventoryItem.unitCost) e taxas de devolução/troca/PIX: valores reais do Shopify
+            — valor atual aplicado em todo o período, pois o Shopify não mantém série histórica
+            desses. Único dado estimado: marketing por unidade (rateio a nível de mercado, não
+            atribuível por produto/período). Barras verdes = MCL positiva, vermelhas = negativa.
           </div>
         </>
       )}
