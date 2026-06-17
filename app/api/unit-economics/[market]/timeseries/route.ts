@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getProductUeTimeseries, type Market, type UeBucketGranularity } from '@/lib/unit-economics/queries';
 import { memo, TTL_30M } from '@/lib/ltv-dashboard/memo-cache';
-import { dateRangeForPeriod, granularityForDays, daysBetween } from '@/lib/utils/periods';
+import { dateRangeForPeriod, dateRangeCompleted, granularityForDays, daysBetween } from '@/lib/utils/periods';
 import type { Period } from '@/types/metric';
 
 export const dynamic = 'force-dynamic';
@@ -31,17 +31,26 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
 
   let start: string;
   let end: string;
+  let granularity: UeBucketGranularity;
   if (customStart && customEnd && /^\d{4}-\d{2}-\d{2}$/.test(customStart) && /^\d{4}-\d{2}-\d{2}$/.test(customEnd)) {
     start = customStart;
     end = customEnd;
+    granularity = granularityForDays(daysBetween(start, end));
   } else {
     const period: Period = periodParam && VALID_PERIODS.includes(periodParam) ? periodParam : '28d';
-    const range = dateRangeForPeriod(period);
-    start = range.from;
-    end = range.to;
+    // Granularidade igual ao Main (REGRAS 5.1/6.1): 7/14/28d -> dia, 3M -> semana, 6M/12M -> mes.
+    if (period === '3M' || period === '6M' || period === '12M') {
+      const range = dateRangeForPeriod(period); // monthly: alinhado ao 1o dia do mes inicial
+      start = range.from;
+      end = range.to;
+      granularity = period === '3M' ? 'week' : 'month';
+    } else {
+      const range = dateRangeCompleted(period); // exato N dias (ate ontem) -> dia
+      start = range.from;
+      end = range.to;
+      granularity = 'day';
+    }
   }
-
-  const granularity: UeBucketGranularity = granularityForDays(daysBetween(start, end));
 
   try {
     const cacheKey = `ue-ts:${market}:${sku}:${start}:${end}:${granularity}:v1`;
