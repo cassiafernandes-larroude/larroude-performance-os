@@ -123,6 +123,7 @@ export function aggregatedKpisSQL(market: Market, fulCats?: FulfillmentCategory[
       s.order_revenue,
       (s.order_revenue - IFNULL(r.refund_value, 0)) AS total_sales,
       s.orders,
+      u.units,
       SAFE_DIVIDE(s.order_revenue, NULLIF(s.orders, 0)) AS aov,
       a.spend,
       a.meta_spend,

@@ -6,7 +6,7 @@
 
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useTransition } from "react";
-import { FULFILLMENT_CATEGORY_OPTIONS, type FulfillmentCategory } from "@/lib/shared/fulfillment-category";
+import { FULFILLMENT_CATEGORY_GROUPS, type FulfillmentCategory } from "@/lib/shared/fulfillment-category";
 
 export function FulfillmentFilter({ className = "" }: { className?: string }) {
   const router = useRouter();
@@ -21,10 +21,12 @@ export function FulfillmentFilter({ className = "" }: { className?: string }) {
   const nav = (p: URLSearchParams) =>
     startTransition(() => router.replace(`${pathname}?${p.toString()}`, { scroll: false }));
 
-  const toggle = (c: FulfillmentCategory) => {
+  // Um grupo esta' ativo se TODAS as suas categorias estao selecionadas. Toggle adiciona/remove todas.
+  const toggleGroup = (cats: FulfillmentCategory[]) => {
     const next = new Set(selected);
-    if (next.has(c)) next.delete(c);
-    else next.add(c);
+    const active = cats.every((c) => next.has(c));
+    if (active) cats.forEach((c) => next.delete(c));
+    else cats.forEach((c) => next.add(c));
     const p = new URLSearchParams(params.toString());
     if (next.size === 0) p.delete("fulCats");
     else p.set("fulCats", [...next].join(","));
@@ -45,15 +47,18 @@ export function FulfillmentFilter({ className = "" }: { className?: string }) {
       <button onClick={clear} className={`pill ${isAll ? "pill-active" : "pill-inactive"} px-3 py-1 text-[12px] ${isAll ? "font-medium" : ""}`}>
         Todos
       </button>
-      {FULFILLMENT_CATEGORY_OPTIONS.map((o) => (
-        <button
-          key={o.key}
-          onClick={() => toggle(o.key)}
-          className={`pill ${selected.has(o.key) ? "pill-active" : "pill-inactive"} px-3 py-1 text-[12px] ${selected.has(o.key) ? "font-medium" : ""}`}
-        >
-          {o.label}
-        </button>
-      ))}
+      {FULFILLMENT_CATEGORY_GROUPS.map((g) => {
+        const active = g.cats.every((c) => selected.has(c));
+        return (
+          <button
+            key={g.key}
+            onClick={() => toggleGroup(g.cats)}
+            className={`pill ${active ? "pill-active" : "pill-inactive"} px-3 py-1 text-[12px] ${active ? "font-medium" : ""}`}
+          >
+            {g.label}
+          </button>
+        );
+      })}
     </div>
   );
 }

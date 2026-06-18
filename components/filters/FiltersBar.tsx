@@ -4,7 +4,7 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { SlidersHorizontal, RefreshCw, FileDown, Calendar } from "lucide-react";
 import type { Market, Period } from "@/types/metric";
-import { FULFILLMENT_CATEGORY_OPTIONS, type FulfillmentCategory } from "@/lib/shared/fulfillment-category";
+import { FULFILLMENT_CATEGORY_GROUPS, type FulfillmentCategory } from "@/lib/shared/fulfillment-category";
 
 const periods: Period[] = ["7d", "14d", "28d", "3M", "6M", "12M"];
 
@@ -46,9 +46,11 @@ export function FiltersBar({ hidePeriod = false, hideDateRange = false, showFulf
   const fulCatsParam = params.get("fulCats");
   const selectedFul = new Set((fulCatsParam ? fulCatsParam.split(",").filter(Boolean) : []) as FulfillmentCategory[]);
   const fulIsAll = selectedFul.size === 0;
-  const toggleFul = (c: FulfillmentCategory) => {
+  const toggleFulGroup = (cats: FulfillmentCategory[]) => {
     const next = new Set(selectedFul);
-    if (next.has(c)) next.delete(c); else next.add(c);
+    const active = cats.every((c) => next.has(c));
+    if (active) cats.forEach((c) => next.delete(c));
+    else cats.forEach((c) => next.add(c));
     const p = new URLSearchParams(params.toString());
     if (next.size === 0) p.delete("fulCats"); else p.set("fulCats", [...next].join(","));
     startTransition(() => router.replace(`${pathname}?${p.toString()}`, { scroll: false }));
@@ -156,11 +158,14 @@ export function FiltersBar({ hidePeriod = false, hideDateRange = false, showFulf
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className="text-[11px] font-semibold mr-1" style={{ color: "var(--ink-muted)", letterSpacing: "0.06em" }}>ORIGEM</span>
               <button onClick={clearFul} className={`pill ${fulIsAll ? "pill-active" : "pill-inactive"} px-3 py-1 text-[12px] ${fulIsAll ? "font-medium" : ""}`}>Todos</button>
-              {FULFILLMENT_CATEGORY_OPTIONS.map((o) => (
-                <button key={o.key} onClick={() => toggleFul(o.key)} className={`pill ${selectedFul.has(o.key) ? "pill-active" : "pill-inactive"} px-3 py-1 text-[12px] ${selectedFul.has(o.key) ? "font-medium" : ""}`}>
-                  {o.label}
-                </button>
-              ))}
+              {FULFILLMENT_CATEGORY_GROUPS.map((g) => {
+                const active = g.cats.every((c) => selectedFul.has(c));
+                return (
+                  <button key={g.key} onClick={() => toggleFulGroup(g.cats)} className={`pill ${active ? "pill-active" : "pill-inactive"} px-3 py-1 text-[12px] ${active ? "font-medium" : ""}`}>
+                    {g.label}
+                  </button>
+                );
+              })}
             </div>
           </>
         )}

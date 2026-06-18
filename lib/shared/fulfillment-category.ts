@@ -28,12 +28,12 @@ export const FULFILLMENT_LOCATION_IDS = {
   ],
 };
 
-// Ordem/labels para o filtro de UI (pending fica visivel; other so aparece quando "tudo").
-export const FULFILLMENT_CATEGORY_OPTIONS: { key: FulfillmentCategory; label: string }[] = [
-  { key: 'in-stock', label: 'Em estoque' },
-  { key: 'on-demand', label: 'Sob demanda' },
-  { key: 'from-batch', label: 'From-batch' },
-  { key: 'pending', label: 'Pendente' },
+// Grupos para o filtro de UI. Cassia 2026-06-17: on-demand + from-batch consolidados
+// em "Pre-order" (produzido). Cada pill controla 1+ categorias internas.
+export const FULFILLMENT_CATEGORY_GROUPS: { key: string; label: string; cats: FulfillmentCategory[] }[] = [
+  { key: "in-stock", label: "Em estoque", cats: ["in-stock"] },
+  { key: "pre-order", label: "Pré-order", cats: ["on-demand", "from-batch"] },
+  { key: "pending", label: "Pendente", cats: ["pending"] },
 ];
 
 const ALL_CATEGORIES: FulfillmentCategory[] = ['in-stock', 'on-demand', 'from-batch', 'pending', 'other'];

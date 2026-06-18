@@ -16,6 +16,7 @@ type AggRow = {
   order_revenue: number | string;
   total_sales: number | string;
   orders: number;
+  units?: number | string;
   aov: number | string;
   spend: number | string;
   meta_spend: number | string;
@@ -330,14 +331,6 @@ export async function getMetricBundle(
         hint: market === "US" ? "Google Ads US" : "Google Ads BR",
       }),
       baseMetric({
-        key: "roas_gross",
-        label: "ROAS GROSS",
-        value: recalcRoasGross,
-        formatted: formatMultiplier(recalcRoasGross),
-        currency: null,
-        delta_pct: pct(recalcRoasGross, recalcRoasGrossPrev),
-      }),
-      baseMetric({
         key: "roas_total",
         label: "ROAS TOTAL SALES",
         value: recalcRoasTotal,
@@ -366,6 +359,14 @@ export async function getMetricBundle(
         value: cTotal,
         formatted: formatCurrency(cTotal, currency),
         delta_pct: pct(cTotal, pTotal),
+      }),
+      baseMetric({
+        key: "units",
+        label: "UNIDADES VENDIDAS",
+        value: num(c.units),
+        formatted: formatNumber(num(c.units)),
+        currency: null,
+        delta_pct: pct(num(c.units), num(p.units)),
       }),
       baseMetric({
         key: "orders",
