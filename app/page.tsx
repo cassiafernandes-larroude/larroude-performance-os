@@ -7,6 +7,8 @@ import { getMetricBundle } from "@/lib/data/metrics";
 import { runDiagnostics } from "@/lib/intelligence/diagnostics";
 import type { Period } from "@/types/metric";
 import { DashboardActions } from "@/components/shared/DashboardActions";
+import { FulfillmentFilter } from "@/components/filters/FulfillmentFilter";
+import { parseFulfillmentCategories } from "@/lib/shared/fulfillment-category";
 import { todayInMarket, yesterdayInMarket } from "@/lib/utils/market-tz";
 
 // Cassia 2026-06-12: Overview suporta ?day=today (intra-dia D0) e default
@@ -16,18 +18,19 @@ export const revalidate = 60;
 export default async function DailyBriefingPage({
   searchParams,
 }: {
-  searchParams?: { day?: string };
+  searchParams?: { day?: string; fulCats?: string };
 }) {
   const isToday = searchParams?.day === "today";
   const period = "today" as Period; // marker so cache key differs from 28d
+  const fulCats = parseFulfillmentCategories(searchParams?.fulCats);
 
   // Datas resolvidas no fuso do market correspondente (NY p/ US, Brasília p/ BR).
   const usDate = isToday ? todayInMarket("US") : yesterdayInMarket("US");
   const brDate = isToday ? todayInMarket("BR") : yesterdayInMarket("BR");
 
   const [us, br] = await Promise.all([
-    getMetricBundle("US", period, { from: usDate, to: usDate }),
-    getMetricBundle("BR", period, { from: brDate, to: brDate }),
+    getMetricBundle("US", period, { from: usDate, to: usDate }, fulCats),
+    getMetricBundle("BR", period, { from: brDate, to: brDate }, fulCats),
   ]);
   const diagnostics = await runDiagnostics({ us, br });
 
@@ -70,6 +73,8 @@ export default async function DailyBriefingPage({
         </div>
 
         <RefreshBar />
+
+        <FulfillmentFilter className="mb-5" />
 
         {/* ===== US Section ===== */}
         <div className="section-marker mb-3">

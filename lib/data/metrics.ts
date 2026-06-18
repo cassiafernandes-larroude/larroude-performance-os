@@ -3,6 +3,7 @@ import { dateRangeForPeriod, previousPeriodRange, periodToDays, previousRangeOf 
 import { formatCurrency, formatMultiplier, formatNumber, formatPercent } from "@/lib/utils/format";
 import { hasBigQueryCredentials, runQuery } from "@/lib/bigquery/client";
 import { aggregatedKpisSQL } from "@/lib/bigquery/queries/metrics";
+import { type FulfillmentCategory } from "@/lib/shared/fulfillment-category";
 import { getMetaSpendApi, hasMetaCredentials } from "@/lib/meta-api";
 import { cached } from "@/lib/cache";
 import { getFixedToolsCostInRange, getAgentShopCost, CHANNEL_COSTS } from "@/lib/channel-costs";
@@ -19,6 +20,8 @@ type AggRow = {
   spend: number | string;
   meta_spend: number | string;
   google_spend: number | string;
+  meta_spend_preorder?: number | string;
+  google_spend_preorder?: number | string;
   roas_gross: number;
   roas_order: number;
   roas_total: number;
@@ -48,10 +51,10 @@ function previousDateRangeCompleted(period: Period, today = new Date()): { from:
   };
 }
 
-async function fetchKpis(market: Market, range: { from: string; to: string }): Promise<AggRow | null> {
+async function fetchKpis(market: Market, range: { from: string; to: string }, fulCats?: FulfillmentCategory[] | null): Promise<AggRow | null> {
   if (!hasBigQueryCredentials()) return null;
   try {
-    const rows = await runQuery<AggRow>(aggregatedKpisSQL(market), {
+    const rows = await runQuery<AggRow>(aggregatedKpisSQL(market, fulCats), {
       market_lower: market.toLowerCase(),
       start: range.from,
       end: range.to,
@@ -95,11 +98,13 @@ const MOCK_BR: AggRow = {
 export async function getMetricBundle(
   market: Market,
   period: Period,
-  customRange?: { from: string; to: string }
+  customRange?: { from: string; to: string },
+  fulCats?: FulfillmentCategory[] | null
 ): Promise<MetricBundle> {
+  const fulKey = fulCats && fulCats.length ? fulCats.slice().sort().join('+') : 'all';
   const cacheKey = customRange
-    ? `metrics-v13-meta-sm-fallback:${market}:custom:${customRange.from}:${customRange.to}`
-    : `metrics-v13-meta-sm-fallback:${market}:${period}`;
+    ? `metrics-v13-meta-sm-fallback:${market}:custom:${customRange.from}:${customRange.to}:ful=${fulKey}`
+    : `metrics-v13-meta-sm-fallback:${market}:${period}:ful=${fulKey}`;
   return cached(cacheKey, 1800, async () => {
     const range = customRange ?? dateRangeCompleted(period);
     const prevRange = customRange
@@ -107,8 +112,8 @@ export async function getMetricBundle(
       : previousDateRangeCompleted(period);
 
     const [curr, prev] = await Promise.all([
-      fetchKpis(market, range),
-      fetchKpis(market, prevRange),
+      fetchKpis(market, range, fulCats),
+      fetchKpis(market, prevRange, fulCats),
     ]);
 
     const source: MetricSource = curr ? "BQ" : "Mock";
@@ -252,6 +257,10 @@ export async function getMetricBundle(
     } catch (err) {
       console.warn("[overview] computeTotalSpend failed:", err);
     }
+    // Cassia 2026-06-17: com filtro de origem ativo, o spend NAO e' atribuivel por origem
+    // a partir do BQ (Meta vem da API; gold.all_channels_daily tem Meta ~0 por lag). Ate'
+    // implementar o split via API do Meta por campanha (pre-order), ocultamos os KPIs de
+    // spend/ROAS/CAC quando filtrado (ver filtro de metrics no fim). As vendas filtram normal.
     const cGross = num(c.gross_sales), pGross = num(p.gross_sales);
     // Recalcular ROAS, CAC com spend Meta API real (substitui valores do BQ que usavam spend incompleto)
     const recalcRoasGross = cSpend > 0 ? cGross / cSpend : 0;
@@ -353,6 +362,11 @@ export async function getMetricBundle(
       }),
     ];
 
-    return { market, period, date_range: range, metrics, generated_at };
+    // Com filtro de origem ativo: oculta KPIs de spend (nao atribuiveis por origem a partir
+    // do BQ — split por campanha pre-order via API do Meta sera' o proximo passo).
+    const SPEND_KEYS = new Set(["amount_spent", "meta_spend", "google_spend", "roas_gross", "roas_total", "cac"]);
+    const finalMetrics = fulCats && fulCats.length ? metrics.filter((m) => !SPEND_KEYS.has(m.key)) : metrics;
+
+    return { market, period, date_range: range, metrics: finalMetrics, generated_at };
   });
 }

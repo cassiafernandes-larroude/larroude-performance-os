@@ -1,5 +1,6 @@
 import type { Market } from "@/types/metric";
 import { dtcCoreFilters } from "@/lib/shared/dtc-filters";
+import { fulfillmentCategoryFilterSQL, PREORDER_CAMPAIGN_REGEX, type FulfillmentCategory } from "@/lib/shared/fulfillment-category";
 
 const TZ: Record<Market, string> = {
   US: "America/New_York",
@@ -17,9 +18,12 @@ const DATASET: Record<Market, string> = {
 // Ajustes (2026-05-22):
 //   1. Excluir B2B/wholesale em US e BR (via customer.tags e order.tags)
 //   2. Excluir PIX nao pago no BR (gateway LIKE '%pix%' AND financial_status = 'pending')
-export function aggregatedKpisSQL(market: Market) {
+export function aggregatedKpisSQL(market: Market, fulCats?: FulfillmentCategory[] | null) {
   const dataset = DATASET[market];
   const tz = TZ[market];
+  // Cassia 2026-06-17: filtro de origem de fulfillment (estoque/sob demanda/from-batch/pendente).
+  const fulBare = fulfillmentCategoryFilterSQL(fulCats, '');
+  const fulO = fulfillmentCategoryFilterSQL(fulCats, 'o');
 
   // BR: Meta da conta Larroude BR principal vem em USD → multiplicar por FX
   // Mas Pre-Order BR já está em BRL → não converter
@@ -39,7 +43,7 @@ export function aggregatedKpisSQL(market: Market) {
   // ouro (REGRAS secao 1/10). Inclui agora tag `influencer`, cancelled/test, PIX nao-pago
   // BR e exclusao de trocas (Loop/TroquEcommerce) — antes faltavam aqui e o Overview
   // divergia de Main/CAC/LTV. O voided/refunded base continua inline.
-  const ORDER_FILTERS = `financial_status NOT IN ('voided','refunded') ${dtcCoreFilters(market)}`;
+  const ORDER_FILTERS = `financial_status NOT IN ('voided','refunded') ${dtcCoreFilters(market)} ${fulBare}`;
 
   return `
     WITH
@@ -61,6 +65,7 @@ export function aggregatedKpisSQL(market: Market) {
       WHERE DATE(o.created_at) BETWEEN @start AND @end
         AND o.financial_status NOT IN ('voided','refunded')
         ${dtcCoreFilters(market, 'o')}
+        ${fulO}
     ),
     refunds_raw AS (
       SELECT
@@ -80,6 +85,9 @@ export function aggregatedKpisSQL(market: Market) {
         SUM(${spendExpr}) AS spend,
         SUM(IF(LOWER(ad.channel) LIKE 'meta%', ${spendExpr}, 0)) AS meta_spend,
         SUM(IF(LOWER(ad.channel) LIKE 'google%', ad.spend, 0)) AS google_spend,
+        -- Cassia 2026-06-17: split pre-order p/ atribuir spend por origem (produzido vs estoque)
+        SUM(IF(LOWER(ad.channel) LIKE 'meta%' AND REGEXP_CONTAINS(LOWER(IFNULL(ad.campaign_name,'')), r'${PREORDER_CAMPAIGN_REGEX}'), ${spendExpr}, 0)) AS meta_spend_preorder,
+        SUM(IF(LOWER(ad.channel) LIKE 'google%' AND REGEXP_CONTAINS(LOWER(IFNULL(ad.campaign_name,'')), r'${PREORDER_CAMPAIGN_REGEX}'), ad.spend, 0)) AS google_spend_preorder,
         SUM(ad.impressions) AS impressions,
         SUM(ad.clicks) AS clicks,
         SUM(ad.conversions) AS pixel_purchases
@@ -105,6 +113,7 @@ export function aggregatedKpisSQL(market: Market) {
       WHERE DATE(o.created_at) BETWEEN @start AND @end
         AND o.financial_status NOT IN ('voided','refunded')
         ${dtcCoreFilters(market, 'o')}
+        ${fulO}
     )
     SELECT
       s.gross_sales,
@@ -116,6 +125,8 @@ export function aggregatedKpisSQL(market: Market) {
       a.spend,
       a.meta_spend,
       a.google_spend,
+      a.meta_spend_preorder,
+      a.google_spend_preorder,
       a.impressions,
       a.clicks,
       SAFE_DIVIDE(s.gross_sales, NULLIF(a.spend, 0)) AS roas_gross,
