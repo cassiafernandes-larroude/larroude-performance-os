@@ -264,12 +264,16 @@ export async function getMetricBundle(
     if (fulCats && fulCats.length) {
       try {
         const { queryMetaCampaigns } = await import("@/lib/main-dashboard/meta-ads");
-        const { queryGoogleCampaignsViaSupermetrics } = await import("@/lib/main-dashboard/supermetrics");
+        const { queryGoogleCampaignsViaSupermetrics, queryMetaCampaignsViaSupermetrics } = await import("@/lib/main-dashboard/supermetrics");
         const { isPreorderCampaign } = await import("@/lib/shared/fulfillment-category");
-        const [metaC, googC] = await Promise.all([
-          queryMetaCampaigns(market as any, range.from, range.to).catch(() => [] as any[]),
-          queryGoogleCampaignsViaSupermetrics(market as any, range.from, range.to).catch(() => [] as any[]),
-        ]);
+        // Meta: API direta primeiro; se vazia (token fora), fallback Supermetrics (ds_id FA).
+        let metaC: any[] = await queryMetaCampaigns(market as any, range.from, range.to).catch(() => []);
+        let metaSource = "meta-api";
+        if (!metaC.length) {
+          metaC = await queryMetaCampaignsViaSupermetrics(market as any, range.from, range.to).catch(() => []);
+          metaSource = "supermetrics";
+        }
+        const googC: any[] = await queryGoogleCampaignsViaSupermetrics(market as any, range.from, range.to).catch(() => []);
         const metaTot = metaC.reduce((s: number, x: any) => s + (Number(x.spend) || 0), 0);
         const metaPre = metaC.filter((x: any) => isPreorderCampaign(x.campaign_name)).reduce((s: number, x: any) => s + (Number(x.spend) || 0), 0);
         const googTot = googC.reduce((s: number, x: any) => s + (Number(x.spend) || 0), 0);
@@ -282,7 +286,7 @@ export async function getMetricBundle(
         cSpend *= factor; pSpend *= factor;
         cMetaSpend *= factor; pMetaSpend *= factor;
         cGoogleSpend *= factor; pGoogleSpend *= factor;
-        console.log(`[overview ful ${market}]`, `metaPre/${metaTot.toFixed(0)} googPre/${googTot.toFixed(0)}`, `shareProduced=${shareProduced.toFixed(3)} factor=${factor.toFixed(3)}`);
+        console.log(`[overview ful ${market}]`, `meta=${metaSource} metaPre/${metaTot.toFixed(0)} googPre/${googTot.toFixed(0)}`, `shareProduced=${shareProduced.toFixed(3)} factor=${factor.toFixed(3)}`);
       } catch (err) {
         console.warn("[overview] fulfillment spend split failed:", err);
       }

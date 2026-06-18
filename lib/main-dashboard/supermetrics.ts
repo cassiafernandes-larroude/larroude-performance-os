@@ -223,6 +223,38 @@ export async function queryMetaAdsViaSupermetrics(market: Market, start: string,
   return Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date));
 }
 
+// Campanhas Meta via Supermetrics (fallback quando a API direta do Meta esta' fora —
+// token expirado etc.). Cassia 2026-06-17: usado p/ split pre-venda x estoque por nome.
+export interface MetaCampaignSmRow {
+  campaign_name: string;
+  spend: number;
+}
+
+export async function queryMetaCampaignsViaSupermetrics(market: Market, start: string, end: string): Promise<MetaCampaignSmRow[]> {
+  const accountIds = META_ACCOUNT_IDS[market];
+  const params = {
+    ds_id: 'FA',
+    ds_accounts: accountIds,
+    fields: 'Campaign,Date,Spend',
+    date_range_type: 'custom',
+    start_date: start,
+    end_date: end,
+    max_rows: 5000,
+  };
+  const json = await fetchSupermetrics(params);
+  if (!json?.data || json.data.length < 2) return [];
+  const fx = market === 'BR' ? FX_USD_BRL_FALLBACK : 1;
+  const byCampaign = new Map<string, MetaCampaignSmRow>();
+  for (const r of json.data.slice(1)) {
+    const name = String(r[0] || '(sem nome)');
+    const spend = Number(r[2] || 0) * fx;
+    const row = byCampaign.get(name) ?? { campaign_name: name, spend: 0 };
+    row.spend += spend;
+    byCampaign.set(name, row);
+  }
+  return Array.from(byCampaign.values()).filter((c) => c.spend > 0);
+}
+
 export async function queryMetaAdsTotalViaSupermetrics(market: Market, start: string, end: string) {
   const daily = await queryMetaAdsViaSupermetrics(market, start, end);
   return daily.reduce(

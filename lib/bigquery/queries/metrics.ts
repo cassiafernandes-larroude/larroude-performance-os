@@ -69,12 +69,14 @@ export function aggregatedKpisSQL(market: Market, fulCats?: FulfillmentCategory[
     ),
     refunds_raw AS (
       SELECT
-        DATE(created_at, '${tz}') AS d,
+        DATE(rf.created_at, '${tz}') AS d,
         (SELECT SUM(CAST(JSON_VALUE(t,'$.amount') AS NUMERIC))
-         FROM UNNEST(JSON_QUERY_ARRAY(transactions)) t
+         FROM UNNEST(JSON_QUERY_ARRAY(rf.transactions)) t
          WHERE JSON_VALUE(t,'$.kind') = 'refund') AS refund_amount
-      FROM \`larroude-data-prod.${dataset}.order_refunds\`
-      WHERE DATE(created_at, '${tz}') BETWEEN @start AND @end
+      FROM \`larroude-data-prod.${dataset}.order_refunds\` rf
+      LEFT JOIN \`larroude-data-prod.${dataset}.orders\` o ON o.id = rf.order_id
+      WHERE DATE(rf.created_at, '${tz}') BETWEEN @start AND @end
+        ${fulO}
     ),
     returns_t AS (
       SELECT SUM(IFNULL(refund_amount, 0)) AS refund_value
