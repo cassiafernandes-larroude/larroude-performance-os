@@ -257,10 +257,36 @@ export async function getMetricBundle(
     } catch (err) {
       console.warn("[overview] computeTotalSpend failed:", err);
     }
-    // Cassia 2026-06-17: com filtro de origem ativo, o spend NAO e' atribuivel por origem
-    // a partir do BQ (Meta vem da API; gold.all_channels_daily tem Meta ~0 por lag). Ate'
-    // implementar o split via API do Meta por campanha (pre-order), ocultamos os KPIs de
-    // spend/ROAS/CAC quando filtrado (ver filtro de metrics no fim). As vendas filtram normal.
+    // Cassia 2026-06-17: filtro de origem -> PUXA o spend por campanha e calcula ROAS por origem.
+    // Pre-venda/pre-order (produzido = sob demanda + from-batch) = campanhas com pre-order/pre-venda
+    // no nome; estoque = demais. Fonte AO VIVO: Meta API (queryMetaCampaigns) + Google Supermetrics
+    // (BQ tem Meta ~0 por lag). Escala o spend total/Meta/Google pelo fator da origem selecionada.
+    if (fulCats && fulCats.length) {
+      try {
+        const { queryMetaCampaigns } = await import("@/lib/main-dashboard/meta-ads");
+        const { queryGoogleCampaignsViaSupermetrics } = await import("@/lib/main-dashboard/supermetrics");
+        const { isPreorderCampaign } = await import("@/lib/shared/fulfillment-category");
+        const [metaC, googC] = await Promise.all([
+          queryMetaCampaigns(market as any, range.from, range.to).catch(() => [] as any[]),
+          queryGoogleCampaignsViaSupermetrics(market as any, range.from, range.to).catch(() => [] as any[]),
+        ]);
+        const metaTot = metaC.reduce((s: number, x: any) => s + (Number(x.spend) || 0), 0);
+        const metaPre = metaC.filter((x: any) => isPreorderCampaign(x.campaign_name)).reduce((s: number, x: any) => s + (Number(x.spend) || 0), 0);
+        const googTot = googC.reduce((s: number, x: any) => s + (Number(x.spend) || 0), 0);
+        const googPre = googC.filter((x: any) => isPreorderCampaign(x.campaign)).reduce((s: number, x: any) => s + (Number(x.spend) || 0), 0);
+        const chanTot = metaTot + googTot;
+        const shareProduced = chanTot > 0 ? (metaPre + googPre) / chanTot : 0;
+        const producedSel = fulCats.includes("on-demand") || fulCats.includes("from-batch");
+        const inStockSel = fulCats.includes("in-stock");
+        const factor = (producedSel ? shareProduced : 0) + (inStockSel ? 1 - shareProduced : 0);
+        cSpend *= factor; pSpend *= factor;
+        cMetaSpend *= factor; pMetaSpend *= factor;
+        cGoogleSpend *= factor; pGoogleSpend *= factor;
+        console.log(`[overview ful ${market}]`, `metaPre/${metaTot.toFixed(0)} googPre/${googTot.toFixed(0)}`, `shareProduced=${shareProduced.toFixed(3)} factor=${factor.toFixed(3)}`);
+      } catch (err) {
+        console.warn("[overview] fulfillment spend split failed:", err);
+      }
+    }
     const cGross = num(c.gross_sales), pGross = num(p.gross_sales);
     // Recalcular ROAS, CAC com spend Meta API real (substitui valores do BQ que usavam spend incompleto)
     const recalcRoasGross = cSpend > 0 ? cGross / cSpend : 0;
@@ -362,11 +388,6 @@ export async function getMetricBundle(
       }),
     ];
 
-    // Com filtro de origem ativo: oculta KPIs de spend (nao atribuiveis por origem a partir
-    // do BQ — split por campanha pre-order via API do Meta sera' o proximo passo).
-    const SPEND_KEYS = new Set(["amount_spent", "meta_spend", "google_spend", "roas_gross", "roas_total", "cac"]);
-    const finalMetrics = fulCats && fulCats.length ? metrics.filter((m) => !SPEND_KEYS.has(m.key)) : metrics;
-
-    return { market, period, date_range: range, metrics: finalMetrics, generated_at };
+    return { market, period, date_range: range, metrics, generated_at };
   });
 }
