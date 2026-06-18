@@ -1,6 +1,7 @@
 import type { Market } from "@/types/metric";
 import { runQuery, hasBigQueryCredentials } from "@/lib/bigquery/client";
 import { cached } from "@/lib/cache";
+import { fulfillmentCategoryFilterSQL, type FulfillmentCategory } from "@/lib/shared/fulfillment-category";
 
 const TZ: Record<Market, string> = { US: "America/New_York", BR: "America/Sao_Paulo" };
 const DATASET: Record<Market, string> = { US: "stg_shopify", BR: "stg_shopify_br" };
@@ -184,8 +185,13 @@ function commonFiltersShopify(market: Market, alias: string = ""): string {
   `;
 }
 
-export async function getShopifyBundle(market: Market, period: { from: string; to: string }): Promise<ShopifyBundle> {
-  return cached(`shopify-v2:${market}:${period.from}:${period.to}`, 1800, async () => {
+export async function getShopifyBundle(
+  market: Market,
+  period: { from: string; to: string },
+  fulCats?: FulfillmentCategory[] | null,
+): Promise<ShopifyBundle> {
+  const fulKey = fulCats && fulCats.length ? fulCats.slice().sort().join('+') : 'all';
+  return cached(`shopify-v2:${market}:${period.from}:${period.to}:ful=${fulKey}`, 1800, async () => {
     const range = period;
 
     if (!hasBigQueryCredentials()) {
@@ -194,6 +200,10 @@ export async function getShopifyBundle(market: Market, period: { from: string; t
 
     const dataset = DATASET[market];
     const tz = TZ[market];
+    // Cassia 2026-06-17: filtro de origem de fulfillment (estoque/sob demanda/from-batch/pendente).
+    // Injetado em todas as CTEs baseadas em orders. fulCats vazio/null = sem filtro (tudo).
+    const fulBare = fulfillmentCategoryFilterSQL(fulCats, '');
+    const fulO = fulfillmentCategoryFilterSQL(fulCats, 'o');
 
     try {
       // KPIs principais
@@ -208,6 +218,7 @@ export async function getShopifyBundle(market: Market, period: { from: string; t
           FROM \`larroude-data-prod.${dataset}.orders\`
           WHERE DATE(created_at, '${tz}') BETWEEN @from AND @to
             AND ${commonFiltersShopify(market)}
+            ${fulBare}
         ),
         units AS (
           SELECT SUM(CAST(JSON_VALUE(li,'$.quantity') AS INT64)) AS units
@@ -215,13 +226,16 @@ export async function getShopifyBundle(market: Market, period: { from: string; t
             UNNEST(JSON_QUERY_ARRAY(line_items)) li
           WHERE DATE(o.created_at, '${tz}') BETWEEN @from AND @to
             AND ${commonFiltersShopify(market, "o.")}
+            ${fulO}
         ),
         refunds AS (
           SELECT IFNULL(SUM((SELECT SUM(CAST(JSON_VALUE(t,'$.amount') AS NUMERIC))
-            FROM UNNEST(JSON_QUERY_ARRAY(transactions)) t WHERE JSON_VALUE(t,'$.kind') = 'refund')), 0) AS refund_value,
+            FROM UNNEST(JSON_QUERY_ARRAY(rf.transactions)) t WHERE JSON_VALUE(t,'$.kind') = 'refund')), 0) AS refund_value,
             COUNT(*) AS refund_orders
-          FROM \`larroude-data-prod.${dataset}.order_refunds\`
-          WHERE DATE(created_at, '${tz}') BETWEEN @from AND @to
+          FROM \`larroude-data-prod.${dataset}.order_refunds\` rf
+          LEFT JOIN \`larroude-data-prod.${dataset}.orders\` o ON o.id = rf.order_id
+          WHERE DATE(rf.created_at, '${tz}') BETWEEN @from AND @to
+            ${fulO}
         )
         SELECT s.*, u.units, r.refund_value, r.refund_orders
         FROM sales s, units u, refunds r
@@ -272,6 +286,7 @@ export async function getShopifyBundle(market: Market, period: { from: string; t
             AND CAST(o.total_price AS NUMERIC) < ${market === "US" ? 30000 : 25000}
             ${market === "BR" ? `
             AND LOWER(IFNULL(o.financial_status, '')) NOT IN ('pending', 'expired', 'authorized')` : ""}
+            ${fulO}
         )
         SELECT
           COALESCE(sku_root, 'sem-sku') AS sku,
@@ -315,6 +330,7 @@ export async function getShopifyBundle(market: Market, period: { from: string; t
           AND CAST(o.total_price AS NUMERIC) < ${market === "US" ? 30000 : 25000}
           ${market === "BR" ? `
           AND LOWER(IFNULL(o.financial_status, '')) NOT IN ('pending', 'expired', 'authorized')` : ""}
+          ${fulO}
         GROUP BY title
         ORDER BY units DESC
         LIMIT 8
@@ -342,6 +358,7 @@ export async function getShopifyBundle(market: Market, period: { from: string; t
           AND CAST(o.total_price AS NUMERIC) < ${market === "US" ? 30000 : 25000}
           ${market === "BR" ? `
           AND LOWER(IFNULL(o.financial_status, '')) NOT IN ('pending', 'expired', 'authorized')` : ""}
+          ${fulO}
         GROUP BY collection
         ORDER BY revenue DESC
         LIMIT 8
@@ -364,6 +381,7 @@ export async function getShopifyBundle(market: Market, period: { from: string; t
         FROM \`larroude-data-prod.${dataset}.orders\`
         WHERE DATE(created_at, '${tz}') BETWEEN @from AND @to
           AND ${commonFiltersShopify(market)}
+          ${fulBare}
         GROUP BY dow
         ORDER BY dow
       `;
@@ -402,6 +420,7 @@ export async function getShopifyBundle(market: Market, period: { from: string; t
           JOIN refund_orders ro ON o.id = ro.order_id,
             UNNEST(JSON_QUERY_ARRAY(o.line_items)) li
           WHERE REGEXP_EXTRACT(JSON_VALUE(li, '$.sku'), r'^[A-Z]?\\d+') IS NOT NULL
+            ${fulO}
           GROUP BY sku
           ORDER BY refund_value DESC
           LIMIT 5

@@ -2,6 +2,7 @@ import { getShopifyBundle } from "@/lib/data/shopify-dashboard";
 import { getInventory, getFulfillmentStatus } from "@/lib/shopify/inventory";
 import { formatCurrency, formatNumber } from "@/lib/utils/format";
 import { dateRangeCompleted } from "@/lib/utils/periods";
+import { parseFulfillmentCategories } from "@/lib/shared/fulfillment-category";
 import type { Market, Period } from "@/types/metric";
 import { RotateCcw, TrendingUp, Tag, AlertCircle, Lightbulb, ArrowDown, ArrowUp, Calendar } from "lucide-react";
 import { FiltersBar } from "@/components/filters/FiltersBar";
@@ -12,16 +13,17 @@ export const revalidate = 300;
 export default async function ShopifyPage({
   searchParams,
 }: {
-  searchParams: { market?: string; period?: string; from?: string; to?: string };
+  searchParams: { market?: string; period?: string; from?: string; to?: string; fulCats?: string };
 }) {
   const market = (searchParams.market || "US") as Market;
   const period = (searchParams.period || "28d") as Period;
   const range = searchParams.from && searchParams.to
     ? { from: searchParams.from, to: searchParams.to }
     : dateRangeCompleted(period);
+  const fulCats = parseFulfillmentCategories(searchParams.fulCats);
 
   const [data, inventory, fulfillment] = await Promise.all([
-    getShopifyBundle(market, range),
+    getShopifyBundle(market, range, fulCats),
     getInventory(market),
     getFulfillmentStatus(market),
   ]);
@@ -52,7 +54,7 @@ export default async function ShopifyPage({
           <DashboardActions />
         </div>
 
-        <FiltersBar />
+        <FiltersBar showFulfillment />
 
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-7">
           <KPI label="ORDERS" value={formatNumber(data.orders)} />

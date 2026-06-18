@@ -4,6 +4,7 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { SlidersHorizontal, RefreshCw, FileDown, Calendar } from "lucide-react";
 import type { Market, Period } from "@/types/metric";
+import { FULFILLMENT_CATEGORY_OPTIONS, type FulfillmentCategory } from "@/lib/shared/fulfillment-category";
 
 const periods: Period[] = ["7d", "14d", "28d", "3M", "6M", "12M"];
 
@@ -28,7 +29,7 @@ function granularityLabel(days: number): string {
   return "mensal";
 }
 
-export function FiltersBar({ hidePeriod = false, hideDateRange = false }: { hidePeriod?: boolean; hideDateRange?: boolean } = {}) {
+export function FiltersBar({ hidePeriod = false, hideDateRange = false, showFulfillment = false }: { hidePeriod?: boolean; hideDateRange?: boolean; showFulfillment?: boolean } = {}) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -40,6 +41,23 @@ export function FiltersBar({ hidePeriod = false, hideDateRange = false }: { hide
   const urlFrom = params.get("from");
   const urlTo = params.get("to");
   const isCustom = !!(urlFrom && urlTo);
+
+  // Cassia 2026-06-17: filtro de origem de fulfillment (multi-seleção). Vazio = Todos.
+  const fulCatsParam = params.get("fulCats");
+  const selectedFul = new Set((fulCatsParam ? fulCatsParam.split(",").filter(Boolean) : []) as FulfillmentCategory[]);
+  const fulIsAll = selectedFul.size === 0;
+  const toggleFul = (c: FulfillmentCategory) => {
+    const next = new Set(selectedFul);
+    if (next.has(c)) next.delete(c); else next.add(c);
+    const p = new URLSearchParams(params.toString());
+    if (next.size === 0) p.delete("fulCats"); else p.set("fulCats", [...next].join(","));
+    startTransition(() => router.replace(`${pathname}?${p.toString()}`, { scroll: false }));
+  };
+  const clearFul = () => {
+    const p = new URLSearchParams(params.toString());
+    p.delete("fulCats");
+    startTransition(() => router.replace(`${pathname}?${p.toString()}`, { scroll: false }));
+  };
 
   // Estado local dos inputs De/Ate (so commita ao clicar Aplicar)
   const defaultRange = isCustom ? { from: urlFrom!, to: urlTo! } : presetRange(period);
@@ -131,6 +149,21 @@ export function FiltersBar({ hidePeriod = false, hideDateRange = false }: { hide
             </button>
           ))}
         </div>
+
+        {showFulfillment && (
+          <>
+            <div className="w-px h-5" style={{ background: "var(--border)" }} />
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[11px] font-semibold mr-1" style={{ color: "var(--ink-muted)", letterSpacing: "0.06em" }}>ORIGEM</span>
+              <button onClick={clearFul} className={`pill ${fulIsAll ? "pill-active" : "pill-inactive"} px-3 py-1 text-[12px] ${fulIsAll ? "font-medium" : ""}`}>Todos</button>
+              {FULFILLMENT_CATEGORY_OPTIONS.map((o) => (
+                <button key={o.key} onClick={() => toggleFul(o.key)} className={`pill ${selectedFul.has(o.key) ? "pill-active" : "pill-inactive"} px-3 py-1 text-[12px] ${selectedFul.has(o.key) ? "font-medium" : ""}`}>
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
 
         <div className="w-px h-5" style={{ background: "var(--border)" }} />
 
