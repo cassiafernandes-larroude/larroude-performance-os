@@ -99,7 +99,7 @@ export async function queryAggregatedKpis(market: Market, start: string, end: st
       SELECT SUM(CAST(JSON_VALUE(li,'$.quantity') AS INT64)) AS units
       FROM \`larroude-data-prod.${dataset}.orders\` o,
            UNNEST(JSON_QUERY_ARRAY(line_items)) li
-      WHERE DATE(o.created_at) BETWEEN @start AND @end
+      WHERE DATE(o.created_at, '${TZ[market]}') BETWEEN @start AND @end
         AND o.financial_status NOT IN ('voided','refunded') ${shopifyOrderFilters(market, 'o', fulCats, dataset)}
     ),
     refunds_raw AS (
@@ -147,13 +147,13 @@ export async function queryAggregatedKpis(market: Market, start: string, end: st
     ),
     customer_split AS (
       SELECT
-        COUNTIF(DATE(o.created_at) = fo.first_dt) AS new_customer_orders,
-        COUNTIF(DATE(o.created_at) != fo.first_dt) AS returning_customer_orders,
-        SUM(IF(DATE(o.created_at) = fo.first_dt, CAST(o.total_price AS NUMERIC), 0)) AS new_customer_revenue,
-        SUM(IF(DATE(o.created_at) != fo.first_dt, CAST(o.total_price AS NUMERIC), 0)) AS returning_customer_revenue
+        COUNTIF(DATE(o.created_at, '${TZ[market]}') = fo.first_dt) AS new_customer_orders,
+        COUNTIF(DATE(o.created_at, '${TZ[market]}') != fo.first_dt) AS returning_customer_orders,
+        SUM(IF(DATE(o.created_at, '${TZ[market]}') = fo.first_dt, CAST(o.total_price AS NUMERIC), 0)) AS new_customer_revenue,
+        SUM(IF(DATE(o.created_at, '${TZ[market]}') != fo.first_dt, CAST(o.total_price AS NUMERIC), 0)) AS returning_customer_revenue
       FROM \`larroude-data-prod.${dataset}.orders\` o
       JOIN first_order_per_customer fo ON JSON_VALUE(o.customer, '$.id') = fo.cust_id
-      WHERE DATE(o.created_at) BETWEEN @start AND @end
+      WHERE DATE(o.created_at, '${TZ[market]}') BETWEEN @start AND @end
         AND o.financial_status NOT IN ('voided','refunded') ${shopifyOrderFilters(market, 'o', fulCats, dataset)}
     ),
     cac AS (
@@ -265,11 +265,11 @@ export async function queryDailySales(market: Market, start: string, end: string
       GROUP BY d
     ),
     units_daily AS (
-      SELECT DATE(o.created_at) AS d,
+      SELECT DATE(o.created_at, '${TZ[market]}') AS d,
              SUM(CAST(JSON_VALUE(li,'$.quantity') AS INT64)) AS units
       FROM \`larroude-data-prod.${dataset}.orders\` o,
            UNNEST(JSON_QUERY_ARRAY(line_items)) li
-      WHERE DATE(o.created_at) BETWEEN @start AND @end
+      WHERE DATE(o.created_at, '${TZ[market]}') BETWEEN @start AND @end
         AND o.financial_status NOT IN ('voided','refunded') ${shopifyOrderFilters(market, 'o', fulCats, dataset)}
       GROUP BY d
     )
@@ -381,12 +381,12 @@ export async function queryDailyCac(market: Market, start: string, end: string, 
       GROUP BY customer_id
     ),
     new_customers_daily AS (
-      SELECT DATE(o.created_at) AS d, COUNT(*) AS new_customers
+      SELECT DATE(o.created_at, '${TZ[market]}') AS d, COUNT(*) AS new_customers
       FROM \`larroude-data-prod.${dataset}.orders\` o
       JOIN first_order_per_customer fo
         ON JSON_VALUE(o.customer, '$.id') = fo.customer_id
-       AND DATE(o.created_at) = fo.first_order_date
-      WHERE DATE(o.created_at) BETWEEN @start AND @end
+       AND DATE(o.created_at, '${TZ[market]}') = fo.first_order_date
+      WHERE DATE(o.created_at, '${TZ[market]}') BETWEEN @start AND @end
         AND o.financial_status NOT IN ('voided', 'refunded') ${shopifyOrderFilters(market, 'o', fulCats, dataset)}
       GROUP BY d
     ),

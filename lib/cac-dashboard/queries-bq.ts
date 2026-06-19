@@ -106,7 +106,35 @@ async function getSpendByDay(
     googleByDay.set(iso, (googleByDay.get(iso) || 0) + v);
     googleDailySum += v;
   }
-  const googleTotal = googleTotalResult.spend || googleDailySum;
+  let googleTotal = googleTotalResult.spend || googleDailySum;
+
+  // Cassia 2026-06-17 (auditoria de convergencia): fallback BQ pro Google.
+  // Supermetrics as vezes retorna 0 (falha) — o Main cai pro BQ (gold.all_channels_daily),
+  // mas o CAC ficava com Google=0, divergindo do Main. Aqui replicamos o fallback BQ.
+  if (googleTotal <= 0) {
+    try {
+      const bqRows = await runQuery<{ d: string; spend: number }>(
+        `SELECT FORMAT_DATE('%Y-%m-%d', ad.date) AS d, SUM(IF(LOWER(ad.channel) LIKE 'google%', ad.spend, 0)) AS spend
+         FROM \`larroude-data-prod.gold.all_channels_daily\` ad
+         WHERE LOWER(ad.market) = @m AND ad.date BETWEEN @s AND @e
+         GROUP BY d`,
+        { m: market.toLowerCase(), s: startDate, e: endDate }
+      );
+      let bqGoogleSum = 0;
+      for (const r of bqRows) {
+        const v = Number(r.spend) || 0;
+        if (v <= 0) continue;
+        googleByDay.set(r.d, (googleByDay.get(r.d) || 0) + v);
+        bqGoogleSum += v;
+      }
+      if (bqGoogleSum > 0) {
+        googleTotal = bqGoogleSum;
+        console.log(`[cac-bq] Google fallback BQ ${market}: $${bqGoogleSum.toFixed(0)}`);
+      }
+    } catch (err) {
+      console.error('[cac-bq] Google BQ fallback failed:', err);
+    }
+  }
 
   // Meta — API direta + ajuste manual Set/25
   const metaByDay = new Map<string, number>(apiMeta);

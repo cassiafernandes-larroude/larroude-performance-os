@@ -62,7 +62,7 @@ export function aggregatedKpisSQL(market: Market, fulCats?: FulfillmentCategory[
       SELECT SUM(CAST(JSON_VALUE(li,'$.quantity') AS INT64)) AS units
       FROM \`larroude-data-prod.${dataset}.orders\` o,
            UNNEST(JSON_QUERY_ARRAY(line_items)) li
-      WHERE DATE(o.created_at) BETWEEN @start AND @end
+      WHERE DATE(o.created_at, '${tz}') BETWEEN @start AND @end
         AND o.financial_status NOT IN ('voided','refunded')
         ${dtcCoreFilters(market, 'o')}
         ${fulO}
@@ -108,11 +108,11 @@ export function aggregatedKpisSQL(market: Market, fulCats?: FulfillmentCategory[
     ),
     customer_split AS (
       SELECT
-        COUNTIF(DATE(o.created_at) = fo.first_dt) AS new_customer_orders,
-        SUM(IF(DATE(o.created_at) = fo.first_dt, CAST(o.total_price AS NUMERIC), 0)) AS new_customer_revenue
+        COUNTIF(DATE(o.created_at, '${tz}') = fo.first_dt) AS new_customer_orders,
+        SUM(IF(DATE(o.created_at, '${tz}') = fo.first_dt, CAST(o.total_price AS NUMERIC), 0)) AS new_customer_revenue
       FROM \`larroude-data-prod.${dataset}.orders\` o
       JOIN first_order_per_customer fo ON JSON_VALUE(o.customer, '$.id') = fo.cust_id
-      WHERE DATE(o.created_at) BETWEEN @start AND @end
+      WHERE DATE(o.created_at, '${tz}') BETWEEN @start AND @end
         AND o.financial_status NOT IN ('voided','refunded')
         ${dtcCoreFilters(market, 'o')}
         ${fulO}
