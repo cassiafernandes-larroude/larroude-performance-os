@@ -29,6 +29,7 @@ import {
   queryGoogleAdsTotalViaSupermetrics,
   queryGoogleAdsViaSupermetrics,
   queryGoogleCampaignsViaSupermetrics,
+  queryMetaCampaignsViaSupermetrics,
   queryMetaAdsTotalViaSupermetrics,
   queryMetaAdsViaSupermetrics,
   queryGA4TotalViaSupermetrics,
@@ -38,6 +39,7 @@ import {
 import { calcPeriod, fmtCurrency, fmtMultiple, fmtNumber, fmtPercent, granularityFor, pctChange, safeDiv } from './utils';
 import { getMetaSpendAdjustment, getMetaSpendAdjustmentByDay } from '@/lib/shared/meta-adjustments';
 import { getFixedToolsCostInRange, getAgentShopCost, getPercentRevenueCosts, CHANNEL_COSTS } from '@/lib/channel-costs';
+import { type FulfillmentCategory, isPreorderCampaign } from '@/lib/shared/fulfillment-category';
 import type {
   CampaignRow,
   ChannelRevenue,
@@ -99,6 +101,7 @@ export async function getDashboardPayload(
   periodKey: PeriodKey,
   endDate?: string,
   customStart?: string,
+  fulCats?: FulfillmentCategory[] | null,
 ): Promise<DashboardPayload> {
   // Build period (com possivel override de start customizado)
   const basePeriod = calcPeriod(periodKey, endDate, market);
@@ -154,8 +157,8 @@ export async function getDashboardPayload(
     metaAdsCurr, metaAdsPrev,
     ga4Curr, ga4Prev, ga4Daily,
   ] = await Promise.all([
-    queryAggregatedKpis(market, period.start, period.end),
-    queryAggregatedKpis(market, period.prevStart, period.prevEnd),
+    queryAggregatedKpis(market, period.start, period.end, fulCats),
+    queryAggregatedKpis(market, period.prevStart, period.prevEnd, fulCats),
     queryDailySales(market, chartStart, period.end, granularity),
     queryDailyReturns(market, chartStart, period.end, granularity),
     queryDailyAds(market, chartStart, period.end, granularity),
@@ -208,9 +211,9 @@ export async function getDashboardPayload(
   // Estratégia: Supermetrics-FIRST. Se Supermetrics retornar dados (>0), confiar.
   // Se Supermetrics ausente/falhar, usar BQ (bqMetaSpend = total - google_spend).
   let finalMetaSpend = supermetricsMetaSpend > 0 ? supermetricsMetaSpend : bqMetaSpend;
-  const finalGoogleSpend = supermetricsGoogleSpend > 0 ? supermetricsGoogleSpend : bqGoogleSpend;
+  let finalGoogleSpend = supermetricsGoogleSpend > 0 ? supermetricsGoogleSpend : bqGoogleSpend;
   let finalMetaSpendPrev = supermetricsMetaSpendPrev > 0 ? supermetricsMetaSpendPrev : bqMetaSpendPrev;
-  const finalGoogleSpendPrev = supermetricsGoogleSpendPrev > 0 ? supermetricsGoogleSpendPrev : bqGoogleSpendPrev;
+  let finalGoogleSpendPrev = supermetricsGoogleSpendPrev > 0 ? supermetricsGoogleSpendPrev : bqGoogleSpendPrev;
 
   // AJUSTE MANUAL: Meta US +$400k Setembro/2025 (regra Cassia, REGRAS-LARROUDE-OS.md secao 3.3)
   // Pro-rata pelos dias do periodo que overlap com Set/2025.
@@ -234,7 +237,28 @@ export async function getDashboardPayload(
   // Prev: aproxima usando mesma soma (não temos channelMix do período anterior)
   const agentShopCostPrev = agentShopCost;
 
-  const spend = finalMetaSpend + finalGoogleSpend + fixedToolsCost + agentShopCost;
+  // Cassia 2026-06-17: filtro de origem -> escala o spend pelo split pre-order das campanhas
+  // (Meta API + Google Supermetrics, ao vivo). produzido = sob demanda + from-batch.
+  let _fulFactor = 1;
+  if (fulCats && fulCats.length) {
+    try {
+      let metaCs: any[] = Array.isArray(metaApiCampaigns) ? (metaApiCampaigns as any[]) : [];
+      if (!metaCs.length) metaCs = await queryMetaCampaignsViaSupermetrics(market, period.start, period.end).catch(() => []);
+      const googCs: any[] = Array.isArray(googleCampaigns) ? (googleCampaigns as any[]) : [];
+      const sumIf = (arr: any[], f: (x: any) => boolean) => arr.filter(f).reduce((s, x) => s + (Number(x.spend) || 0), 0);
+      const metaTot = sumIf(metaCs, () => true), metaPre = sumIf(metaCs, (x) => isPreorderCampaign(x.campaign_name));
+      const googTot = sumIf(googCs, () => true), googPre = sumIf(googCs, (x) => isPreorderCampaign(x.campaign));
+      const chanTot = metaTot + googTot;
+      const shareProduced = chanTot > 0 ? (metaPre + googPre) / chanTot : 0;
+      const producedSel = fulCats.includes('on-demand') || fulCats.includes('from-batch');
+      const inStockSel = fulCats.includes('in-stock');
+      _fulFactor = (producedSel ? shareProduced : 0) + (inStockSel ? 1 - shareProduced : 0);
+      console.log(`[main ful ${market}]`, `shareProduced=${shareProduced.toFixed(3)} factor=${_fulFactor.toFixed(3)}`);
+    } catch (e) { console.warn('[main ful spend]', e); }
+  }
+  let spend = finalMetaSpend + finalGoogleSpend + fixedToolsCost + agentShopCost;
+  spend *= _fulFactor;
+  finalMetaSpend *= _fulFactor; finalGoogleSpend *= _fulFactor;
   // Debug log (visível em vercel logs)
   console.log(`[spend ${market} ${period.start}..${period.end}]`,
     `meta_supermetrics=${supermetricsMetaSpend.toFixed(2)}`,
@@ -278,7 +302,9 @@ export async function getDashboardPayload(
   const roasTotal = safeDiv(totalSales, spend);
 
   // Previous period — usa mesma lógica (Meta + Google Supermetrics)
-  const pSpend = finalMetaSpendPrev + finalGoogleSpendPrev + fixedToolsCostPrev + agentShopCostPrev;
+  let pSpend = finalMetaSpendPrev + finalGoogleSpendPrev + fixedToolsCostPrev + agentShopCostPrev;
+  pSpend *= _fulFactor;
+  finalMetaSpendPrev *= _fulFactor; finalGoogleSpendPrev *= _fulFactor;
   const pGross = num(aggPrev.gross_sales);
   const pDiscounts = num(aggPrev.discounts);
   const pRefund = num(aggPrev.refund_value);

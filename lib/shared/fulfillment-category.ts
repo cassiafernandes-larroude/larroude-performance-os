@@ -82,13 +82,18 @@ export function fulfillmentCategoryFilterSQL(
   if (valid.length === 0 || valid.length === ALL_CATEGORIES.length) return '';
   const a = ordersAlias ? `${ordersAlias}.` : '';
   const foTable = `\`larroude-data-prod.${dataset}.fulfillment_orders\``;
-  const ids: string[] = [];
-  if (valid.includes('from-batch')) ids.push(...FULFILLMENT_LOCATION_IDS.fromBatch);
-  if (valid.includes('on-demand')) ids.push(...FULFILLMENT_LOCATION_IDS.onDemand);
-  if (valid.includes('in-stock')) ids.push(...FULFILLMENT_LOCATION_IDS.inStock);
+  const inSub = (idsX: string[]) =>
+    `${a}id IN (SELECT order_id FROM ${foTable} WHERE CAST(assigned_location_id AS STRING) IN (${idIn(idsX)}))`;
+  const preIds = [...FULFILLMENT_LOCATION_IDS.fromBatch, ...FULFILLMENT_LOCATION_IDS.onDemand];
+  const wantPre = valid.includes('on-demand') || valid.includes('from-batch');
+  const wantIn = valid.includes('in-stock');
   const conds: string[] = [];
-  if (ids.length) {
-    conds.push(`${a}id IN (SELECT order_id FROM ${foTable} WHERE CAST(assigned_location_id AS STRING) IN (${idIn(ids)}))`);
+  // Categorias EXCLUSIVAS com precedencia pre-order: pedido com QUALQUER item de producao
+  // (Senda/Possibility) = pre-order; senao, se tem item de estoque = in-stock. Pedidos "split"
+  // (estoque + producao) contam so como pre-order -> Estoque + Pre-order = Total (sem dupla contagem).
+  if (wantPre) conds.push(inSub(preIds));
+  if (wantIn) {
+    conds.push(wantPre ? inSub(FULFILLMENT_LOCATION_IDS.inStock) : `(${inSub(FULFILLMENT_LOCATION_IDS.inStock)} AND NOT (${inSub(preIds)}))`);
   }
   if (valid.includes('pending')) {
     conds.push(`${a}id NOT IN (SELECT order_id FROM ${foTable} WHERE order_id IS NOT NULL)`);

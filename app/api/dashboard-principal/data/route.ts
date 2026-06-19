@@ -4,6 +4,7 @@
 
 import { NextResponse } from 'next/server';
 import { getDashboardPayload } from '@/lib/main-dashboard/dashboard-service';
+import { parseFulfillmentCategories } from '@/lib/shared/fulfillment-category';
 import type { DashboardPayload, Market, PeriodKey } from '@/lib/main-dashboard/types';
 
 export const runtime = 'nodejs';
@@ -25,13 +26,15 @@ export async function GET(req: Request) {
   const startParam = url.searchParams.get('start');
   const endParam = url.searchParams.get('end');
   const bust = url.searchParams.get('t');
+  const fulCats = parseFulfillmentCategories(url.searchParams.get('fulCats'));
+  const fulKey = fulCats && fulCats.length ? fulCats.slice().sort().join('+') : 'all';
 
   if (!isValidMarket(market)) return NextResponse.json({ error: 'market deve ser US ou BR' }, { status: 400 });
   if (!isValidPeriod(period)) return NextResponse.json({ error: 'period inválido' }, { status: 400 });
 
   // Modo custom: start e end definidos pelo usuário (aceita start == end = 1 dia)
   const isCustom = !!(startParam && endParam && isValidDate(startParam) && isValidDate(endParam) && startParam <= endParam);
-  const key = isCustom ? `${market}:custom:${startParam}:${endParam}` : `${market}:${period}`;
+  const key = (isCustom ? `${market}:custom:${startParam}:${endParam}` : `${market}:${period}`) + `:ful=${fulKey}`;
   const hit = CACHE.get(key);
   if (!bust && hit && Date.now() - hit.ts < TTL_MS) {
     return NextResponse.json(hit.data, { headers: { 'X-Cache': 'HIT' } });
@@ -55,9 +58,9 @@ export async function GET(req: Request) {
       else if (days <= 90) derivedPeriod = '3M';
       else if (days <= 180) derivedPeriod = '6M';
       else derivedPeriod = '12M';
-      data = await getDashboardPayload(market, derivedPeriod, endParam, startParam);
+      data = await getDashboardPayload(market, derivedPeriod, endParam, startParam, fulCats);
     } else {
-      data = await getDashboardPayload(market, period);
+      data = await getDashboardPayload(market, period, undefined, undefined, fulCats);
     }
     CACHE.set(key, { ts: Date.now(), data });
     return NextResponse.json(data, { headers: { 'X-Cache': bust ? 'BYPASS' : 'MISS' } });

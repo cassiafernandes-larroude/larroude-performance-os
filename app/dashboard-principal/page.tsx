@@ -8,6 +8,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Header from '@/components/main-dashboard/Header';
 import Dashboard from '@/components/main-dashboard/Dashboard';
 import type { DashboardPayload, Market, PeriodKey } from '@/lib/main-dashboard/types';
+import { FULFILLMENT_CATEGORY_GROUPS, type FulfillmentCategory } from '@/lib/shared/fulfillment-category';
 
 export default function DashboardPrincipalPage() {
   const [market, setMarket] = useState<Market>('US');
@@ -15,18 +16,20 @@ export default function DashboardPrincipalPage() {
   const [customStart, setCustomStart] = useState<string | undefined>(undefined);
   const [customEnd, setCustomEnd] = useState<string | undefined>(undefined);
   const [isCustom, setIsCustom] = useState(false);
+  const [fulCats, setFulCats] = useState<FulfillmentCategory[]>([]);
   const [data, setData] = useState<DashboardPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchData = useCallback(
-    async (m: Market, p: PeriodKey, cs?: string, ce?: string, bust = false) => {
+    async (m: Market, p: PeriodKey, cs?: string, ce?: string, bust = false, fc: FulfillmentCategory[] = []) => {
       setLoading(true);
       setError(null);
       try {
         let url = `/api/dashboard-principal/data?market=${m}&period=${p}`;
         if (cs && ce) url += `&start=${cs}&end=${ce}`;
+        if (fc.length) url += `&fulCats=${fc.join(',')}`;
         if (bust) url += `&t=${Date.now()}`;
         const res = await fetch(url, { cache: bust ? 'no-store' : 'default' });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -48,9 +51,11 @@ export default function DashboardPrincipalPage() {
       market,
       period,
       isCustom ? customStart : undefined,
-      isCustom ? customEnd : undefined
+      isCustom ? customEnd : undefined,
+      false,
+      fulCats
     );
-  }, [market, period, isCustom, customStart, customEnd, fetchData]);
+  }, [market, period, isCustom, customStart, customEnd, fulCats, fetchData]);
 
   function handlePeriodChange(p: PeriodKey) {
     setIsCustom(false);
@@ -75,7 +80,8 @@ export default function DashboardPrincipalPage() {
       period,
       isCustom ? customStart : undefined,
       isCustom ? customEnd : undefined,
-      true
+      true,
+      fulCats
     );
   }
 
@@ -100,6 +106,40 @@ export default function DashboardPrincipalPage() {
         generatedAt={data?.generatedAt}
         periodRange={data?.period}
       />
+
+      <div className="flex items-center gap-1.5 mt-3 flex-wrap no-print">
+        <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', color: '#9ca3af' }}>ORIGEM</span>
+        <button
+          onClick={() => setFulCats([])}
+          className={`pill ${fulCats.length === 0 ? 'pill-active' : 'pill-inactive'} px-3 py-1 text-[12px]`}
+        >
+          Todos
+        </button>
+        {FULFILLMENT_CATEGORY_GROUPS.map((g) => {
+          const active = g.cats.every((c) => fulCats.includes(c));
+          return (
+            <button
+              key={g.key}
+              onClick={() =>
+                setFulCats((prev) => {
+                  const set = new Set(prev);
+                  if (g.cats.every((c) => set.has(c))) g.cats.forEach((c) => set.delete(c));
+                  else g.cats.forEach((c) => set.add(c));
+                  return [...set];
+                })
+              }
+              className={`pill ${active ? 'pill-active' : 'pill-inactive'} px-3 py-1 text-[12px]`}
+            >
+              {g.label}
+            </button>
+          );
+        })}
+        {fulCats.length > 0 && (
+          <span className="text-[11px]" style={{ color: '#9ca3af' }}>
+            KPIs e ROAS por origem · gráficos diários = total
+          </span>
+        )}
+      </div>
 
       {error && (
         <div className="card mt-4 p-4 border-l-4" style={{ borderLeftColor: '#ef4444' }}>

@@ -15,6 +15,7 @@
 import { runQuery } from './bigquery';
 import type { Granularity, Market } from './types';
 import { dtcCoreFilters } from '@/lib/shared/dtc-filters';
+import { fulfillmentCategoryFilterSQL, type FulfillmentCategory } from '@/lib/shared/fulfillment-category';
 
 // Timezone Shopify (alinhado ao admin oficial)
 // US: America/New_York | BR: America/Sao_Paulo
@@ -28,8 +29,11 @@ const TZ: Record<Market, string> = {
 // Inclui agora tag `influencer`, cancelled/test e exclusao de trocas (Loop/TroquEcommerce)
 // — antes faltavam aqui e quebravam a paridade ORDERS/AOV com LTV/CAC.
 // O `financial_status NOT IN ('voided','refunded')` continua inline em cada call site.
-function shopifyOrderFilters(market: Market, alias = ''): string {
-  return dtcCoreFilters(market, alias);
+// Cassia 2026-06-17: fulCats opcional — filtro de origem (estoque/pre-order). No-op quando
+// ausente, entao funcoes que nao passam fulCats nao mudam. `dataset` necessario p/ o semi-join.
+function shopifyOrderFilters(market: Market, alias = '', fulCats?: FulfillmentCategory[] | null, dataset?: string): string {
+  const fulf = fulCats && fulCats.length && dataset ? fulfillmentCategoryFilterSQL(fulCats, alias, dataset) : '';
+  return `${dtcCoreFilters(market, alias)} ${fulf}`;
 }
 
 // Para gold_sales.* store usa 'US' / 'BR' uppercase
@@ -74,7 +78,7 @@ function truncExpr(dateColumn: string, granularity: Granularity): string {
 // KPI principal — agrega métricas no intervalo [start, end]
 // (não depende de granularidade — é um único valor agregado)
 // --------------------------------------------------------------------------
-export async function queryAggregatedKpis(market: Market, start: string, end: string) {
+export async function queryAggregatedKpis(market: Market, start: string, end: string, fulCats?: FulfillmentCategory[] | null) {
   // Validado contra Shopify oficial (98%+ match): usar stg_shopify direto
   const dataset = market === 'US' ? 'stg_shopify' : 'stg_shopify_br';
   const marketLower = market.toLowerCase();
@@ -89,23 +93,25 @@ export async function queryAggregatedKpis(market: Market, start: string, end: st
         COUNT(*) AS orders
       FROM \`larroude-data-prod.${dataset}.orders\`
       WHERE DATE(created_at, '${TZ[market]}') BETWEEN @start AND @end
-        AND financial_status NOT IN ('voided','refunded') ${shopifyOrderFilters(market)}
+        AND financial_status NOT IN ('voided','refunded') ${shopifyOrderFilters(market, '', fulCats, dataset)}
     ),
     units_t AS (
       SELECT SUM(CAST(JSON_VALUE(li,'$.quantity') AS INT64)) AS units
       FROM \`larroude-data-prod.${dataset}.orders\` o,
            UNNEST(JSON_QUERY_ARRAY(line_items)) li
       WHERE DATE(o.created_at) BETWEEN @start AND @end
-        AND o.financial_status NOT IN ('voided','refunded') ${shopifyOrderFilters(market, 'o')}
+        AND o.financial_status NOT IN ('voided','refunded') ${shopifyOrderFilters(market, 'o', fulCats, dataset)}
     ),
     refunds_raw AS (
       SELECT
-        DATE(created_at, '${TZ[market]}') AS d,
+        DATE(rf.created_at, '${TZ[market]}') AS d,
         (SELECT SUM(CAST(JSON_VALUE(t,'$.amount') AS NUMERIC))
-         FROM UNNEST(JSON_QUERY_ARRAY(transactions)) t
+         FROM UNNEST(JSON_QUERY_ARRAY(rf.transactions)) t
          WHERE JSON_VALUE(t,'$.kind') = 'refund') AS refund_amount
-      FROM \`larroude-data-prod.${dataset}.order_refunds\`
-      WHERE DATE(created_at, '${TZ[market]}') BETWEEN @start AND @end
+      FROM \`larroude-data-prod.${dataset}.order_refunds\` rf
+      LEFT JOIN \`larroude-data-prod.${dataset}.orders\` o ON o.id = rf.order_id
+      WHERE DATE(rf.created_at, '${TZ[market]}') BETWEEN @start AND @end
+        ${fulCats && fulCats.length ? fulfillmentCategoryFilterSQL(fulCats, 'o', dataset) : ''}
     ),
     returns_t AS (
       SELECT
@@ -136,7 +142,7 @@ export async function queryAggregatedKpis(market: Market, start: string, end: st
       SELECT JSON_VALUE(customer, '$.id') AS cust_id,
              MIN(DATE(created_at, '${TZ[market]}')) AS first_dt
       FROM \`larroude-data-prod.${dataset}.orders\`
-      WHERE customer IS NOT NULL AND financial_status NOT IN ('voided','refunded') ${shopifyOrderFilters(market)}
+      WHERE customer IS NOT NULL AND financial_status NOT IN ('voided','refunded') ${shopifyOrderFilters(market, '', fulCats, dataset)}
       GROUP BY cust_id
     ),
     customer_split AS (
@@ -148,7 +154,7 @@ export async function queryAggregatedKpis(market: Market, start: string, end: st
       FROM \`larroude-data-prod.${dataset}.orders\` o
       JOIN first_order_per_customer fo ON JSON_VALUE(o.customer, '$.id') = fo.cust_id
       WHERE DATE(o.created_at) BETWEEN @start AND @end
-        AND o.financial_status NOT IN ('voided','refunded') ${shopifyOrderFilters(market, 'o')}
+        AND o.financial_status NOT IN ('voided','refunded') ${shopifyOrderFilters(market, 'o', fulCats, dataset)}
     ),
     cac AS (
       SELECT new_customer_orders AS new_customers FROM customer_split
