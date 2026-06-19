@@ -33,7 +33,8 @@ export const FULFILLMENT_LOCATION_IDS = {
 export const FULFILLMENT_CATEGORY_GROUPS: { key: string; label: string; cats: FulfillmentCategory[] }[] = [
   { key: "in-stock", label: "Em estoque", cats: ["in-stock"] },
   { key: "pre-order", label: "Pré-order", cats: ["on-demand", "from-batch"] },
-  { key: "pending", label: "Pendente", cats: ["pending"] },
+  // Cassia 2026-06-17: "Pendente" removido do filtro (residual — quase tudo ja' e' roteado).
+  // A categoria 'pending' ainda existe no enum/SQL, so' nao aparece como pill.
 ];
 
 const ALL_CATEGORIES: FulfillmentCategory[] = ['in-stock', 'on-demand', 'from-batch', 'pending', 'other'];
