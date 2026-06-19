@@ -6,7 +6,7 @@
 // filtro de período igual ao Dashboard Principal e visão CONSOLIDADA (BR+US em US$).
 // Fontes: /api/product-performance/[market|all] (+/today) + /api/unit-economics/[market]/timeseries.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import BarLineChart, { type BarPoint } from '@/components/shared/BarLineChart';
 
 type MarketSel = 'US' | 'BR' | 'ALL';
@@ -91,6 +91,8 @@ export default function ProductPerformancePage() {
   const [today, setToday] = useState<TodayData | null>(null);
   const [seriesBySku, setSeriesBySku] = useState<Record<string, SeriesPoint[]>>({});
   const [loadingSeries, setLoadingSeries] = useState(false);
+  const carouselRef = useRef<HTMLDivElement>(null);
+  const scrollCarousel = (dir: -1 | 1) => carouselRef.current?.scrollBy({ left: dir * 640, behavior: 'smooth' });
 
   const currency = perf?.currency || (market === 'BR' ? 'BRL' : 'USD');
   const cur = currency === 'BRL' ? 'R$' : '$';
@@ -408,7 +410,14 @@ export default function ProductPerformancePage() {
 
       {loadingPerf && <div className="card p-8 text-center text-sm mb-6" style={{ color: '#6b7280' }}>Carregando…</div>}
       {!loadingPerf && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
+        <div className="relative mb-4">
+          <button onClick={() => scrollCarousel(-1)} aria-label="Anterior"
+            className="hidden sm:flex absolute left-[-6px] top-[90px] z-20 items-center justify-center"
+            style={{ width: 38, height: 38, borderRadius: '50%', background: '#fff', border: '1px solid #e5e3de', boxShadow: '0 2px 8px rgba(0,0,0,0.10)', cursor: 'pointer', fontSize: 20, color: '#1a1a1a' }}>‹</button>
+          <button onClick={() => scrollCarousel(1)} aria-label="Próximo"
+            className="hidden sm:flex absolute right-[-6px] top-[90px] z-20 items-center justify-center"
+            style={{ width: 38, height: 38, borderRadius: '50%', background: '#fff', border: '1px solid #e5e3de', boxShadow: '0 2px 8px rgba(0,0,0,0.10)', cursor: 'pointer', fontSize: 20, color: '#1a1a1a' }}>›</button>
+          <div ref={carouselRef} className="flex gap-3 overflow-x-auto pb-2" style={{ scrollSnapType: 'x proximity', scrollbarWidth: 'thin' }}>
           {visible.map((p, i) => {
             const isSel = selected.has(p.motherSku);
             const hasAds = today ? adKeysForMother(p.motherSku, today.adSpendBySku).length > 0 : false;
@@ -423,7 +432,7 @@ export default function ProductPerformancePage() {
             return (
               <div key={p.motherSku} onClick={() => toggle(p.motherSku)}
                 className="relative rounded-2xl overflow-hidden cursor-pointer transition-all"
-                style={{ background: '#fff', border: isSel ? '2px solid #ec4899' : '1px solid #ece9e2', boxShadow: isSel ? '0 0 0 2px rgba(236,72,153,0.18)' : '0 1px 2px rgba(0,0,0,0.03)' }}>
+                style={{ flex: '0 0 auto', width: 188, scrollSnapAlign: 'start', background: '#fff', border: isSel ? '2px solid #ec4899' : '1px solid #ece9e2', boxShadow: isSel ? '0 0 0 2px rgba(236,72,153,0.18)' : '0 1px 2px rgba(0,0,0,0.03)' }}>
                 <div className="absolute top-2 left-2 z-10 flex items-center justify-center" style={{ width: 24, height: 24, borderRadius: '50%', fontSize: 12, fontWeight: 700, color: '#fff', background: gold ? '#b89b3e' : '#9ca3af' }}>{rank}</div>
                 {isSel && <div className="absolute top-2 right-2 z-10" style={{ width: 22, height: 22, borderRadius: '50%', background: '#ec4899', color: '#fff', fontSize: 13, lineHeight: '22px', textAlign: 'center', fontWeight: 700 }}>✓</div>}
                 <div style={{ aspectRatio: '1 / 1', background: '#f6f4ef', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -450,7 +459,8 @@ export default function ProductPerformancePage() {
               </div>
             );
           })}
-          {ranked.length === 0 && <div className="col-span-full card p-8 text-center text-sm" style={{ color: '#6b7280' }}>Nenhum produto no período/busca.</div>}
+          {ranked.length === 0 && <div className="card p-8 text-center text-sm w-full" style={{ color: '#6b7280' }}>Nenhum produto no período/busca.</div>}
+          </div>
         </div>
       )}
       {!loadingPerf && !search.trim() && ranked.length > visible.length && (
