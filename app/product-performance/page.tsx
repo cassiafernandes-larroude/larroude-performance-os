@@ -151,7 +151,8 @@ export default function ProductPerformancePage() {
     }
     let spend = 0, pv = 0;
     for (const k of adKeys) { const a = today.adSpendBySku[k]; if (a) { spend += a.spend; pv += a.purchaseValue; } }
-    return { units, revenue, spend, hasAds: adKeys.size > 0, roas: spend > 0 ? revenue / spend : null, metaPv: pv };
+    // ROAS do anúncio = valor de compra atribuído pelo Meta / spend (os ads são por SKU).
+    return { units, revenue, spend, hasAds: adKeys.size > 0, roas: spend > 0 ? pv / spend : null, attrValue: pv };
   }, [today, selected]);
 
   const toggle = (sku: string) => setSelected((prev) => {
@@ -195,25 +196,33 @@ export default function ProductPerformancePage() {
         )}
       </div>
 
-      {/* KPIs AO VIVO DE HOJE (seleção) */}
-      <div className="mb-2 flex items-center gap-2">
+      {/* KPIs DA SELEÇÃO (todos referentes aos produtos selecionados) */}
+      <div className="mb-2 flex items-center gap-2 flex-wrap">
         <span className="text-[11px] font-bold uppercase tracking-wide" style={{ color: '#16A34A' }}>● Ao vivo · hoje {today?.date ? `(${today.date})` : ''}</span>
-        <span className="text-[11px]" style={{ color: '#9ca3af' }}>{selCount} produto{selCount === 1 ? '' : 's'} selecionado{selCount === 1 ? '' : 's'}</span>
+        <span className="text-[11px] font-semibold" style={{ color: '#1A1A1A' }}>
+          {selCount === 0 ? 'nenhum produto selecionado' : selCount === 1 ? selRows[0]?.name : `${selCount} produtos selecionados`}
+        </span>
+        <span className="text-[11px]" style={{ color: '#9ca3af' }}>
+          · mercado: {today ? fmtNum(today.totalUnits) : '…'} un hoje · {fmtNum(perf?.totalUnits || 0)} un no período
+        </span>
       </div>
-      <div className="grid grid-cols-3 gap-3 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
         {[
-          { label: 'UNIDADES HOJE', value: liveToday ? fmtNum(liveToday.units) : '…' },
-          { label: 'FATURAMENTO HOJE', value: liveToday ? fmtMoney(liveToday.revenue) : '…' },
+          { live: true, label: 'UNIDADES HOJE', value: liveToday ? fmtNum(liveToday.units) : '…', sub: 'seleção · hoje' },
+          { live: true, label: 'FATURAMENTO HOJE', value: liveToday ? fmtMoney(liveToday.revenue) : '…', sub: 'seleção · hoje' },
           {
+            live: true,
             label: 'ROAS HOJE',
             value: !liveToday ? '…' : liveToday.roas != null ? `${liveToday.roas.toFixed(2)}x` : liveToday.hasAds ? '0.00x' : '— sem ads',
-            sub: liveToday && liveToday.hasAds ? `spend ${fmtMoney(liveToday.spend)}` : 'nenhum SKU com anúncio',
+            sub: liveToday && liveToday.hasAds ? `spend ${fmtMoney(liveToday.spend)} · ads Meta` : 'sem SKU anunciado',
           },
+          { live: false, label: 'UNIDADES NO PERÍODO', value: loadingPerf ? '…' : fmtNum(selUnits), sub: 'seleção' },
+          { live: false, label: 'FATURAMENTO NO PERÍODO', value: loadingPerf ? '…' : fmtMoney(selRevenue), sub: 'seleção' },
         ].map((k) => (
-          <div key={k.label} className="card p-4" style={{ borderLeft: '3px solid #16A34A' }}>
-            <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', color: '#6b7280' }}>{k.label}</div>
-            <div style={{ fontSize: 26, fontWeight: 700, color: '#111827', marginTop: 4 }}>{k.value}</div>
-            {k.sub && <div style={{ fontSize: 10.5, color: '#9ca3af', marginTop: 2 }}>{k.sub}</div>}
+          <div key={k.label} className="card p-4" style={k.live ? { borderLeft: '3px solid #16A34A' } : undefined}>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', color: '#6b7280' }}>{k.label}</div>
+            <div style={{ fontSize: 23, fontWeight: 700, color: '#111827', marginTop: 4 }}>{k.value}</div>
+            <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>{k.sub}</div>
           </div>
         ))}
       </div>
@@ -222,22 +231,6 @@ export default function ProductPerformancePage() {
           ⚠️ Spend Meta de hoje pode estar incompleto (falha parcial na API) — ROAS é aproximado.
         </div>
       )}
-
-      {/* KPIs do período (visão geral do mercado) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-        {[
-          { label: 'UNIDADES NO PERÍODO', value: fmtNum(perf?.totalUnits || 0), sub: 'mercado todo' },
-          { label: 'FATURAMENTO NO PERÍODO', value: fmtMoney(perf?.totalRevenue || 0), sub: 'mercado todo' },
-          { label: 'UN. DA SELEÇÃO', value: fmtNum(selUnits), sub: `${selCount} produto(s)` },
-          { label: 'FAT. DA SELEÇÃO', value: fmtMoney(selRevenue), sub: `${selCount} produto(s)` },
-        ].map((k) => (
-          <div key={k.label} className="card p-4">
-            <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', color: '#6b7280' }}>{k.label}</div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: '#111827', marginTop: 4 }}>{loadingPerf ? '…' : k.value}</div>
-            <div style={{ fontSize: 10.5, color: '#9ca3af', marginTop: 2 }}>{k.sub}</div>
-          </div>
-        ))}
-      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[460px,1fr] gap-4">
         {/* Ranking (best sellers) — multi-select */}
