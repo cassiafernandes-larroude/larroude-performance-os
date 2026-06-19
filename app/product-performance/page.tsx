@@ -322,17 +322,87 @@ export default function ProductPerformancePage() {
         </div>
       )}
 
-      {/* Ranking — cards com imagem (best sellers), multi-select */}
-      <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-        <span className="text-sm font-semibold uppercase tracking-wide" style={{ color: '#6b7280' }}>🏆 Mais vendidos · clique pra selecionar</span>
-        <div className="flex items-center gap-2">
-          <input type="text" placeholder="Buscar SKU/nome…" value={search} onChange={(e) => setSearch(e.target.value)}
-            className="px-3 py-1.5 rounded-lg text-[13px]" style={{ background: '#fff', border: '1px solid #e5e3de', width: 180 }} />
-          <div className="flex items-center rounded-full overflow-hidden" style={{ border: '1px solid #e5e3de' }}>
-            <button onClick={() => setSortBy('units')} className="px-3 py-1.5 text-[12px] font-semibold" style={{ background: sortBy === 'units' ? '#1a1a1a' : '#fff', color: sortBy === 'units' ? '#fff' : '#1a1a1a' }}>Qtd</button>
-            <button onClick={() => setSortBy('revenue')} className="px-3 py-1.5 text-[12px] font-semibold" style={{ background: sortBy === 'revenue' ? '#1a1a1a' : '#fff', color: sortBy === 'revenue' ? '#fff' : '#1a1a1a' }}>Receita</button>
+      {/* Visão original: tabela de ranking (multi-select) + drill-down lado a lado */}
+      <div className="grid grid-cols-1 lg:grid-cols-[460px,1fr] gap-4 mb-8">
+        {/* Ranking (tabela) */}
+        <div className="card p-4">
+          <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+            <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#6b7280' }}>🏆 Ranking · selecione quantos quiser</span>
+            <div className="flex items-center gap-1">
+              <button onClick={() => setSortBy('revenue')} className={pillBtn(sortBy === 'revenue')}>Fat.</button>
+              <button onClick={() => setSortBy('units')} className={pillBtn(sortBy === 'units')}>Un.</button>
+            </div>
           </div>
-          {selCount > 0 && <button onClick={() => setSelected(new Set())} className="text-[11px] underline" style={{ color: '#9ca3af' }}>limpar ({selCount})</button>}
+          <div className="flex items-center gap-2 mb-2">
+            <input type="text" placeholder="Buscar SKU/nome…" value={search} onChange={(e) => setSearch(e.target.value)}
+              className="flex-1 px-3 py-1.5 rounded-lg text-[13px]" style={{ background: '#fff', border: '1px solid #e5e3de' }} />
+            {selCount > 0 && <button onClick={() => setSelected(new Set())} className="text-[11px] underline" style={{ color: '#9ca3af' }}>limpar ({selCount})</button>}
+          </div>
+          <div className="overflow-y-auto" style={{ maxHeight: 560 }}>
+            <table className="w-full text-[12px]">
+              <thead>
+                <tr className="text-left" style={{ color: '#9ca3af', fontSize: 10, textTransform: 'uppercase' }}>
+                  <th className="py-1 pr-1"></th><th className="py-1 pr-2">#</th><th className="py-1 pr-2">Produto</th>
+                  <th className="py-1 pr-2 text-right">Un</th><th className="py-1 text-right">Fat.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loadingPerf && <tr><td colSpan={5} className="py-4 text-center" style={{ color: '#6b7280' }}>Carregando…</td></tr>}
+                {!loadingPerf && ranked.map((p, i) => {
+                  const isSel = selected.has(p.motherSku);
+                  const hasAds = today ? adKeysForMother(p.motherSku, today.adSpendBySku).length > 0 : false;
+                  return (
+                    <tr key={p.motherSku} onClick={() => toggle(p.motherSku)}
+                      style={{ cursor: 'pointer', background: isSel ? '#fff0f6' : undefined, borderTop: '1px solid #f0ece4' }}>
+                      <td className="py-1.5 pr-1"><input type="checkbox" checked={isSel} readOnly style={{ accentColor: '#d6336c' }} /></td>
+                      <td className="py-1.5 pr-2" style={{ color: '#9ca3af' }}>{i + 1}</td>
+                      <td className="py-1.5 pr-2">
+                        <div style={{ fontWeight: isSel ? 700 : 500, color: '#1A1A1A' }} className="truncate max-w-[210px]">
+                          {p.name} {hasAds && <span title="Tem anúncio rodando hoje">📣</span>}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono" style={{ fontSize: 10, color: '#9ca3af' }}>{p.motherSku}</span>
+                          <button onClick={(e) => { e.stopPropagation(); setSelected(new Set([p.motherSku])); }} className="text-[9px] underline" style={{ color: '#c7c2b6' }}>só este</button>
+                        </div>
+                      </td>
+                      <td className="py-1.5 pr-2 text-right font-num">{fmtNum(p.units)}</td>
+                      <td className="py-1.5 text-right font-num">{fmtMoney(p.revenue)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Drill-down agregado da seleção */}
+        <div>
+          <div className="mb-3">
+            <div className="text-[15px] font-bold" style={{ color: '#1A1A1A' }}>
+              {selCount === 0 ? 'Nenhum produto selecionado' : selCount === 1 ? selRows[0]?.name : `${selCount} produtos selecionados`}
+            </div>
+            <div className="text-[12px]" style={{ color: '#6b7280' }}>
+              {selCount > 0 && <>{fmtNum(selUnits)} un · {fmtMoney(selRevenue)} no período{market === 'ALL' && ' (US$)'}</>}
+            </div>
+          </div>
+          {selCount === 0 && <div className="card p-8 text-center text-sm" style={{ color: '#6b7280' }}>Selecione um ou mais produtos para ver a evolução.</div>}
+          {selCount > 0 && loadingSeries && <div className="card p-8 text-center text-sm" style={{ color: '#6b7280' }}>Carregando série…</div>}
+          {selCount > 0 && !loadingSeries && unitPoints.length === 0 && <div className="card p-8 text-center text-sm" style={{ color: '#6b7280' }}>Sem vendas da seleção no período.</div>}
+          {selCount > 0 && !loadingSeries && unitPoints.length > 0 && (
+            <div className="grid grid-cols-1 gap-4">
+              <BarLineChart title={`UNIDADES VENDIDAS / TEMPO${selCount > 1 ? ' (soma da seleção)' : ''}`} data={unitPoints} color="#5d4ec5" unit="number" market={market === 'BR' ? 'BR' : 'US'} height={240} />
+              <BarLineChart title={`FATURAMENTO / TEMPO${selCount > 1 ? ' (soma)' : ''}${market === 'ALL' ? ' · US$' : ''}`} data={revPoints} color="#16A34A" unit="currency" market={market === 'BR' ? 'BR' : 'US'} height={240} />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Mais vendidos — cards com imagem (abaixo da visão original) */}
+      <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+        <span className="text-sm font-semibold uppercase tracking-wide" style={{ color: '#6b7280' }}>🏆 Mais vendidos · com imagem (clique pra selecionar)</span>
+        <div className="flex items-center rounded-full overflow-hidden" style={{ border: '1px solid #e5e3de' }}>
+          <button onClick={() => setSortBy('units')} className="px-3 py-1.5 text-[12px] font-semibold" style={{ background: sortBy === 'units' ? '#1a1a1a' : '#fff', color: sortBy === 'units' ? '#fff' : '#1a1a1a' }}>Qtd</button>
+          <button onClick={() => setSortBy('revenue')} className="px-3 py-1.5 text-[12px] font-semibold" style={{ background: sortBy === 'revenue' ? '#1a1a1a' : '#fff', color: sortBy === 'revenue' ? '#fff' : '#1a1a1a' }}>Receita</button>
         </div>
       </div>
 
@@ -393,25 +463,6 @@ export default function ProductPerformancePage() {
       {!loadingPerf && showAll && !search.trim() && ranked.length > INITIAL_CARDS && (
         <div className="text-center mb-8">
           <button onClick={() => setShowAll(false)} className="text-[12px] underline" style={{ color: '#9ca3af' }}>mostrar menos</button>
-        </div>
-      )}
-
-      {/* Drill-down agregado da seleção */}
-      <div className="mb-3">
-        <div className="text-[15px] font-bold" style={{ color: '#1A1A1A' }}>
-          {selCount === 0 ? 'Nenhum produto selecionado' : selCount === 1 ? selRows[0]?.name : `${selCount} produtos selecionados`}
-        </div>
-        <div className="text-[12px]" style={{ color: '#6b7280' }}>
-          {selCount > 0 && <>{fmtNum(selUnits)} un · {fmtMoney(selRevenue)} no período{market === 'ALL' && ' (US$)'}</>}
-        </div>
-      </div>
-      {selCount === 0 && <div className="card p-8 text-center text-sm" style={{ color: '#6b7280' }}>Selecione um ou mais cards acima para ver a evolução.</div>}
-      {selCount > 0 && loadingSeries && <div className="card p-8 text-center text-sm" style={{ color: '#6b7280' }}>Carregando série…</div>}
-      {selCount > 0 && !loadingSeries && unitPoints.length === 0 && <div className="card p-8 text-center text-sm" style={{ color: '#6b7280' }}>Sem vendas da seleção no período.</div>}
-      {selCount > 0 && !loadingSeries && unitPoints.length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <BarLineChart title={`UNIDADES VENDIDAS / TEMPO${selCount > 1 ? ' (soma da seleção)' : ''}`} data={unitPoints} color="#5d4ec5" unit="number" market={market === 'BR' ? 'BR' : 'US'} height={260} />
-          <BarLineChart title={`FATURAMENTO / TEMPO${selCount > 1 ? ' (soma)' : ''}${market === 'ALL' ? ' · US$' : ''}`} data={revPoints} color="#16A34A" unit="currency" market={market === 'BR' ? 'BR' : 'US'} height={260} />
         </div>
       )}
     </main>
