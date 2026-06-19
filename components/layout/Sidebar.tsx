@@ -53,6 +53,7 @@ const navSections: NavSection[] = [
       { href: "/ltv-native", label: "LTV", icon: TrendingUp },
       { href: "/cac-native", label: "CAC", icon: Users },
       { href: "/unit-economics", label: "Unit Economics", icon: Microscope },
+      { href: "/product-performance", label: "Product Performance", icon: BarChart3 },
       { href: "/produtos-apostar", label: "Products to Bet On", icon: Target },
       { href: "/klaviyo", label: "Klaviyo Journey", icon: Mail },
       { href: "/klaviyo-crm", label: "Klaviyo CRM", icon: Mail },
