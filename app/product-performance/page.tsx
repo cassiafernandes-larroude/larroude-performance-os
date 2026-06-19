@@ -84,6 +84,7 @@ export default function ProductPerformancePage() {
   const [draftEnd, setDraftEnd] = useState('');
   const [sortBy, setSortBy] = useState<'revenue' | 'units'>('revenue');
   const [search, setSearch] = useState('');
+  const [showAll, setShowAll] = useState(false);
   const [perf, setPerf] = useState<PerfResp | null>(null);
   const [loadingPerf, setLoadingPerf] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -198,13 +199,17 @@ export default function ProductPerformancePage() {
   }, [market, rangeQS, selKey, perf?.fx]);
 
   const products = perf?.products || [];
+  // Lista COMPLETA (todos os produtos do período) filtrada+ordenada — sem corte.
   const ranked = useMemo(() => {
     const q = search.trim().toLowerCase();
     return [...products]
       .filter((p) => !q || p.motherSku.toLowerCase().includes(q) || p.name.toLowerCase().includes(q))
-      .sort((a, b) => (sortBy === 'units' ? b.units - a.units : b.revenue - a.revenue))
-      .slice(0, 60);
+      .sort((a, b) => (sortBy === 'units' ? b.units - a.units : b.revenue - a.revenue));
   }, [products, search, sortBy]);
+  // Render incremental pra não pesar: mostra INITIAL_CARDS e expande sob demanda.
+  // Busca mostra todos os matches direto.
+  const INITIAL_CARDS = 60;
+  const visible = (showAll || search.trim()) ? ranked : ranked.slice(0, INITIAL_CARDS);
 
   const { unitPoints, revPoints } = useMemo(() => {
     const acc = new Map<string, { units: number; rev: number }>();
@@ -333,8 +338,8 @@ export default function ProductPerformancePage() {
 
       {loadingPerf && <div className="card p-8 text-center text-sm mb-6" style={{ color: '#6b7280' }}>Carregando…</div>}
       {!loadingPerf && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-8">
-          {ranked.map((p, i) => {
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
+          {visible.map((p, i) => {
             const isSel = selected.has(p.motherSku);
             const hasAds = today ? adKeysForMother(p.motherSku, today.adSpendBySku).length > 0 : false;
             const metric = sortBy === 'units' ? p.units : p.revenue;
@@ -376,6 +381,18 @@ export default function ProductPerformancePage() {
             );
           })}
           {ranked.length === 0 && <div className="col-span-full card p-8 text-center text-sm" style={{ color: '#6b7280' }}>Nenhum produto no período/busca.</div>}
+        </div>
+      )}
+      {!loadingPerf && !search.trim() && ranked.length > visible.length && (
+        <div className="text-center mb-8">
+          <button onClick={() => setShowAll(true)} className={PILL_INACTIVE} style={{ cursor: 'pointer' }}>
+            Mostrar todos os {ranked.length} produtos
+          </button>
+        </div>
+      )}
+      {!loadingPerf && showAll && !search.trim() && ranked.length > INITIAL_CARDS && (
+        <div className="text-center mb-8">
+          <button onClick={() => setShowAll(false)} className="text-[12px] underline" style={{ color: '#9ca3af' }}>mostrar menos</button>
         </div>
       )}
 
