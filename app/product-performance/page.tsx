@@ -8,10 +8,45 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import BarLineChart, { type BarPoint } from '@/components/shared/BarLineChart';
-import type { Period } from '@/types/metric';
 
 type Market = 'US' | 'BR';
-const PRESETS: Period[] = ['7d', '14d', '28d', '3M', '6M', '12M'];
+// Mesmos presets do Dashboard Principal (Header.tsx): D-1 / 7D / 14D / 28D / 3M / 6M / 12M.
+type PeriodKey = '1d' | '7d' | '14d' | '28d' | '3M' | '6M' | '12M';
+const PRESETS: PeriodKey[] = ['1d', '7d', '14d', '28d', '3M', '6M', '12M'];
+
+// Estilos das pills idênticos ao Header do Main.
+const PILL_BASE = 'inline-flex items-center justify-center rounded-full text-[12px] sm:text-[13px] font-semibold transition-all duration-150 select-none';
+const PILL_ACTIVE_DARK = `${PILL_BASE} bg-[#1a1a1a] text-white px-3 sm:px-5 py-1.5 sm:py-2`;
+const PILL_INACTIVE = `${PILL_BASE} bg-[#ebe9e3] text-[#1a1a1a] hover:bg-[#ddd9d0] px-3 sm:px-5 py-1.5 sm:py-2`;
+
+function periodLabel(p: PeriodKey): string {
+  return p === '1d' ? 'D-1' : p.toUpperCase();
+}
+
+function ptPeriodLabel(p: PeriodKey): string {
+  switch (p) {
+    case '1d': return 'Ontem';
+    case '7d': return 'Últimos 7 dias';
+    case '14d': return 'Últimos 14 dias';
+    case '28d': return 'Últimos 28 dias';
+    case '3M': return 'Últimos 3 meses';
+    case '6M': return 'Últimos 6 meses';
+    case '12M': return 'Últimos 12 meses';
+  }
+}
+
+// "Ontem" (D-1) no fuso do market — D-1 é uma janela de 1 dia (start=end).
+function yesterdayInMarket(market: Market): string {
+  const tz = market === 'US' ? 'America/New_York' : 'America/Sao_Paulo';
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  const d = new Date(today + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function daysInclusive(from: string, to: string): number {
+  return Math.round((new Date(to).getTime() - new Date(from).getTime()) / 86400000) + 1;
+}
 
 interface ProductRow { motherSku: string; name: string; category: string; units: number; revenue: number; }
 interface Bucket { date: string; units: number; grossRevenue: number; discount: number; }
@@ -32,10 +67,12 @@ function adKeysForMother(motherSku: string, adSpendBySku: Record<string, unknown
 
 export default function ProductPerformancePage() {
   const [market, setMarket] = useState<Market>('US');
-  const [period, setPeriod] = useState<Period>('28d');
-  const [useCustom, setUseCustom] = useState(false);
-  const [cStart, setCStart] = useState('');
-  const [cEnd, setCEnd] = useState('');
+  const [period, setPeriod] = useState<PeriodKey>('28d');
+  const [isCustom, setIsCustom] = useState(false);
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
+  const [draftStart, setDraftStart] = useState('');
+  const [draftEnd, setDraftEnd] = useState('');
   const [sortBy, setSortBy] = useState<'revenue' | 'units'>('revenue');
   const [search, setSearch] = useState('');
   const [perf, setPerf] = useState<{ totalUnits: number; totalRevenue: number; productCount: number; products: ProductRow[]; start?: string; end?: string } | null>(null);
@@ -50,9 +87,22 @@ export default function ProductPerformancePage() {
   const fmtMoney = (v: number) => `${cur}${Math.round(v).toLocaleString(loc)}`;
   const fmtNum = (v: number) => v.toLocaleString(loc);
 
-  // Range custom válido (ambas as datas) tem precedência sobre o preset.
-  const customValid = useCustom && /^\d{4}-\d{2}-\d{2}$/.test(cStart) && /^\d{4}-\d{2}-\d{2}$/.test(cEnd) && cStart <= cEnd;
-  const rangeQS = customValid ? `start=${cStart}&end=${cEnd}` : `period=${period}`;
+  // Range ativo: custom (Aplicar) tem precedência; D-1 vira start=end=ontem; demais usam preset.
+  const rangeQS = isCustom
+    ? `start=${customStart}&end=${customEnd}`
+    : period === '1d'
+      ? (() => { const y = yesterdayInMarket(market); return `start=${y}&end=${y}`; })()
+      : `period=${period}`;
+
+  function handlePeriodChange(p: PeriodKey) { setIsCustom(false); setPeriod(p); }
+  function applyDates() {
+    if (!draftStart || !draftEnd) { alert('Selecione data inicial e final.'); return; }
+    if (draftStart > draftEnd) { alert('Data inicial deve ser anterior ou igual à data final.'); return; }
+    setCustomStart(draftStart); setCustomEnd(draftEnd); setIsCustom(true);
+  }
+  const activeLabel = isCustom
+    ? `Últimos ${daysInclusive(customStart, customEnd)} dia${daysInclusive(customStart, customEnd) === 1 ? '' : 's'}`
+    : ptPeriodLabel(period);
 
   // Ranking + totais do período
   useEffect(() => {
@@ -71,6 +121,11 @@ export default function ProductPerformancePage() {
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [market, rangeQS]);
+
+  // Inputs de data refletem a janela ativa resolvida (presets/D-1) — só quando não é custom.
+  useEffect(() => {
+    if (!isCustom && perf?.start && perf?.end) { setDraftStart(perf.start); setDraftEnd(perf.end); }
+  }, [perf?.start, perf?.end, isCustom]);
 
   // Live de hoje (vendas + spend por SKU) — só depende do market
   useEffect(() => {
@@ -175,25 +230,48 @@ export default function ProductPerformancePage() {
         </p>
       </div>
 
-      {/* Filtros */}
-      <div className="flex items-center gap-2 flex-wrap mb-4">
+      {/* Market */}
+      <div className="flex items-center gap-2 flex-wrap mb-3">
         <button onClick={() => setMarket('US')} className={pillBtn(market === 'US')}>US</button>
         <button onClick={() => setMarket('BR')} className={pillBtn(market === 'BR')}>BR</button>
-        <span style={{ width: 1, height: 22, background: '#E5E0D6', margin: '0 4px' }} />
-        <span className="text-[11px] font-semibold mr-1" style={{ color: '#9ca3af', letterSpacing: '0.06em' }}>PERÍODO</span>
-        {PRESETS.map((p) => (
-          <button key={p} onClick={() => { setPeriod(p); setUseCustom(false); }} className={pillBtn(!useCustom && period === p)}>{p}</button>
-        ))}
-        <button onClick={() => setUseCustom((v) => !v)} className={pillBtn(useCustom)} title="Selecionar intervalo de datas">📅 Personalizado</button>
-        {useCustom && (
-          <span className="flex items-center gap-1">
-            <input type="date" value={cStart} max={cEnd || undefined} onChange={(e) => setCStart(e.target.value)}
-              className="px-2 py-1 rounded-lg text-[12px]" style={{ background: '#fff', border: '1px solid #e5e3de' }} />
-            <span style={{ color: '#9ca3af' }}>→</span>
-            <input type="date" value={cEnd} min={cStart || undefined} onChange={(e) => setCEnd(e.target.value)}
-              className="px-2 py-1 rounded-lg text-[12px]" style={{ background: '#fff', border: '1px solid #e5e3de' }} />
-          </span>
-        )}
+      </div>
+
+      {/* Filtro de período — idêntico ao Dashboard Principal */}
+      <div className="px-5 py-3 rounded-2xl flex flex-wrap items-center gap-3 mb-6" style={{ background: 'white', border: '0.8px solid #e5e3de' }}>
+        <span className="text-[11px] uppercase tracking-[0.12em] font-semibold mr-1" style={{ color: '#9ca3af' }}>PERÍODO</span>
+        <div className="flex items-center gap-2 flex-wrap">
+          {PRESETS.map((p) => {
+            const active = period === p && !isCustom;
+            return (
+              <button key={p} onClick={() => handlePeriodChange(p)} className={active ? PILL_ACTIVE_DARK : PILL_INACTIVE}>
+                {periodLabel(p)}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="h-7 w-px mx-1" style={{ background: '#e5e3de' }} />
+
+        <input
+          type="date"
+          value={draftStart}
+          onChange={(e) => setDraftStart(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') applyDates(); }}
+          className="rounded-full px-4 py-2 text-[13px] bg-white font-medium"
+          style={{ border: `1px solid ${isCustom ? '#ec4899' : '#e5e3de'}`, boxShadow: isCustom ? '0 0 0 1px rgba(236,72,153,0.30)' : 'none' }}
+        />
+        <span className="text-[13px]" style={{ color: '#6b7280' }}>até</span>
+        <input
+          type="date"
+          value={draftEnd}
+          onChange={(e) => setDraftEnd(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') applyDates(); }}
+          className="rounded-full px-4 py-2 text-[13px] bg-white font-medium"
+          style={{ border: `1px solid ${isCustom ? '#ec4899' : '#e5e3de'}`, boxShadow: isCustom ? '0 0 0 1px rgba(236,72,153,0.30)' : 'none' }}
+        />
+        <button onClick={applyDates} className={PILL_ACTIVE_DARK} title="Aplicar intervalo">Aplicar</button>
+
+        <span className="ml-auto text-[13px] italic px-2" style={{ color: '#9ca3af' }}>{activeLabel}</span>
       </div>
 
       {/* KPIs DA SELEÇÃO (todos referentes aos produtos selecionados) */}
