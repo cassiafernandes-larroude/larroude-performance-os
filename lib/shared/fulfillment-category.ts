@@ -54,19 +54,6 @@ function idIn(ids: string[]): string {
   return ids.map((x) => `'${x}'`).join(',');
 }
 
-/** Expressao SQL (de-correlacionada) que retorna a categoria de fulfillment de uma order. */
-export function orderFulfillmentCategorySQL(ordersAlias = ''): string {
-  const a = ordersAlias ? `${ordersAlias}.` : '';
-  return `CASE WHEN ARRAY_LENGTH(JSON_QUERY_ARRAY(${a}fulfillments)) = 0 THEN 'pending' ELSE (
-    SELECT CASE
-      WHEN JSON_VALUE(f, '$.location_id') IN (${idIn(FULFILLMENT_LOCATION_IDS.fromBatch)}) THEN 'from-batch'
-      WHEN JSON_VALUE(f, '$.location_id') IN (${idIn(FULFILLMENT_LOCATION_IDS.onDemand)}) THEN 'on-demand'
-      WHEN JSON_VALUE(f, '$.location_id') IN (${idIn(FULFILLMENT_LOCATION_IDS.inStock)}) THEN 'in-stock'
-      ELSE 'other' END
-    FROM UNNEST(JSON_QUERY_ARRAY(${a}fulfillments)) f LIMIT 1
-  ) END`;
-}
-
 /** Normaliza/valida uma lista de categorias vinda da query string (csv). */
 export function parseFulfillmentCategories(raw: string | null | undefined): FulfillmentCategory[] | null {
   if (!raw) return null;
@@ -77,16 +64,34 @@ export function parseFulfillmentCategories(raw: string | null | undefined): Fulf
 }
 
 /**
- * Clausula WHERE de filtro. categories null/vazio = sem filtro (mostra tudo).
- * Valores vem de enum interno (nao input livre) -> seguro inline.
+ * Clausula WHERE de filtro por origem. categories null/vazio = sem filtro (tudo).
+ *
+ * Cassia 2026-06-17: usa a localizacao ATRIBUIDA (fulfillment_orders.assigned_location_id),
+ * definida no momento do pedido — assim PRE-ORDER e' identificado mesmo antes de despachar
+ * (a producao leva semanas; usar o fulfillment concluido jogava pre-orders em "pending").
+ * Semi-join (IN) — suportado pelo BQ. `dataset` = 'stg_shopify' | 'stg_shopify_br'.
  */
 export function fulfillmentCategoryFilterSQL(
   categories: FulfillmentCategory[] | null | undefined,
-  ordersAlias = ''
+  ordersAlias: string,
+  dataset: string
 ): string {
   if (!categories || categories.length === 0) return '';
   const valid = categories.filter((c) => ALL_CATEGORIES.includes(c));
   if (valid.length === 0 || valid.length === ALL_CATEGORIES.length) return '';
-  const inList = valid.map((c) => `'${c}'`).join(',');
-  return `AND (${orderFulfillmentCategorySQL(ordersAlias)}) IN (${inList})`;
+  const a = ordersAlias ? `${ordersAlias}.` : '';
+  const foTable = `\`larroude-data-prod.${dataset}.fulfillment_orders\``;
+  const ids: string[] = [];
+  if (valid.includes('from-batch')) ids.push(...FULFILLMENT_LOCATION_IDS.fromBatch);
+  if (valid.includes('on-demand')) ids.push(...FULFILLMENT_LOCATION_IDS.onDemand);
+  if (valid.includes('in-stock')) ids.push(...FULFILLMENT_LOCATION_IDS.inStock);
+  const conds: string[] = [];
+  if (ids.length) {
+    conds.push(`${a}id IN (SELECT order_id FROM ${foTable} WHERE CAST(assigned_location_id AS STRING) IN (${idIn(ids)}))`);
+  }
+  if (valid.includes('pending')) {
+    conds.push(`${a}id NOT IN (SELECT order_id FROM ${foTable} WHERE order_id IS NOT NULL)`);
+  }
+  if (!conds.length) return '';
+  return `AND (${conds.join(' OR ')})`;
 }

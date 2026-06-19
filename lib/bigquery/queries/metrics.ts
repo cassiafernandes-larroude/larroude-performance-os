@@ -22,8 +22,8 @@ export function aggregatedKpisSQL(market: Market, fulCats?: FulfillmentCategory[
   const dataset = DATASET[market];
   const tz = TZ[market];
   // Cassia 2026-06-17: filtro de origem de fulfillment (estoque/sob demanda/from-batch/pendente).
-  const fulBare = fulfillmentCategoryFilterSQL(fulCats, '');
-  const fulO = fulfillmentCategoryFilterSQL(fulCats, 'o');
+  const fulBare = fulfillmentCategoryFilterSQL(fulCats, '', dataset);
+  const fulO = fulfillmentCategoryFilterSQL(fulCats, 'o', dataset);
 
   // BR: Meta da conta Larroude BR principal vem em USD → multiplicar por FX
   // Mas Pre-Order BR já está em BRL → não converter

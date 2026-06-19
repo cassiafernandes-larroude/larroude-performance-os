@@ -202,8 +202,8 @@ export async function getShopifyBundle(
     const tz = TZ[market];
     // Cassia 2026-06-17: filtro de origem de fulfillment (estoque/sob demanda/from-batch/pendente).
     // Injetado em todas as CTEs baseadas em orders. fulCats vazio/null = sem filtro (tudo).
-    const fulBare = fulfillmentCategoryFilterSQL(fulCats, '');
-    const fulO = fulfillmentCategoryFilterSQL(fulCats, 'o');
+    const fulBare = fulfillmentCategoryFilterSQL(fulCats, '', dataset);
+    const fulO = fulfillmentCategoryFilterSQL(fulCats, 'o', dataset);
 
     try {
       // KPIs principais
