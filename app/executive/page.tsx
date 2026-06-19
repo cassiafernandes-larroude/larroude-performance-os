@@ -91,7 +91,7 @@ export default async function ExecutivePage({
         <FulfillmentFilter className="mt-2 mb-4" />
         {fulCats && fulCats.length > 0 && (
           <p className="text-[11px] mb-4" style={{ color: "var(--ink-muted)" }}>
-            KPIs e ROAS consolidados por origem · gráficos diários e channel share = total
+            KPIs, ROAS e gráficos diários consolidados por origem · channel share = total
           </p>
         )}
 

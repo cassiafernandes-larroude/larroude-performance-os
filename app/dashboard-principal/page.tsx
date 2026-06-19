@@ -136,7 +136,7 @@ export default function DashboardPrincipalPage() {
         })}
         {fulCats.length > 0 && (
           <span className="text-[11px]" style={{ color: '#9ca3af' }}>
-            KPIs e ROAS por origem · gráficos diários = total
+            KPIs, ROAS e gráficos diários por origem · channel share = total
           </span>
         )}
       </div>

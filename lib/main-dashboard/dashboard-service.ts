@@ -160,10 +160,10 @@ export async function getDashboardPayload(
   ] = await Promise.all([
     queryAggregatedKpis(market, period.start, period.end, fulCats),
     queryAggregatedKpis(market, period.prevStart, period.prevEnd, fulCats),
-    queryDailySales(market, chartStart, period.end, granularity),
-    queryDailyReturns(market, chartStart, period.end, granularity),
+    queryDailySales(market, chartStart, period.end, granularity, fulCats),
+    queryDailyReturns(market, chartStart, period.end, granularity, fulCats),
     queryDailyAds(market, chartStart, period.end, granularity),
-    queryDailyCac(market, chartStart, period.end, granularity),
+    queryDailyCac(market, chartStart, period.end, granularity, fulCats),
     queryDailySessions(market, chartStart, period.end, granularity),
     queryDailySessions(market, period.prevStart, period.prevEnd, granularity),
     queryCampaigns(market, period.start, period.end),
@@ -591,7 +591,9 @@ export async function getDashboardPayload(
     const dSpendSuper = supermetricsSpendDaily.get(d);
     const dSpendBase = dSpendSuper != null && dSpendSuper > 0 ? dSpendSuper : num(a.spend);
     // Aplica ajuste manual Set/25 ao bucket atual (regra Cassia, REGRAS-LARROUDE-OS.md 3.3)
-    const dSpend = dSpendBase + (metaAdjByBucket.get(d) ?? 0);
+    // Cassia 2026-06-17: filtro de origem -> escala o spend diario pelo fator pre-order do periodo
+    // (spend nao tem split por origem por dia; aproximacao consistente com os KPIs).
+    let dSpend = (dSpendBase + (metaAdjByBucket.get(d) ?? 0)) * _fulFactor;
     const dOrders = num(s.orders);
     // Pixel purchases: prefere Meta Graph API direto (sempre atualizado) sobre BQ
     // (BQ gold.all_channels_daily pode estar com gap de ingest do Meta).

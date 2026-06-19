@@ -242,7 +242,7 @@ export async function queryOriginShare(market: Market, start: string, end: strin
 // --------------------------------------------------------------------------
 // Séries — Sales / Discounts / Orders / Units (agrupado por granularidade)
 // --------------------------------------------------------------------------
-export async function queryDailySales(market: Market, start: string, end: string, granularity: Granularity = 'day') {
+export async function queryDailySales(market: Market, start: string, end: string, granularity: Granularity = 'day', fulCats?: FulfillmentCategory[] | null) {
   // Validado contra dashboard Shopify oficial: 98%+ match
   // gold_sales.daily_sales_summary tem dados inflados (~175%) — usar stg_shopify.orders direto
   const dataset = market === 'US' ? 'stg_shopify' : 'stg_shopify_br';
@@ -261,7 +261,7 @@ export async function queryDailySales(market: Market, start: string, end: string
         SUM(CAST(total_tax AS NUMERIC)) AS tax
       FROM \`larroude-data-prod.${dataset}.orders\`
       WHERE DATE(created_at, '${TZ[market]}') BETWEEN @start AND @end
-        AND financial_status NOT IN ('voided','refunded') ${shopifyOrderFilters(market)}
+        AND financial_status NOT IN ('voided','refunded') ${shopifyOrderFilters(market, '', fulCats, dataset)}
       GROUP BY d
     ),
     units_daily AS (
@@ -270,7 +270,7 @@ export async function queryDailySales(market: Market, start: string, end: string
       FROM \`larroude-data-prod.${dataset}.orders\` o,
            UNNEST(JSON_QUERY_ARRAY(line_items)) li
       WHERE DATE(o.created_at) BETWEEN @start AND @end
-        AND o.financial_status NOT IN ('voided','refunded') ${shopifyOrderFilters(market, 'o')}
+        AND o.financial_status NOT IN ('voided','refunded') ${shopifyOrderFilters(market, 'o', fulCats, dataset)}
       GROUP BY d
     )
     SELECT
@@ -289,7 +289,7 @@ export async function queryDailySales(market: Market, start: string, end: string
   return runQuery<any>(sql, { start, end });
 }
 
-export async function queryDailyReturns(market: Market, start: string, end: string, granularity: Granularity = 'day') {
+export async function queryDailyReturns(market: Market, start: string, end: string, granularity: Granularity = 'day', fulCats?: FulfillmentCategory[] | null) {
   // Returns reais via stg_shopify.order_refunds (transactions kind='refund')
   // Validado contra Shopify oficial: 96% match
   const dataset = market === 'US' ? 'stg_shopify' : 'stg_shopify_br';
@@ -299,12 +299,14 @@ export async function queryDailyReturns(market: Market, start: string, end: stri
   const sql = `
     WITH refunds AS (
       SELECT
-        DATE(created_at, '${TZ[market]}') AS d,
+        DATE(rf.created_at, '${TZ[market]}') AS d,
         (SELECT SUM(CAST(JSON_VALUE(t,'$.amount') AS NUMERIC))
-         FROM UNNEST(JSON_QUERY_ARRAY(transactions)) t
+         FROM UNNEST(JSON_QUERY_ARRAY(rf.transactions)) t
          WHERE JSON_VALUE(t,'$.kind') = 'refund') AS refund_amount
-      FROM \`larroude-data-prod.${dataset}.order_refunds\`
-      WHERE DATE(created_at, '${TZ[market]}') BETWEEN @start AND @end
+      FROM \`larroude-data-prod.${dataset}.order_refunds\` rf
+      LEFT JOIN \`larroude-data-prod.${dataset}.orders\` o ON o.id = rf.order_id
+      WHERE DATE(rf.created_at, '${TZ[market]}') BETWEEN @start AND @end
+        ${fulCats && fulCats.length ? fulfillmentCategoryFilterSQL(fulCats, 'o', dataset) : ''}
     )
     SELECT
       FORMAT_DATE('%Y-%m-%d', ${bucket}) AS date,
@@ -357,7 +359,7 @@ export async function queryDailyAds(market: Market, start: string, end: string, 
 //   CAC          = Spend / Novos clientes
 //   CPO          = Spend / Pedidos
 // --------------------------------------------------------------------------
-export async function queryDailyCac(market: Market, start: string, end: string, granularity: Granularity = 'day') {
+export async function queryDailyCac(market: Market, start: string, end: string, granularity: Granularity = 'day', fulCats?: FulfillmentCategory[] | null) {
   const dataset = market === 'US' ? 'stg_shopify' : 'stg_shopify_br';
   const bucket = granularity === 'week' ? 'DATE_TRUNC(d, WEEK(MONDAY))'
                 : granularity === 'month' ? 'DATE_TRUNC(d, MONTH)'
@@ -375,7 +377,7 @@ export async function queryDailyCac(market: Market, start: string, end: string, 
              MIN(DATE(created_at, '${TZ[market]}')) AS first_order_date
       FROM \`larroude-data-prod.${dataset}.orders\`
       WHERE customer IS NOT NULL
-        AND financial_status NOT IN ('voided', 'refunded') ${shopifyOrderFilters(market)}
+        AND financial_status NOT IN ('voided', 'refunded') ${shopifyOrderFilters(market, '', fulCats, dataset)}
       GROUP BY customer_id
     ),
     new_customers_daily AS (
@@ -385,14 +387,14 @@ export async function queryDailyCac(market: Market, start: string, end: string, 
         ON JSON_VALUE(o.customer, '$.id') = fo.customer_id
        AND DATE(o.created_at) = fo.first_order_date
       WHERE DATE(o.created_at) BETWEEN @start AND @end
-        AND o.financial_status NOT IN ('voided', 'refunded') ${shopifyOrderFilters(market, 'o')}
+        AND o.financial_status NOT IN ('voided', 'refunded') ${shopifyOrderFilters(market, 'o', fulCats, dataset)}
       GROUP BY d
     ),
     orders_daily AS (
       SELECT DATE(created_at, '${TZ[market]}') AS d, COUNT(*) AS orders
       FROM \`larroude-data-prod.${dataset}.orders\`
       WHERE DATE(created_at, '${TZ[market]}') BETWEEN @start AND @end
-        AND financial_status NOT IN ('voided', 'refunded') ${shopifyOrderFilters(market)}
+        AND financial_status NOT IN ('voided', 'refunded') ${shopifyOrderFilters(market, '', fulCats, dataset)}
       GROUP BY d
     ),
     spend_daily AS (
