@@ -7,6 +7,9 @@ export const maxDuration = 30;
 // Cassia 2026-06-17: PROBE temporario — Shop Campaigns / marketing spend (Shopify Admin US).
 // Captura erros crus pra distinguir "0 atividades" de "erro de escopo".
 export async function GET() {
+  // Escopos atuais do token (prova de qual permissao falta)
+  const scopes = await shopifyGraphQLRaw('US', `{ currentAppInstallation { accessScopes { handle } } }`);
+  const scopeHandles = (scopes?.data?.currentAppInstallation?.accessScopes || []).map((s: any) => s.handle);
   // 1) marketingActivities cru (com errors)
   const acts = await shopifyGraphQLRaw('US', `{
     marketingActivities(first: 25) {
@@ -18,6 +21,8 @@ export async function GET() {
     marketingActivities(first: 5) { edges { node { id title } } }
   }`);
   return NextResponse.json({
+    tokenScopes: scopeHandles,
+    hasMarketingScope: scopeHandles.includes('read_marketing_events'),
     activitiesHttpStatus: acts?.httpStatus,
     activitiesErrors: acts?.errors ?? null,
     activitiesCount: acts?.data?.marketingActivities?.edges?.length ?? null,
