@@ -1,28 +1,24 @@
 'use client';
 
-// Aba Performance de Produto (robusta) — Cassia 2026-06-17 / multi-seleção + hoje 2026-06-19.
-// Topo: KPIs AO VIVO DE HOJE da seleção (unidades, faturamento, ROAS — ROAS via ads por SKU).
-// Filtro de período: presets + calendário (range custom). Ranking best-sellers multi-select
-// (quantos produtos quiser) alimenta o drill-down agregado (unidades + faturamento no tempo).
-// Fontes: /api/product-performance/[market] (ranking) + /today (live) + /api/unit-economics/[market]/timeseries.
+// Aba Performance de Produto (robusta) — Cassia 2026-06-19.
+// Cards de best-sellers com IMAGEM do produto (rank, unidades/faturamento, preço médio,
+// Δ vs período anterior, % do total), multi-seleção, KPIs ao vivo de hoje da seleção,
+// filtro de período igual ao Dashboard Principal e visão CONSOLIDADA (BR+US em US$).
+// Fontes: /api/product-performance/[market|all] (+/today) + /api/unit-economics/[market]/timeseries.
 
 import { useEffect, useMemo, useState } from 'react';
 import BarLineChart, { type BarPoint } from '@/components/shared/BarLineChart';
 
-type Market = 'US' | 'BR';
-// Mesmos presets do Dashboard Principal (Header.tsx): D-1 / 7D / 14D / 28D / 3M / 6M / 12M.
+type MarketSel = 'US' | 'BR' | 'ALL';
+type RealMarket = 'US' | 'BR';
 type PeriodKey = '1d' | '7d' | '14d' | '28d' | '3M' | '6M' | '12M';
 const PRESETS: PeriodKey[] = ['1d', '7d', '14d', '28d', '3M', '6M', '12M'];
 
-// Estilos das pills idênticos ao Header do Main.
 const PILL_BASE = 'inline-flex items-center justify-center rounded-full text-[12px] sm:text-[13px] font-semibold transition-all duration-150 select-none';
 const PILL_ACTIVE_DARK = `${PILL_BASE} bg-[#1a1a1a] text-white px-3 sm:px-5 py-1.5 sm:py-2`;
 const PILL_INACTIVE = `${PILL_BASE} bg-[#ebe9e3] text-[#1a1a1a] hover:bg-[#ddd9d0] px-3 sm:px-5 py-1.5 sm:py-2`;
 
-function periodLabel(p: PeriodKey): string {
-  return p === '1d' ? 'D-1' : p.toUpperCase();
-}
-
+function periodLabel(p: PeriodKey): string { return p === '1d' ? 'D-1' : p.toUpperCase(); }
 function ptPeriodLabel(p: PeriodKey): string {
   switch (p) {
     case '1d': return 'Ontem';
@@ -34,39 +30,52 @@ function ptPeriodLabel(p: PeriodKey): string {
     case '12M': return 'Últimos 12 meses';
   }
 }
-
-// "Ontem" (D-1) no fuso do market — D-1 é uma janela de 1 dia (start=end).
-function yesterdayInMarket(market: Market): string {
+function yesterdayInMarket(market: RealMarket): string {
   const tz = market === 'US' ? 'America/New_York' : 'America/Sao_Paulo';
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
   const d = new Date(today + 'T12:00:00Z');
   d.setUTCDate(d.getUTCDate() - 1);
   return d.toISOString().slice(0, 10);
 }
-
 function daysInclusive(from: string, to: string): number {
   return Math.round((new Date(to).getTime() - new Date(from).getTime()) / 86400000) + 1;
 }
 
-interface ProductRow { motherSku: string; name: string; category: string; units: number; revenue: number; }
-interface Bucket { date: string; units: number; grossRevenue: number; discount: number; }
+interface ProductRow {
+  motherSku: string; name: string; image: string | null; category: string;
+  units: number; revenue: number; prevUnits: number; prevRevenue: number;
+}
+interface RawBucket { date: string; units: number; grossRevenue: number; discount: number; }
+interface SeriesPoint { date: string; units: number; revenue: number; }
 interface TodayData {
-  date: string;
-  metaOk: boolean;
+  date: string; metaOk: boolean; totalUnits: number; totalRevenue: number; fx: number;
   salesBySku: Record<string, { units: number; orders: number; revenue: number }>;
   adSpendBySku: Record<string, { spend: number; purchaseValue: number }>;
-  generatedAt: string;
+}
+interface PerfResp {
+  currency: 'USD' | 'BRL'; fx: number | null; totalUnits: number; totalRevenue: number;
+  productCount: number; products: ProductRow[]; start?: string; end?: string;
 }
 
-// Casa um SKU de anúncio (pode ser genérico "L420" ou completo) com um mother SKU, por prefixo.
 function adKeysForMother(motherSku: string, adSpendBySku: Record<string, unknown>): string[] {
   return Object.keys(adSpendBySku).filter(
     (a) => a === motherSku || motherSku.startsWith(a + '-') || a.startsWith(motherSku + '-')
   );
 }
+function normSeries(buckets: RawBucket[], toUsd: number): SeriesPoint[] {
+  return buckets.filter((b) => b.units > 0).map((b) => ({ date: b.date, units: b.units, revenue: (b.grossRevenue - (b.discount || 0)) * toUsd }));
+}
+function mergeSeries(a: SeriesPoint[], b: SeriesPoint[]): SeriesPoint[] {
+  const m = new Map<string, SeriesPoint>();
+  for (const p of [...a, ...b]) {
+    const e = m.get(p.date) || { date: p.date, units: 0, revenue: 0 };
+    e.units += p.units; e.revenue += p.revenue; m.set(p.date, e);
+  }
+  return Array.from(m.values()).sort((x, y) => x.date.localeCompare(y.date));
+}
 
 export default function ProductPerformancePage() {
-  const [market, setMarket] = useState<Market>('US');
+  const [market, setMarket] = useState<MarketSel>('US');
   const [period, setPeriod] = useState<PeriodKey>('28d');
   const [isCustom, setIsCustom] = useState(false);
   const [customStart, setCustomStart] = useState('');
@@ -75,23 +84,23 @@ export default function ProductPerformancePage() {
   const [draftEnd, setDraftEnd] = useState('');
   const [sortBy, setSortBy] = useState<'revenue' | 'units'>('revenue');
   const [search, setSearch] = useState('');
-  const [perf, setPerf] = useState<{ totalUnits: number; totalRevenue: number; productCount: number; products: ProductRow[]; start?: string; end?: string } | null>(null);
+  const [perf, setPerf] = useState<PerfResp | null>(null);
   const [loadingPerf, setLoadingPerf] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [today, setToday] = useState<TodayData | null>(null);
-  const [seriesBySku, setSeriesBySku] = useState<Record<string, Bucket[]>>({});
+  const [seriesBySku, setSeriesBySku] = useState<Record<string, SeriesPoint[]>>({});
   const [loadingSeries, setLoadingSeries] = useState(false);
 
-  const cur = market === 'US' ? '$' : 'R$';
-  const loc = market === 'US' ? 'en-US' : 'pt-BR';
+  const currency = perf?.currency || (market === 'BR' ? 'BRL' : 'USD');
+  const cur = currency === 'BRL' ? 'R$' : '$';
+  const loc = currency === 'BRL' ? 'pt-BR' : 'en-US';
   const fmtMoney = (v: number) => `${cur}${Math.round(v).toLocaleString(loc)}`;
-  const fmtNum = (v: number) => v.toLocaleString(loc);
+  const fmtNum = (v: number) => Math.round(v).toLocaleString(loc);
 
-  // Range ativo: custom (Aplicar) tem precedência; D-1 vira start=end=ontem; demais usam preset.
   const rangeQS = isCustom
     ? `start=${customStart}&end=${customEnd}`
     : period === '1d'
-      ? (() => { const y = yesterdayInMarket(market); return `start=${y}&end=${y}`; })()
+      ? (() => { const y = yesterdayInMarket(market === 'BR' ? 'BR' : 'US'); return `start=${y}&end=${y}`; })()
       : `period=${period}`;
 
   function handlePeriodChange(p: PeriodKey) { setIsCustom(false); setPeriod(p); }
@@ -104,14 +113,14 @@ export default function ProductPerformancePage() {
     ? `Últimos ${daysInclusive(customStart, customEnd)} dia${daysInclusive(customStart, customEnd) === 1 ? '' : 's'}`
     : ptPeriodLabel(period);
 
-  // Ranking + totais do período
+  // Ranking (com imagem + período anterior). market=ALL → rota consolida BR+US em US$.
   useEffect(() => {
     let cancelled = false;
     setLoadingPerf(true);
     fetch(`/api/product-performance/${market}?${rangeQS}`, { cache: 'no-store' })
       .then((r) => r.json())
-      .then((j) => {
-        if (cancelled) return;
+      .then((j: PerfResp & { error?: string }) => {
+        if (cancelled || j.error) { setLoadingPerf(false); return; }
         setPerf(j);
         const top = (j.products || [])[0]?.motherSku;
         setSelected((prev) => (prev.size > 0 ? prev : top ? new Set([top]) : new Set()));
@@ -122,42 +131,71 @@ export default function ProductPerformancePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [market, rangeQS]);
 
-  // Inputs de data refletem a janela ativa resolvida (presets/D-1) — só quando não é custom.
   useEffect(() => {
     if (!isCustom && perf?.start && perf?.end) { setDraftStart(perf.start); setDraftEnd(perf.end); }
   }, [perf?.start, perf?.end, isCustom]);
 
-  // Live de hoje (vendas + spend por SKU) — só depende do market
+  // Live de hoje. Consolidado: busca US+BR e mescla em US$ (BR ÷ FX).
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/product-performance/${market}/today`, { cache: 'no-store' })
-      .then((r) => r.json())
-      .then((j) => { if (!cancelled && !j.error) setToday(j); })
-      .catch(() => {});
+    async function load() {
+      if (market !== 'ALL') {
+        const j = await fetch(`/api/product-performance/${market}/today`, { cache: 'no-store' }).then((r) => r.json()).catch(() => null);
+        if (!cancelled && j && !j.error) setToday(j);
+        return;
+      }
+      const [us, br] = await Promise.all([
+        fetch('/api/product-performance/US/today', { cache: 'no-store' }).then((r) => r.json()).catch(() => null),
+        fetch('/api/product-performance/BR/today', { cache: 'no-store' }).then((r) => r.json()).catch(() => null),
+      ]);
+      if (cancelled || !us || !br || us.error || br.error) return;
+      const fx = br.fx || 5.45;
+      const salesBySku: TodayData['salesBySku'] = {};
+      for (const [k, v] of Object.entries(us.salesBySku as TodayData['salesBySku'])) salesBySku[k] = { units: v.units, orders: v.orders, revenue: v.revenue };
+      for (const [k, v] of Object.entries(br.salesBySku as TodayData['salesBySku'])) {
+        const e = salesBySku[k] || { units: 0, orders: 0, revenue: 0 };
+        e.units += v.units; e.orders += v.orders; e.revenue += v.revenue / fx; salesBySku[k] = e;
+      }
+      const adSpendBySku: TodayData['adSpendBySku'] = {};
+      for (const [k, v] of Object.entries(us.adSpendBySku as TodayData['adSpendBySku'])) adSpendBySku[k] = { spend: v.spend, purchaseValue: v.purchaseValue };
+      for (const [k, v] of Object.entries(br.adSpendBySku as TodayData['adSpendBySku'])) {
+        const e = adSpendBySku[k] || { spend: 0, purchaseValue: 0 };
+        e.spend += v.spend / fx; e.purchaseValue += v.purchaseValue / fx; adSpendBySku[k] = e;
+      }
+      if (!cancelled) setToday({
+        date: us.date, metaOk: us.metaOk && br.metaOk, fx: 1,
+        totalUnits: us.totalUnits + br.totalUnits, totalRevenue: us.totalRevenue + br.totalRevenue / fx,
+        salesBySku, adSpendBySku,
+      });
+    }
+    load();
     return () => { cancelled = true; };
   }, [market]);
 
-  // Séries temporais dos produtos selecionados (drill-down agregado)
+  // Séries do drill-down. Consolidado: US + BR (BR ÷ FX) por SKU, mescladas por data.
+  const selKey = Array.from(selected).sort().join(',');
   useEffect(() => {
     const skus = Array.from(selected);
     if (skus.length === 0) { setSeriesBySku({}); return; }
     let cancelled = false;
     setLoadingSeries(true);
-    Promise.all(
-      skus.map((sku) =>
-        fetch(`/api/unit-economics/${market}/timeseries?sku=${encodeURIComponent(sku)}&${rangeQS}`, { cache: 'no-store' })
-          .then((r) => r.json())
-          .then((j: { buckets: Bucket[] }) => [sku, j.buckets || []] as const)
-          .catch(() => [sku, [] as Bucket[]] as const)
-      )
-    ).then((entries) => {
+    const fx = perf?.fx || 5.45;
+    const fetchTs = (mk: RealMarket, sku: string) =>
+      fetch(`/api/unit-economics/${mk}/timeseries?sku=${encodeURIComponent(sku)}&${rangeQS}`, { cache: 'no-store' })
+        .then((r) => r.json()).then((j: { buckets: RawBucket[] }) => j.buckets || []).catch(() => [] as RawBucket[]);
+    const one = async (sku: string): Promise<readonly [string, SeriesPoint[]]> => {
+      if (market !== 'ALL') return [sku, normSeries(await fetchTs(market, sku), 1)] as const;
+      const [u, b] = await Promise.all([fetchTs('US', sku), fetchTs('BR', sku)]);
+      return [sku, mergeSeries(normSeries(u, 1), normSeries(b, 1 / fx))] as const;
+    };
+    Promise.all(skus.map(one)).then((entries) => {
       if (cancelled) return;
       setSeriesBySku(Object.fromEntries(entries));
       setLoadingSeries(false);
     });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [market, rangeQS, Array.from(selected).sort().join(',')]);
+  }, [market, rangeQS, selKey, perf?.fx]);
 
   const products = perf?.products || [];
   const ranked = useMemo(() => {
@@ -168,17 +206,13 @@ export default function ProductPerformancePage() {
       .slice(0, 60);
   }, [products, search, sortBy]);
 
-  // Drill-down agregado: soma as séries dos SKUs selecionados por data
   const { unitPoints, revPoints } = useMemo(() => {
     const acc = new Map<string, { units: number; rev: number }>();
     for (const sku of Object.keys(seriesBySku)) {
       if (!selected.has(sku)) continue;
-      for (const b of seriesBySku[sku]) {
-        if (b.units <= 0) continue;
-        const e = acc.get(b.date) || { units: 0, rev: 0 };
-        e.units += b.units;
-        e.rev += Math.round((b.grossRevenue - (b.discount || 0)) * 100) / 100;
-        acc.set(b.date, e);
+      for (const p of seriesBySku[sku]) {
+        const e = acc.get(p.date) || { units: 0, rev: 0 };
+        e.units += p.units; e.rev += p.revenue; acc.set(p.date, e);
       }
     }
     const dates = Array.from(acc.keys()).sort();
@@ -188,26 +222,22 @@ export default function ProductPerformancePage() {
     };
   }, [seriesBySku, selected]);
 
-  // KPIs do período (seleção)
   const selRows = products.filter((p) => selected.has(p.motherSku));
   const selUnits = selRows.reduce((s, p) => s + p.units, 0);
   const selRevenue = selRows.reduce((s, p) => s + p.revenue, 0);
 
-  // KPIs AO VIVO DE HOJE (seleção)
   const liveToday = useMemo(() => {
     if (!today) return null;
-    const skus = Array.from(selected);
     let units = 0, revenue = 0;
     const adKeys = new Set<string>();
-    for (const sku of skus) {
+    for (const sku of selected) {
       const s = today.salesBySku[sku];
       if (s) { units += s.units; revenue += s.revenue; }
       for (const k of adKeysForMother(sku, today.adSpendBySku)) adKeys.add(k);
     }
     let spend = 0, pv = 0;
     for (const k of adKeys) { const a = today.adSpendBySku[k]; if (a) { spend += a.spend; pv += a.purchaseValue; } }
-    // ROAS do anúncio = valor de compra atribuído pelo Meta / spend (os ads são por SKU).
-    return { units, revenue, spend, hasAds: adKeys.size > 0, roas: spend > 0 ? pv / spend : null, attrValue: pv };
+    return { units, revenue, spend, hasAds: adKeys.size > 0, roas: spend > 0 ? pv / spend : null };
   }, [today, selected]);
 
   const toggle = (sku: string) => setSelected((prev) => {
@@ -215,25 +245,25 @@ export default function ProductPerformancePage() {
     if (n.has(sku)) n.delete(sku); else n.add(sku);
     return n;
   });
-  const selectOnly = (sku: string) => setSelected(new Set([sku]));
-
   const pillBtn = (active: boolean) => `pill ${active ? 'pill-active' : 'pill-inactive'} px-3 py-1.5 text-[12px] ${active ? 'font-medium' : ''}`;
   const selCount = selected.size;
+  const totalMetric = sortBy === 'units' ? (perf?.totalUnits || 0) : (perf?.totalRevenue || 0);
 
   return (
     <main className="main-dashboard-root mx-auto max-w-[1400px] px-4 py-6 lg:px-8">
       <div className="mb-4">
         <h1 className="font-display text-[26px] lg:text-[36px]" style={{ color: '#1A1A1A' }}>Performance de Produto</h1>
         <p className="text-[12px] lg:text-[14px] mt-1" style={{ color: '#4A4A4A' }}>
-          Best sellers, ranking e evolução por produto — via BigQuery Larroude OS
-          {perf?.start && <> · {perf.start} → {perf.end}</>}
+          Best sellers com imagem, ranking e evolução por produto — via BigQuery Larroude OS
+          {market === 'ALL' && <> · <span style={{ color: '#7c3aed', fontWeight: 600 }}>consolidado BR+US em US$</span></>}
         </p>
       </div>
 
-      {/* Market */}
+      {/* Market — inclui Consolidado (BR+US) */}
       <div className="flex items-center gap-2 flex-wrap mb-3">
         <button onClick={() => setMarket('US')} className={pillBtn(market === 'US')}>US</button>
         <button onClick={() => setMarket('BR')} className={pillBtn(market === 'BR')}>BR</button>
+        <button onClick={() => setMarket('ALL')} className={pillBtn(market === 'ALL')}>🌎 Consolidado (BR+US)</button>
       </div>
 
       {/* Filtro de período — idêntico ao Dashboard Principal */}
@@ -243,57 +273,34 @@ export default function ProductPerformancePage() {
           {PRESETS.map((p) => {
             const active = period === p && !isCustom;
             return (
-              <button key={p} onClick={() => handlePeriodChange(p)} className={active ? PILL_ACTIVE_DARK : PILL_INACTIVE}>
-                {periodLabel(p)}
-              </button>
+              <button key={p} onClick={() => handlePeriodChange(p)} className={active ? PILL_ACTIVE_DARK : PILL_INACTIVE}>{periodLabel(p)}</button>
             );
           })}
         </div>
-
         <div className="h-7 w-px mx-1" style={{ background: '#e5e3de' }} />
-
-        <input
-          type="date"
-          value={draftStart}
-          onChange={(e) => setDraftStart(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') applyDates(); }}
-          className="rounded-full px-4 py-2 text-[13px] bg-white font-medium"
-          style={{ border: `1px solid ${isCustom ? '#ec4899' : '#e5e3de'}`, boxShadow: isCustom ? '0 0 0 1px rgba(236,72,153,0.30)' : 'none' }}
-        />
+        <input type="date" value={draftStart} onChange={(e) => setDraftStart(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') applyDates(); }}
+          className="rounded-full px-4 py-2 text-[13px] bg-white font-medium" style={{ border: `1px solid ${isCustom ? '#ec4899' : '#e5e3de'}`, boxShadow: isCustom ? '0 0 0 1px rgba(236,72,153,0.30)' : 'none' }} />
         <span className="text-[13px]" style={{ color: '#6b7280' }}>até</span>
-        <input
-          type="date"
-          value={draftEnd}
-          onChange={(e) => setDraftEnd(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') applyDates(); }}
-          className="rounded-full px-4 py-2 text-[13px] bg-white font-medium"
-          style={{ border: `1px solid ${isCustom ? '#ec4899' : '#e5e3de'}`, boxShadow: isCustom ? '0 0 0 1px rgba(236,72,153,0.30)' : 'none' }}
-        />
+        <input type="date" value={draftEnd} onChange={(e) => setDraftEnd(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') applyDates(); }}
+          className="rounded-full px-4 py-2 text-[13px] bg-white font-medium" style={{ border: `1px solid ${isCustom ? '#ec4899' : '#e5e3de'}`, boxShadow: isCustom ? '0 0 0 1px rgba(236,72,153,0.30)' : 'none' }} />
         <button onClick={applyDates} className={PILL_ACTIVE_DARK} title="Aplicar intervalo">Aplicar</button>
-
         <span className="ml-auto text-[13px] italic px-2" style={{ color: '#9ca3af' }}>{activeLabel}</span>
       </div>
 
-      {/* KPIs DA SELEÇÃO (todos referentes aos produtos selecionados) */}
+      {/* KPIs DA SELEÇÃO (ao vivo de hoje + período) */}
       <div className="mb-2 flex items-center gap-2 flex-wrap">
         <span className="text-[11px] font-bold uppercase tracking-wide" style={{ color: '#16A34A' }}>● Ao vivo · hoje {today?.date ? `(${today.date})` : ''}</span>
         <span className="text-[11px] font-semibold" style={{ color: '#1A1A1A' }}>
           {selCount === 0 ? 'nenhum produto selecionado' : selCount === 1 ? selRows[0]?.name : `${selCount} produtos selecionados`}
         </span>
-        <span className="text-[11px]" style={{ color: '#9ca3af' }}>
-          · mercado: {today ? fmtNum(today.totalUnits) : '…'} un hoje · {fmtNum(perf?.totalUnits || 0)} un no período
-        </span>
+        <span className="text-[11px]" style={{ color: '#9ca3af' }}>· mercado: {today ? fmtNum(today.totalUnits) : '…'} un hoje · {fmtNum(perf?.totalUnits || 0)} un no período</span>
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
         {[
           { live: true, label: 'UNIDADES HOJE', value: liveToday ? fmtNum(liveToday.units) : '…', sub: 'seleção · hoje' },
           { live: true, label: 'FATURAMENTO HOJE', value: liveToday ? fmtMoney(liveToday.revenue) : '…', sub: 'seleção · hoje' },
-          {
-            live: true,
-            label: 'ROAS HOJE',
-            value: !liveToday ? '…' : liveToday.roas != null ? `${liveToday.roas.toFixed(2)}x` : liveToday.hasAds ? '0.00x' : '— sem ads',
-            sub: liveToday && liveToday.hasAds ? `spend ${fmtMoney(liveToday.spend)} · ads Meta` : 'sem SKU anunciado',
-          },
+          { live: true, label: 'ROAS HOJE', value: !liveToday ? '…' : liveToday.roas != null ? `${liveToday.roas.toFixed(2)}x` : liveToday.hasAds ? '0.00x' : '— sem ads',
+            sub: liveToday && liveToday.hasAds ? `spend ${fmtMoney(liveToday.spend)} · ads Meta` : 'sem SKU anunciado' },
           { live: false, label: 'UNIDADES NO PERÍODO', value: loadingPerf ? '…' : fmtNum(selUnits), sub: 'seleção' },
           { live: false, label: 'FATURAMENTO NO PERÍODO', value: loadingPerf ? '…' : fmtMoney(selRevenue), sub: 'seleção' },
         ].map((k) => (
@@ -310,83 +317,86 @@ export default function ProductPerformancePage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[460px,1fr] gap-4">
-        {/* Ranking (best sellers) — multi-select */}
-        <div className="card p-4">
-          <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
-            <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#6b7280' }}>🏆 Ranking · selecione quantos quiser</span>
-            <div className="flex items-center gap-1">
-              <button onClick={() => setSortBy('revenue')} className={pillBtn(sortBy === 'revenue')}>Fat.</button>
-              <button onClick={() => setSortBy('units')} className={pillBtn(sortBy === 'units')}>Un.</button>
-            </div>
+      {/* Ranking — cards com imagem (best sellers), multi-select */}
+      <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+        <span className="text-sm font-semibold uppercase tracking-wide" style={{ color: '#6b7280' }}>🏆 Mais vendidos · clique pra selecionar</span>
+        <div className="flex items-center gap-2">
+          <input type="text" placeholder="Buscar SKU/nome…" value={search} onChange={(e) => setSearch(e.target.value)}
+            className="px-3 py-1.5 rounded-lg text-[13px]" style={{ background: '#fff', border: '1px solid #e5e3de', width: 180 }} />
+          <div className="flex items-center rounded-full overflow-hidden" style={{ border: '1px solid #e5e3de' }}>
+            <button onClick={() => setSortBy('units')} className="px-3 py-1.5 text-[12px] font-semibold" style={{ background: sortBy === 'units' ? '#1a1a1a' : '#fff', color: sortBy === 'units' ? '#fff' : '#1a1a1a' }}>Qtd</button>
+            <button onClick={() => setSortBy('revenue')} className="px-3 py-1.5 text-[12px] font-semibold" style={{ background: sortBy === 'revenue' ? '#1a1a1a' : '#fff', color: sortBy === 'revenue' ? '#fff' : '#1a1a1a' }}>Receita</button>
           </div>
-          <div className="flex items-center gap-2 mb-2">
-            <input type="text" placeholder="Buscar SKU/nome…" value={search} onChange={(e) => setSearch(e.target.value)}
-              className="flex-1 px-3 py-1.5 rounded-lg text-[13px]" style={{ background: '#fff', border: '1px solid #e5e3de' }} />
-            {selCount > 0 && (
-              <button onClick={() => setSelected(new Set())} className="text-[11px] underline" style={{ color: '#9ca3af' }}>limpar ({selCount})</button>
-            )}
-          </div>
-          <div className="overflow-y-auto" style={{ maxHeight: 560 }}>
-            <table className="w-full text-[12px]">
-              <thead>
-                <tr className="text-left" style={{ color: '#9ca3af', fontSize: 10, textTransform: 'uppercase' }}>
-                  <th className="py-1 pr-1"></th><th className="py-1 pr-2">#</th><th className="py-1 pr-2">Produto</th>
-                  <th className="py-1 pr-2 text-right">Un</th><th className="py-1 text-right">Fat.</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loadingPerf && <tr><td colSpan={5} className="py-4 text-center" style={{ color: '#6b7280' }}>Carregando…</td></tr>}
-                {!loadingPerf && ranked.map((p, i) => {
-                  const isSel = selected.has(p.motherSku);
-                  const hasAds = today ? adKeysForMother(p.motherSku, today.adSpendBySku).length > 0 : false;
-                  return (
-                    <tr key={p.motherSku} onClick={() => toggle(p.motherSku)}
-                      style={{ cursor: 'pointer', background: isSel ? '#fff0f6' : undefined, borderTop: '1px solid #f0ece4' }}>
-                      <td className="py-1.5 pr-1"><input type="checkbox" checked={isSel} readOnly style={{ accentColor: '#d6336c' }} /></td>
-                      <td className="py-1.5 pr-2" style={{ color: '#9ca3af' }}>{i + 1}</td>
-                      <td className="py-1.5 pr-2">
-                        <div style={{ fontWeight: isSel ? 700 : 500, color: '#1A1A1A' }} className="truncate max-w-[210px]">
-                          {p.name} {hasAds && <span title="Tem anúncio ativo hoje">📣</span>}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono" style={{ fontSize: 10, color: '#9ca3af' }}>{p.motherSku}</span>
-                          <button onClick={(e) => { e.stopPropagation(); selectOnly(p.motherSku); }} className="text-[9px] underline" style={{ color: '#c7c2b6' }}>só este</button>
-                        </div>
-                      </td>
-                      <td className="py-1.5 pr-2 text-right font-num">{fmtNum(p.units)}</td>
-                      <td className="py-1.5 text-right font-num">{fmtMoney(p.revenue)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Drill-down agregado da seleção */}
-        <div>
-          <div className="mb-3">
-            <div className="text-[15px] font-bold" style={{ color: '#1A1A1A' }}>
-              {selCount === 0 ? 'Nenhum produto selecionado' : selCount === 1 ? selRows[0]?.name : `${selCount} produtos selecionados`}
-            </div>
-            <div className="text-[12px]" style={{ color: '#6b7280' }}>
-              {selCount > 0 && <>{fmtNum(selUnits)} un · {fmtMoney(selRevenue)} no período</>}
-            </div>
-          </div>
-          {selCount === 0 && <div className="card p-8 text-center text-sm" style={{ color: '#6b7280' }}>Marque um ou mais produtos no ranking para ver a evolução.</div>}
-          {selCount > 0 && loadingSeries && <div className="card p-8 text-center text-sm" style={{ color: '#6b7280' }}>Carregando série…</div>}
-          {selCount > 0 && !loadingSeries && unitPoints.length === 0 && (
-            <div className="card p-8 text-center text-sm" style={{ color: '#6b7280' }}>Sem vendas da seleção no período.</div>
-          )}
-          {selCount > 0 && !loadingSeries && unitPoints.length > 0 && (
-            <div className="grid grid-cols-1 gap-4">
-              <BarLineChart title={`UNIDADES VENDIDAS / TEMPO${selCount > 1 ? ' (soma da seleção)' : ''}`} data={unitPoints} color="#5d4ec5" unit="number" market={market} height={240} />
-              <BarLineChart title={`FATURAMENTO / TEMPO${selCount > 1 ? ' (soma da seleção)' : ''}`} data={revPoints} color="#16A34A" unit="currency" market={market} height={240} />
-            </div>
-          )}
+          {selCount > 0 && <button onClick={() => setSelected(new Set())} className="text-[11px] underline" style={{ color: '#9ca3af' }}>limpar ({selCount})</button>}
         </div>
       </div>
+
+      {loadingPerf && <div className="card p-8 text-center text-sm mb-6" style={{ color: '#6b7280' }}>Carregando…</div>}
+      {!loadingPerf && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-8">
+          {ranked.map((p, i) => {
+            const isSel = selected.has(p.motherSku);
+            const hasAds = today ? adKeysForMother(p.motherSku, today.adSpendBySku).length > 0 : false;
+            const metric = sortBy === 'units' ? p.units : p.revenue;
+            const prevMetric = sortBy === 'units' ? p.prevUnits : p.prevRevenue;
+            const up = metric >= prevMetric;
+            const deltaPct = prevMetric > 0 ? Math.min(999, Math.round(Math.abs(metric - prevMetric) / prevMetric * 100)) : (metric > 0 ? 100 : 0);
+            const shareTotal = totalMetric > 0 ? (metric / totalMetric * 100) : 0;
+            const avgPrice = p.units > 0 ? p.revenue / p.units : 0;
+            const rank = i + 1;
+            const gold = rank <= 3;
+            return (
+              <div key={p.motherSku} onClick={() => toggle(p.motherSku)}
+                className="relative rounded-2xl overflow-hidden cursor-pointer transition-all"
+                style={{ background: '#fff', border: isSel ? '2px solid #ec4899' : '1px solid #ece9e2', boxShadow: isSel ? '0 0 0 2px rgba(236,72,153,0.18)' : '0 1px 2px rgba(0,0,0,0.03)' }}>
+                <div className="absolute top-2 left-2 z-10 flex items-center justify-center" style={{ width: 24, height: 24, borderRadius: '50%', fontSize: 12, fontWeight: 700, color: '#fff', background: gold ? '#b89b3e' : '#9ca3af' }}>{rank}</div>
+                {isSel && <div className="absolute top-2 right-2 z-10" style={{ width: 22, height: 22, borderRadius: '50%', background: '#ec4899', color: '#fff', fontSize: 13, lineHeight: '22px', textAlign: 'center', fontWeight: 700 }}>✓</div>}
+                <div style={{ aspectRatio: '1 / 1', background: '#f6f4ef', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {p.image
+                    ? <img src={p.image} alt={p.name} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : <span style={{ fontSize: 34 }}>👠</span>}
+                </div>
+                <div className="p-3">
+                  <div className="font-semibold leading-tight" style={{ fontSize: 12.5, color: '#1A1A1A', minHeight: 32, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                    {p.name} {hasAds && <span title="Tem anúncio rodando hoje">📣</span>}
+                  </div>
+                  <div className="font-mono mb-1" style={{ fontSize: 9.5, color: '#9ca3af' }}>{p.motherSku}</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: '#111827' }}>
+                    {sortBy === 'units' ? `${fmtNum(p.units)} un` : fmtMoney(p.revenue)}
+                  </div>
+                  <div style={{ fontSize: 10.5, color: '#9ca3af' }}>
+                    {sortBy === 'units' ? `${fmtMoney(avgPrice)} preço médio` : `${fmtNum(p.units)} un · ${fmtMoney(avgPrice)} médio`}
+                  </div>
+                  <div className="mt-1" style={{ fontSize: 10.5, fontWeight: 600, color: up ? '#16A34A' : '#dc2626' }}>
+                    {up ? '↑' : '↓'} {deltaPct}% vs período ant.
+                  </div>
+                  <div className="mt-1 inline-block px-1.5 py-0.5 rounded" style={{ fontSize: 9.5, color: '#7c3aed', background: '#f3effc' }}>{shareTotal.toFixed(1)}% do total</div>
+                </div>
+              </div>
+            );
+          })}
+          {ranked.length === 0 && <div className="col-span-full card p-8 text-center text-sm" style={{ color: '#6b7280' }}>Nenhum produto no período/busca.</div>}
+        </div>
+      )}
+
+      {/* Drill-down agregado da seleção */}
+      <div className="mb-3">
+        <div className="text-[15px] font-bold" style={{ color: '#1A1A1A' }}>
+          {selCount === 0 ? 'Nenhum produto selecionado' : selCount === 1 ? selRows[0]?.name : `${selCount} produtos selecionados`}
+        </div>
+        <div className="text-[12px]" style={{ color: '#6b7280' }}>
+          {selCount > 0 && <>{fmtNum(selUnits)} un · {fmtMoney(selRevenue)} no período{market === 'ALL' && ' (US$)'}</>}
+        </div>
+      </div>
+      {selCount === 0 && <div className="card p-8 text-center text-sm" style={{ color: '#6b7280' }}>Selecione um ou mais cards acima para ver a evolução.</div>}
+      {selCount > 0 && loadingSeries && <div className="card p-8 text-center text-sm" style={{ color: '#6b7280' }}>Carregando série…</div>}
+      {selCount > 0 && !loadingSeries && unitPoints.length === 0 && <div className="card p-8 text-center text-sm" style={{ color: '#6b7280' }}>Sem vendas da seleção no período.</div>}
+      {selCount > 0 && !loadingSeries && unitPoints.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <BarLineChart title={`UNIDADES VENDIDAS / TEMPO${selCount > 1 ? ' (soma da seleção)' : ''}`} data={unitPoints} color="#5d4ec5" unit="number" market={market === 'BR' ? 'BR' : 'US'} height={260} />
+          <BarLineChart title={`FATURAMENTO / TEMPO${selCount > 1 ? ' (soma)' : ''}${market === 'ALL' ? ' · US$' : ''}`} data={revPoints} color="#16A34A" unit="currency" market={market === 'BR' ? 'BR' : 'US'} height={260} />
+        </div>
+      )}
     </main>
   );
 }
