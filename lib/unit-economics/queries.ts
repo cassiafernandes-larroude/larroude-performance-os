@@ -431,3 +431,76 @@ export async function getProductUeTimeseries(
     duties: Number(r.total_duties) || 0,
   }));
 }
+
+// ---------------------------------------------------------------------------
+// Performance de Produto (robusto) — ranking por mother SKU + categoria (product_type).
+// Cassia 2026-06-17: alimenta a aba Performance de Produto (KPIs + ranking + categorias).
+// Janela [start, end] no fuso do market. DTC filters. Agrega por mother SKU; categoria
+// agregada no servidor a partir do product_type.
+// ---------------------------------------------------------------------------
+export interface ProductPerfRow {
+  motherSku: string;
+  name: string;
+  category: string;
+  units: number;
+  revenue: number;
+}
+
+export async function getProductPerformance(market: Market, startDate: string, endDate: string): Promise<ProductPerfRow[]> {
+  const dataset = ordersDataset(market);
+  const cap = MAX_ORDER_VALUE[market];
+  const tz = market === 'US' ? 'America/New_York' : 'America/Sao_Paulo';
+  const pix = market === 'BR'
+    ? `AND financial_status NOT IN ('voided','refunded','pending','expired','authorized')`
+    : `AND financial_status NOT IN ('voided','refunded')`;
+  const sql = `
+    WITH valid_orders AS (
+      SELECT line_items
+      FROM \`larroude-data-prod.${dataset}.orders\`
+      WHERE DATE(created_at, '${tz}') BETWEEN @start AND @end
+        AND cancelled_at IS NULL AND test = FALSE
+        ${pix}
+        AND NOT REGEXP_CONTAINS(LOWER(IFNULL(tags, '')), r'${EXCLUDED_TAGS_REGEX}')
+        AND (JSON_VALUE(customer, '$.tags') IS NULL OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(customer, '$.tags')), r'${EXCLUDED_TAGS_REGEX}'))
+        AND CAST(total_price AS NUMERIC) < ${cap}
+        AND (source_name IS NULL OR LOWER(source_name) NOT IN ('amazon_marketplace_web', 'mercado_livre', 'mercado_libre'))
+    ),
+    items_raw AS (
+      SELECT
+        JSON_VALUE(li, '$.sku') AS variant_sku,
+        JSON_VALUE(li, '$.title') AS title,
+        IFNULL(NULLIF(JSON_VALUE(li, '$.product_type'), ''), 'Outros') AS category,
+        CAST(JSON_VALUE(li, '$.quantity') AS NUMERIC) AS qty,
+        CAST(JSON_VALUE(li, '$.price') AS NUMERIC) AS price,
+        CAST(JSON_VALUE(li, '$.total_discount') AS NUMERIC) AS line_discount
+      FROM valid_orders, UNNEST(JSON_QUERY_ARRAY(line_items)) li
+    ),
+    items AS (
+      SELECT title, category, qty, price, line_discount, ${CATALOG_MOTHER_SKU_EXPR} AS mother_sku
+      FROM items_raw
+    )
+    SELECT mother_sku,
+      ANY_VALUE(title) AS name,
+      ANY_VALUE(category) AS category,
+      SUM(qty) AS units,
+      ROUND(SUM(qty * price) - SUM(IFNULL(line_discount, 0)), 2) AS revenue
+    FROM items
+    WHERE mother_sku IS NOT NULL
+      AND NOT REGEXP_CONTAINS(LOWER(mother_sku), r'^x-')
+      AND NOT REGEXP_CONTAINS(mother_sku, r'^[0-9]+$')
+      AND qty > 0
+    GROUP BY mother_sku
+    HAVING units > 0
+    ORDER BY revenue DESC
+  `;
+  const rows = await runQuery<{ mother_sku: string; name: string; category: string; units: number; revenue: number }>(
+    sql, { start: startDate, end: endDate }
+  );
+  return rows.map((r) => ({
+    motherSku: r.mother_sku,
+    name: r.name || r.mother_sku,
+    category: r.category || 'Outros',
+    units: Number(r.units) || 0,
+    revenue: Number(r.revenue) || 0,
+  }));
+}
