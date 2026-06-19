@@ -141,6 +141,26 @@ export default function DashboardPrincipalPage() {
         )}
       </div>
 
+      {data?.originShare && data.originShare.totalUnits > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+          {([
+            { label: 'SHARE — EM ESTOQUE', d: data.originShare.inStock, color: '#16A34A' },
+            { label: 'SHARE — PRE-ORDER', d: data.originShare.preOrder, color: '#FF3D8B' },
+          ] as const).map((c) => (
+            <div key={c.label} className="card p-4" style={{ borderTop: `3px solid ${c.color}` }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', color: '#6b7280' }}>{c.label}</div>
+              <div style={{ fontSize: 30, fontWeight: 700, color: '#111827', lineHeight: 1.1, marginTop: 4 }}>
+                {(c.d.unitsShare * 100).toFixed(1)}%
+              </div>
+              <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>
+                {c.d.units.toLocaleString(market === 'US' ? 'en-US' : 'pt-BR')} items · {c.d.orders.toLocaleString(market === 'US' ? 'en-US' : 'pt-BR')} pedidos · {market === 'US' ? '$' : 'R$'}
+                {Math.round(c.d.revenue).toLocaleString(market === 'US' ? 'en-US' : 'pt-BR')} ({(c.d.revenueShare * 100).toFixed(1)}% receita)
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {error && (
         <div className="card mt-4 p-4 border-l-4" style={{ borderLeftColor: '#ef4444' }}>
           <div className="text-sm font-medium" style={{ color: '#ef4444' }}>

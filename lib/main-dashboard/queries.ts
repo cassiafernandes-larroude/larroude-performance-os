@@ -15,7 +15,7 @@
 import { runQuery } from './bigquery';
 import type { Granularity, Market } from './types';
 import { dtcCoreFilters } from '@/lib/shared/dtc-filters';
-import { fulfillmentCategoryFilterSQL, type FulfillmentCategory } from '@/lib/shared/fulfillment-category';
+import { fulfillmentCategoryFilterSQL, FULFILLMENT_LOCATION_IDS, type FulfillmentCategory } from '@/lib/shared/fulfillment-category';
 
 // Timezone Shopify (alinhado ao admin oficial)
 // US: America/New_York | BR: America/Sao_Paulo
@@ -202,6 +202,41 @@ export async function queryAggregatedKpis(market: Market, start: string, end: st
   `;
   const rows = await runQuery<any>(sql, { market_lower: marketLower, start, end });
   return rows[0] ?? {};
+}
+
+// --------------------------------------------------------------------------
+// Share por ORIGEM (estoque vs pre-order) — independente do filtro de origem.
+// Cassia 2026-06-17: classifica cada order pela localizacao ATRIBUIDA (precedencia
+// pre-order: pedido com qualquer item de producao = pre-order). Retorna units/revenue/orders
+// por categoria pra montar os quadros de share.
+// --------------------------------------------------------------------------
+export async function queryOriginShare(market: Market, start: string, end: string) {
+  const dataset = market === 'US' ? 'stg_shopify' : 'stg_shopify_br';
+  const foTable = `\`larroude-data-prod.${dataset}.fulfillment_orders\``;
+  const preIds = [...FULFILLMENT_LOCATION_IDS.fromBatch, ...FULFILLMENT_LOCATION_IDS.onDemand].map((x) => `'${x}'`).join(',');
+  const inIds = FULFILLMENT_LOCATION_IDS.inStock.map((x) => `'${x}'`).join(',');
+  const sql = `
+    WITH ord AS (
+      SELECT id,
+        (SELECT IFNULL(SUM(CAST(JSON_VALUE(li,'$.quantity') AS INT64)), 0)
+         FROM UNNEST(JSON_QUERY_ARRAY(line_items)) li) AS units,
+        CAST(total_price AS NUMERIC) AS revenue
+      FROM \`larroude-data-prod.${dataset}.orders\`
+      WHERE DATE(created_at, '${TZ[market]}') BETWEEN @start AND @end
+        AND financial_status NOT IN ('voided','refunded') ${shopifyOrderFilters(market)}
+    ),
+    cls AS (
+      SELECT units, revenue,
+        CASE
+          WHEN id IN (SELECT order_id FROM ${foTable} WHERE CAST(assigned_location_id AS STRING) IN (${preIds})) THEN 'pre-order'
+          WHEN id IN (SELECT order_id FROM ${foTable} WHERE CAST(assigned_location_id AS STRING) IN (${inIds})) THEN 'in-stock'
+          ELSE 'other' END AS category
+      FROM ord
+    )
+    SELECT category, COUNT(*) AS orders, IFNULL(SUM(units), 0) AS units, IFNULL(SUM(revenue), 0) AS revenue
+    FROM cls GROUP BY category
+  `;
+  return runQuery<{ category: string; orders: number; units: number; revenue: number }>(sql, { start, end });
 }
 
 // --------------------------------------------------------------------------

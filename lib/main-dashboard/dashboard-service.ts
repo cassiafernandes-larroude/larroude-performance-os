@@ -22,6 +22,7 @@ import {
   queryChannelMix,
   queryChannelMixDaily,
   queryShopifyFunnel,
+  queryOriginShare,
 } from './queries';
 import { queryShopifySessions, queryShopifySessionsTotal } from './shopify-admin';
 import { queryMetaAdsTotal, queryMetaAdsDaily, queryMetaCampaigns } from './meta-ads';
@@ -179,7 +180,7 @@ export async function getDashboardPayload(
   ]);
   // Daily — Meta DIRETO via Graph API (todas as contas), Google via Supermetrics
   // Canal diário usa chartStart para 7 barras mínimas (igual aos demais gráficos).
-  const [googleAdsDaily, metaApiDaily, ga4ByChannelDaily, channelMixDaily, googleCampaigns, metaApiCampaigns, shopifySessionsDaily, shopifyFunnel] = await Promise.all([
+  const [googleAdsDaily, metaApiDaily, ga4ByChannelDaily, channelMixDaily, googleCampaigns, metaApiCampaigns, shopifySessionsDaily, shopifyFunnel, originShareRows] = await Promise.all([
     queryGoogleAdsViaSupermetrics(market, chartStart, period.end),
     queryMetaAdsDaily(market, chartStart, period.end),
     queryGA4SessionsByChannel(market, chartStart, period.end),
@@ -188,6 +189,7 @@ export async function getDashboardPayload(
     queryMetaCampaigns(market, period.start, period.end),
     queryShopifySessions(market, chartStart, period.end),
     queryShopifyFunnel(market, period.start, period.end),
+    queryOriginShare(market, period.start, period.end),
   ]);
   // Compatibilidade: metaAdsDaily era um nome usado em vários lugares, renomeio.
   const metaAdsDaily = metaApiDaily;
@@ -961,6 +963,18 @@ export async function getDashboardPayload(
   // Ordena por custo desc
   channelCosts.sort((a, b) => b.cost - a.cost);
 
+  // Cassia 2026-06-17: share por origem (estoque vs pre-order) — sempre, independente do filtro.
+  const _osRow = (cat: string) => (Array.isArray(originShareRows) ? originShareRows : []).find((r: any) => r.category === cat) || { units: 0, revenue: 0, orders: 0 };
+  const _osIn = _osRow('in-stock'), _osPre = _osRow('pre-order'), _osOther = _osRow('other');
+  const _osTotalUnits = num(_osIn.units) + num(_osPre.units) + num(_osOther.units);
+  const _osTotalRev = num(_osIn.revenue) + num(_osPre.revenue) + num(_osOther.revenue);
+  const originShare = {
+    totalUnits: _osTotalUnits,
+    totalRevenue: _osTotalRev,
+    inStock: { units: num(_osIn.units), revenue: num(_osIn.revenue), orders: num(_osIn.orders), unitsShare: _osTotalUnits > 0 ? num(_osIn.units) / _osTotalUnits : 0, revenueShare: _osTotalRev > 0 ? num(_osIn.revenue) / _osTotalRev : 0 },
+    preOrder: { units: num(_osPre.units), revenue: num(_osPre.revenue), orders: num(_osPre.orders), unitsShare: _osTotalUnits > 0 ? num(_osPre.units) / _osTotalUnits : 0, revenueShare: _osTotalRev > 0 ? num(_osPre.revenue) / _osTotalRev : 0 },
+  };
+
   return {
     market,
     currency,
@@ -974,5 +988,6 @@ export async function getDashboardPayload(
     topCampaigns,
     campaigns: allCampaigns,
     alerts,
+    originShare,
   };
 }
