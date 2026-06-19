@@ -41,10 +41,24 @@ function daysInclusive(from: string, to: string): number {
   return Math.round((new Date(to).getTime() - new Date(from).getTime()) / 86400000) + 1;
 }
 
+type ProductGroup = 'tenis' | 'bolsas' | 'vestuario' | 'calcados' | 'outros';
 interface ProductRow {
   motherSku: string; name: string; image: string | null; category: string;
   units: number; revenue: number; prevUnits: number; prevRevenue: number;
+  group: ProductGroup; isB2B: boolean; isCollab: boolean; isNew: boolean;
+  materials: string[]; colors: string[];
 }
+type CatKey = 'all' | 'novos' | 'collab' | 'b2b' | 'tenis' | 'bolsas' | 'vestuario' | 'material';
+const CAT_TABS: { key: CatKey; label: string }[] = [
+  { key: 'all', label: 'Todos' },
+  { key: 'novos', label: 'Lançamentos' },
+  { key: 'collab', label: 'Collabs' },
+  { key: 'b2b', label: 'B2B' },
+  { key: 'tenis', label: 'Tênis' },
+  { key: 'bolsas', label: 'Bolsas/Acessórios' },
+  { key: 'vestuario', label: 'Vestuário' },
+  { key: 'material', label: 'Material/Cor' },
+];
 interface RawBucket { date: string; units: number; grossRevenue: number; discount: number; }
 interface SeriesPoint { date: string; units: number; revenue: number; }
 interface TodayData {
@@ -85,6 +99,9 @@ export default function ProductPerformancePage() {
   const [sortBy, setSortBy] = useState<'revenue' | 'units'>('revenue');
   const [search, setSearch] = useState('');
   const [showAll, setShowAll] = useState(false);
+  const [cat, setCat] = useState<CatKey>('all');
+  const [matSel, setMatSel] = useState<string | null>(null);
+  const [colorSel, setColorSel] = useState<string | null>(null);
   const [perf, setPerf] = useState<PerfResp | null>(null);
   const [loadingPerf, setLoadingPerf] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -208,10 +225,37 @@ export default function ProductPerformancePage() {
       .filter((p) => !q || p.motherSku.toLowerCase().includes(q) || p.name.toLowerCase().includes(q))
       .sort((a, b) => (sortBy === 'units' ? b.units - a.units : b.revenue - a.revenue));
   }, [products, search, sortBy]);
+  // Filtro de categoria (abas do carrossel). Tabela acima continua mostrando tudo.
+  function matchesCat(p: ProductRow): boolean {
+    switch (cat) {
+      case 'novos': return p.isNew;
+      case 'collab': return p.isCollab;
+      case 'b2b': return p.isB2B;
+      case 'tenis': return p.group === 'tenis';
+      case 'bolsas': return p.group === 'bolsas';
+      case 'vestuario': return p.group === 'vestuario';
+      case 'material':
+        if (matSel && !p.materials.includes(matSel)) return false;
+        if (colorSel && !p.colors.includes(colorSel)) return false;
+        return true;
+      default: return true;
+    }
+  }
+  const catFiltered = useMemo(() => ranked.filter(matchesCat), [ranked, cat, matSel, colorSel]);
+  // Materiais/cores disponíveis (pra aba Material/Cor), do conjunto do período.
+  const { materials, colors } = useMemo(() => {
+    const ms = new Set<string>(); const cs = new Set<string>();
+    for (const p of products) { p.materials.forEach((m) => ms.add(m)); p.colors.forEach((c) => cs.add(c)); }
+    return { materials: Array.from(ms).sort(), colors: Array.from(cs).sort() };
+  }, [products]);
+  const catCount = (k: CatKey): number => {
+    if (k === 'all') return ranked.length;
+    if (k === 'material') return ranked.length;
+    return ranked.filter((p) => k === 'novos' ? p.isNew : k === 'collab' ? p.isCollab : k === 'b2b' ? p.isB2B : p.group === k).length;
+  };
   // Render incremental pra não pesar: mostra INITIAL_CARDS e expande sob demanda.
-  // Busca mostra todos os matches direto.
   const INITIAL_CARDS = 60;
-  const visible = (showAll || search.trim()) ? ranked : ranked.slice(0, INITIAL_CARDS);
+  const visible = (showAll || search.trim()) ? catFiltered : catFiltered.slice(0, INITIAL_CARDS);
 
   const { unitPoints, revPoints } = useMemo(() => {
     const acc = new Map<string, { units: number; rev: number }>();
@@ -400,13 +444,46 @@ export default function ProductPerformancePage() {
       </div>
 
       {/* Mais vendidos — cards com imagem (abaixo da visão original) */}
-      <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+      <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
         <span className="text-sm font-semibold uppercase tracking-wide" style={{ color: '#6b7280' }}>🏆 Mais vendidos · com imagem (clique pra selecionar)</span>
         <div className="flex items-center rounded-full overflow-hidden" style={{ border: '1px solid #e5e3de' }}>
           <button onClick={() => setSortBy('units')} className="px-3 py-1.5 text-[12px] font-semibold" style={{ background: sortBy === 'units' ? '#1a1a1a' : '#fff', color: sortBy === 'units' ? '#fff' : '#1a1a1a' }}>Qtd</button>
           <button onClick={() => setSortBy('revenue')} className="px-3 py-1.5 text-[12px] font-semibold" style={{ background: sortBy === 'revenue' ? '#1a1a1a' : '#fff', color: sortBy === 'revenue' ? '#fff' : '#1a1a1a' }}>Receita</button>
         </div>
       </div>
+
+      {/* Abas de categoria do carrossel */}
+      <div className="flex items-center gap-2 flex-wrap mb-2">
+        {CAT_TABS.map((tabItem) => {
+          const active = cat === tabItem.key;
+          return (
+            <button key={tabItem.key} onClick={() => { setCat(tabItem.key); if (tabItem.key !== 'material') { setMatSel(null); setColorSel(null); } }}
+              className={active ? PILL_ACTIVE_DARK : PILL_INACTIVE} style={{ fontSize: 12 }}>
+              {tabItem.label}{tabItem.key !== 'material' && <span style={{ opacity: 0.6, marginLeft: 6 }}>{catCount(tabItem.key)}</span>}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Sub-chips de material/cor */}
+      {cat === 'material' && (
+        <div className="mb-3 flex flex-col gap-2">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[10px] font-bold uppercase mr-1" style={{ color: '#9ca3af' }}>Material</span>
+            <button onClick={() => setMatSel(null)} className="px-2.5 py-1 rounded-full text-[11px]" style={{ background: !matSel ? '#1a1a1a' : '#ebe9e3', color: !matSel ? '#fff' : '#1a1a1a' }}>Todos</button>
+            {materials.map((mt) => (
+              <button key={mt} onClick={() => setMatSel(matSel === mt ? null : mt)} className="px-2.5 py-1 rounded-full text-[11px]" style={{ background: matSel === mt ? '#1a1a1a' : '#ebe9e3', color: matSel === mt ? '#fff' : '#1a1a1a' }}>{mt}</button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[10px] font-bold uppercase mr-1" style={{ color: '#9ca3af' }}>Cor</span>
+            <button onClick={() => setColorSel(null)} className="px-2.5 py-1 rounded-full text-[11px]" style={{ background: !colorSel ? '#1a1a1a' : '#ebe9e3', color: !colorSel ? '#fff' : '#1a1a1a' }}>Todas</button>
+            {colors.map((cl) => (
+              <button key={cl} onClick={() => setColorSel(colorSel === cl ? null : cl)} className="px-2.5 py-1 rounded-full text-[11px]" style={{ background: colorSel === cl ? '#1a1a1a' : '#ebe9e3', color: colorSel === cl ? '#fff' : '#1a1a1a' }}>{cl}</button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {loadingPerf && <div className="card p-8 text-center text-sm mb-6" style={{ color: '#6b7280' }}>Carregando…</div>}
       {!loadingPerf && (
@@ -459,18 +536,18 @@ export default function ProductPerformancePage() {
               </div>
             );
           })}
-          {ranked.length === 0 && <div className="card p-8 text-center text-sm w-full" style={{ color: '#6b7280' }}>Nenhum produto no período/busca.</div>}
+          {catFiltered.length === 0 && <div className="card p-8 text-center text-sm w-full" style={{ color: '#6b7280' }}>Nenhum produto nesta categoria no período/busca.</div>}
           </div>
         </div>
       )}
-      {!loadingPerf && !search.trim() && ranked.length > visible.length && (
+      {!loadingPerf && !search.trim() && catFiltered.length > visible.length && (
         <div className="text-center mb-8">
           <button onClick={() => setShowAll(true)} className={PILL_INACTIVE} style={{ cursor: 'pointer' }}>
-            Mostrar todos os {ranked.length} produtos
+            Mostrar todos os {catFiltered.length} produtos
           </button>
         </div>
       )}
-      {!loadingPerf && showAll && !search.trim() && ranked.length > INITIAL_CARDS && (
+      {!loadingPerf && showAll && !search.trim() && catFiltered.length > INITIAL_CARDS && (
         <div className="text-center mb-8">
           <button onClick={() => setShowAll(false)} className="text-[12px] underline" style={{ color: '#9ca3af' }}>mostrar menos</button>
         </div>

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getProductPerformance, type Market } from '@/lib/unit-economics/queries';
-import { getProductImages } from '@/lib/unit-economics/product-images';
+import { getProductImages, type ProductGroup } from '@/lib/unit-economics/product-images';
 import { runQuery } from '@/lib/bigquery/client';
 import { memo, TTL_30M } from '@/lib/ltv-dashboard/memo-cache';
 import { dateRangeForPeriod, dateRangeCompleted, previousRangeOf } from '@/lib/utils/periods';
@@ -23,6 +23,12 @@ interface PerfRow {
   revenue: number;
   prevUnits: number;
   prevRevenue: number;
+  group: ProductGroup;
+  isB2B: boolean;
+  isCollab: boolean;
+  isNew: boolean;
+  materials: string[];
+  colors: string[];
 }
 
 function resolveRange(sp: URLSearchParams): { start: string; end: string } {
@@ -59,15 +65,22 @@ async function rankingForMarket(market: Market, start: string, end: string): Pro
     const prevMap = new Map(prev.map((r) => [r.motherSku, r]));
     return cur.map((r) => {
       const p = prevMap.get(r.motherSku);
+      const m = imgs[r.motherSku];
       return {
         motherSku: r.motherSku,
-        name: imgs[r.motherSku]?.name || r.name,
-        image: imgs[r.motherSku]?.image ?? null,
+        name: m?.name || r.name,
+        image: m?.image ?? null,
         category: r.category,
         units: r.units,
         revenue: r.revenue,
         prevUnits: p?.units ?? 0,
         prevRevenue: p?.revenue ?? 0,
+        group: m?.group ?? 'outros',
+        isB2B: m?.isB2B ?? false,
+        isCollab: m?.isCollab ?? false,
+        isNew: m?.isNew ?? false,
+        materials: m?.materials ?? [],
+        colors: m?.colors ?? [],
       };
     });
   });
@@ -91,12 +104,18 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
       const merged = new Map<string, PerfRow>();
       const add = (rows: PerfRow[], toUsd: number) => {
         for (const r of rows) {
-          const e = merged.get(r.motherSku) || { motherSku: r.motherSku, name: r.name, image: r.image, category: r.category, units: 0, revenue: 0, prevUnits: 0, prevRevenue: 0 };
+          const e = merged.get(r.motherSku) || { ...r, units: 0, revenue: 0, prevUnits: 0, prevRevenue: 0 };
           e.units += r.units;
           e.revenue += r.revenue * toUsd;
           e.prevUnits += r.prevUnits;
           e.prevRevenue += r.prevRevenue * toUsd;
           if (!e.image && r.image) e.image = r.image;
+          if (e.group === 'outros' && r.group !== 'outros') e.group = r.group;
+          e.isB2B = e.isB2B || r.isB2B;
+          e.isCollab = e.isCollab || r.isCollab;
+          e.isNew = e.isNew || r.isNew;
+          e.materials = Array.from(new Set([...e.materials, ...r.materials]));
+          e.colors = Array.from(new Set([...e.colors, ...r.colors]));
           merged.set(r.motherSku, e);
         }
       };
