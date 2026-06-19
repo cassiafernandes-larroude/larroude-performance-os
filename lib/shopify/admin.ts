@@ -11,6 +11,25 @@ export function hasShopifyCredentials(market: Market): boolean {
   return !!(STORE[market].domain && STORE[market].token);
 }
 
+// Cassia 2026-06-17: variante que retorna data + errors crus (pra probes/diagnostico).
+export async function shopifyGraphQLRaw(market: Market, query: string, variables: Record<string, unknown> = {}): Promise<{ data?: any; errors?: any; httpStatus?: number } | null> {
+  const s = STORE[market];
+  if (!s.domain || !s.token) return null;
+  try {
+    const res = await fetch(`https://${s.domain}/admin/api/${API_VERSION}/graphql.json`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Shopify-Access-Token": s.token },
+      body: JSON.stringify({ query, variables }),
+      signal: AbortSignal.timeout(20000),
+      cache: "no-store",
+    });
+    const json = await res.json().catch(() => ({}));
+    return { data: json.data, errors: json.errors, httpStatus: res.status };
+  } catch (err) {
+    return { errors: String(err) };
+  }
+}
+
 export async function shopifyGraphQL<T>(market: Market, query: string, variables: Record<string, unknown> = {}): Promise<T | null> {
   const s = STORE[market];
   if (!s.domain || !s.token) return null;
