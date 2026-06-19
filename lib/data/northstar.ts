@@ -1,5 +1,4 @@
 import type { Market } from "@/types/metric";
-import { EXCLUDED_TAGS_REGEX } from "@/lib/shared/dtc-filters";
 import { runQuery, hasBigQueryCredentials } from "@/lib/bigquery/client";
 import { getMetaSpendApi, hasMetaCredentials } from "@/lib/meta-api";
 import { cached } from "@/lib/cache";
@@ -30,56 +29,10 @@ export type NorthStarBundle = {
   total_net_sales: number;
 };
 
-// Tabela do LTV Dashboard (NOTA: usa larroude-data-platform, nao data-prod)
-const ORDERS_TABLE: Record<Market, string> = {
-  US: "larroude-data-platform.shopify_us.orders",
-  BR: "larroude-data-platform.shopify_br.orders",
-};
-
-// Filtros exatos do LTV Dashboard (lib/queries.ts COMMON_FILTERS)
-// + filtros tag B2B/wholesale na order + PIX nao pago (so BR)
-function commonFilters(market: Market): string {
-  const pixFilter = market === "BR" ? `
-    AND LOWER(IFNULL(financial_status, '')) NOT IN ('pending', 'expired', 'authorized')
-  ` : "";
-  const cap = market === "US" ? 30000 : 25000;
-
-  return `
-    cancelled_at IS NULL
-    AND test = FALSE
-    AND JSON_VALUE(customer, '$.id') IS NOT NULL
-    AND JSON_VALUE(customer, '$.id') != '5025734230182'
-    AND (
-      JSON_VALUE(customer, '$.tags') IS NULL
-      OR (
-        NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(customer, '$.tags')), r'${EXCLUDED_TAGS_REGEX}')
-      )
-    )
-    AND NOT REGEXP_CONTAINS(LOWER(IFNULL(tags, '')), r'${EXCLUDED_TAGS_REGEX}')
-    AND CAST(total_price AS NUMERIC) < ${cap}
-    AND NOT (
-      LOWER(IFNULL(tags, '')) LIKE '%troquecommerce%'
-      OR LOWER(IFNULL(note, '')) LIKE '%troca direta%'
-      OR LOWER(IFNULL(note, '')) LIKE '%troquecommerce%'
-      OR name LIKE 'EXC-%'
-      OR LOWER(IFNULL(note, '')) LIKE '%new exchange order%'
-      OR LOWER(IFNULL(note, '')) LIKE '%exchange for order%'
-      OR LOWER(IFNULL(tags, '')) LIKE '%loop:%'
-    )
-    ${pixFilter}
-  `;
-}
-
-// net_sales exato do LTV Dashboard
-const NET_SALES_EXPR = `
-  CAST(total_line_items_price AS FLOAT64)
-  - CAST(total_discounts AS FLOAT64)
-  - IFNULL((
-      SELECT SUM(CAST(JSON_VALUE(t, '$.amount') AS FLOAT64))
-      FROM UNNEST(JSON_QUERY_ARRAY(refunds)) AS r,
-        UNNEST(JSON_QUERY_ARRAY(r, '$.transactions')) AS t
-    ), 0)
-`;
+// Cassia 2026-06-17 (auditoria): removido ORDERS_TABLE (data-platform), commonFilters e
+// NET_SALES_EXPR — eram CODIGO MORTO de uma versao antiga. O North Star delega 100% ao
+// getLtvKpiSummary do LTV Dashboard (data-prod), garantindo convergencia. Nao havia
+// divergencia de warehouse (data-platform e data-prod tem os mesmos dados); era so' codigo nao usado.
 
 const MOCK_US: Omit<NorthStarBundle, "market" | "period" | "source"> = {
   ltv_predictive: 455, ltv_historical: 380, ltv_cac: 1.97, cac: 231,
@@ -111,8 +64,6 @@ export async function getNorthStarBundle(market: Market): Promise<NorthStarBundl
         ...(market === "US" ? MOCK_US : MOCK_BR),
       };
     }
-
-    const table = ORDERS_TABLE[market];
 
     try {
       // Cassia 2026-06-14: REGRA — North Star reusa EXATAMENTE getLtvKpiSummary do LTV Dashboard.
