@@ -6,6 +6,8 @@ import { DashboardActions } from "@/components/shared/DashboardActions";
 import DailyBarChart from "@/components/main-dashboard/DailyBarChart";
 import ExecutiveFilterBar from "@/components/executive/ExecutiveFilterBar";
 import DiagnosticsPanel from "@/components/executive/DiagnosticsPanel";
+import { FulfillmentFilter } from "@/components/filters/FulfillmentFilter";
+import { parseFulfillmentCategories } from "@/lib/shared/fulfillment-category";
 import { yesterdayInMarket } from "@/lib/utils/market-tz";
 
 // Cassia 2026-06-12: dynamic p/ filtro de periodo reagir imediatamente (sem ISR stale).
@@ -17,14 +19,15 @@ const VALID_PERIODS: ExecutivePeriod[] = ["1d", "7d", "14d", "28d", "3M", "6M", 
 export default async function ExecutivePage({
   searchParams,
 }: {
-  searchParams?: { period?: string; from?: string; to?: string };
+  searchParams?: { period?: string; from?: string; to?: string; fulCats?: string };
 }) {
   const periodParam = searchParams?.period as ExecutivePeriod | undefined;
   const period: ExecutivePeriod = periodParam && VALID_PERIODS.includes(periodParam) ? periodParam : "28d";
   const customRange = searchParams?.from && searchParams?.to
     ? { from: searchParams.from, to: searchParams.to }
     : undefined;
-  const c = await getExecutiveConsolidated(period, customRange);
+  const fulCats = parseFulfillmentCategories(searchParams?.fulCats);
+  const c = await getExecutiveConsolidated(period, customRange, fulCats);
   const diagnostics = computeExecutiveDiagnostics(c);
   // maxDate p/ date picker = ontem em NY (US é o market âncora)
   const maxDate = yesterdayInMarket("US");
@@ -83,6 +86,14 @@ export default async function ExecutivePage({
 
         {/* Cassia 2026-06-12: filtro de periodo igual Main Dashboard */}
         <ExecutiveFilterBar maxDate={maxDate} />
+
+        {/* Cassia 2026-06-17: filtro de origem (mantem a visao atual, so' filtra por origem) */}
+        <FulfillmentFilter className="mt-2 mb-4" />
+        {fulCats && fulCats.length > 0 && (
+          <p className="text-[11px] mb-4" style={{ color: "var(--ink-muted)" }}>
+            KPIs e ROAS consolidados por origem · gráficos diários e channel share = total
+          </p>
+        )}
 
         {/* ===== 4 Hero KPIs Consolidados ===== */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">

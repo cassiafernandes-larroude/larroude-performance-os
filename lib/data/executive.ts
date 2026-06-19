@@ -299,11 +299,13 @@ function rangeForPeriod(period: ExecutivePeriod, customRange?: { from: string; t
 export async function getExecutiveConsolidated(
   period: ExecutivePeriod = '28d',
   customRange?: { from: string; to: string },
+  fulCats?: import("@/lib/shared/fulfillment-category").FulfillmentCategory[] | null,
 ): Promise<ExecutiveConsolidated> {
   const range = rangeForPeriod(period, customRange);
-  const cacheKey = customRange
+  const fulKey = fulCats && fulCats.length ? fulCats.slice().sort().join('+') : 'all';
+  const cacheKey = (customRange
     ? `executive-consolidated-v3:custom:${customRange.from}:${customRange.to}`
-    : `executive-consolidated-v3:${period}`;
+    : `executive-consolidated-v3:${period}`) + `:ful=${fulKey}`;
   return cached(cacheKey, 1800, async () => {
     const fxRate = await getRecentBrlUsdRate(); // BRL → USD
 
@@ -333,8 +335,8 @@ export async function getExecutiveConsolidated(
       // -> reusa getDashboardPayload (filtros B2B, PIX, ajuste Meta US +400k Set/25, etc).
       // Quando custom range, passamos customStart pra getDashboardPayload usar mesma janela.
       const [us, br, usChannels, brChannels] = await Promise.all([
-        getDashboardPayload("US", period, range.to, customRange?.from),
-        getDashboardPayload("BR", period, range.to, customRange?.from),
+        getDashboardPayload("US", period, range.to, customRange?.from, fulCats),
+        getDashboardPayload("BR", period, range.to, customRange?.from, fulCats),
         queryChannelMix("US", range.from, range.to).catch(() => []),
         queryChannelMix("BR", range.from, range.to).catch(() => []),
       ]);
