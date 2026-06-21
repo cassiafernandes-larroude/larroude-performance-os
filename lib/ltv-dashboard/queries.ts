@@ -97,6 +97,9 @@ const COMMON_FILTERS_BASE = `
     OR LOWER(IFNULL(note, '')) LIKE '%new exchange order%'
     OR LOWER(IFNULL(note, '')) LIKE '%exchange for order%'
     OR LOWER(IFNULL(tags, '')) LIKE '%loop:%'
+    -- Cassia 2026-06-21: tag de TROCA da Larroudé (Loop) que faltava — 'le:exchange' (~7,8k US).
+    -- NÃO é 'exchange-only'/'policy:exchange-only' (política de devolução de compra normal → válida).
+    OR REGEXP_CONTAINS(LOWER(IFNULL(tags, '')), r'le:exchange')
   )
 `;
 

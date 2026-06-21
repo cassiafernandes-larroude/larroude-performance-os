@@ -37,6 +37,10 @@ export function excludeExchangesSQL(alias = ""): string {
       OR LOWER(IFNULL(${a}note, '')) LIKE '%new exchange order%'
       OR LOWER(IFNULL(${a}note, '')) LIKE '%exchange for order%'
       OR LOWER(IFNULL(${a}tags, '')) LIKE '%loop:%'
+      -- Cassia 2026-06-21: marcador de TROCA da Larroudé (Loop) que faltava — tag 'le:exchange'.
+      -- ~7,8k pedidos US eram contados como venda. NÃO confundir com 'exchange-only'/'policy:exchange-only'
+      -- (política de devolução em compra normal — esses CONTINUAM válidos).
+      OR REGEXP_CONTAINS(LOWER(IFNULL(${a}tags, '')), r'le:exchange')
     )`;
 }
 

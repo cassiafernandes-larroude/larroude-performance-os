@@ -57,7 +57,7 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
 
   const currency = market === 'US' ? 'USD' : 'BRL';
   try {
-    const cacheKey = `clientes:v2-validorders:${market}:${start}:${end}`;
+    const cacheKey = `clientes:v3-leexchange:${market}:${start}:${end}`;
     const result = await memo(cacheKey, TTL_6H, async () => {
       const [summary, retention, monthly, nvr, top, open, cohorts] = await Promise.all([
         getLtvKpiSummary(market, start, end),

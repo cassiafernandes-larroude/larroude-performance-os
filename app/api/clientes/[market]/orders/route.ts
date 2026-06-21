@@ -19,7 +19,7 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
   }
 
   try {
-    const orders = await memo(`clientes:orders:v2-validorders:${market}:${customerId}`, TTL_6H, () =>
+    const orders = await memo(`clientes:orders:v3-leexchange:${market}:${customerId}`, TTL_6H, () =>
       getCustomerOrders(market, customerId)
     );
     return NextResponse.json({ customerId, orders }, {
