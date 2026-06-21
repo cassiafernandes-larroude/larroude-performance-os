@@ -98,7 +98,7 @@ export default function ChannelBreakdown({ channels, topCampaigns, channelCosts 
                 : 'bg-blue-100 text-blue-700';
               return (
                 <div key={`${c.platform ?? 'Meta'}-${c.campaign}`} className="grid grid-cols-12 items-center gap-3">
-                  <div className="col-span-5 text-xs text-ink truncate text-right pr-1" title={c.campaign}>
+                  <div className="col-span-5 text-xs text-ink truncate text-right pr-1" title={c.campaign} data-no-translate="true">
                     <span className={`inline-block mr-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold ${platformBadge}`}>
                       {c.platform ?? 'Meta'}
                     </span>

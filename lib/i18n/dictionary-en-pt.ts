@@ -449,8 +449,8 @@ export const EN_TO_PT: Record<string, string> = {
   "Open Rate": "Taxa de Abertura",
   "Click Rate": "Taxa de Clique",
   "Bounce Rate": "Taxa de Rejeição",
-  "Return Rate": "Taxa de Retorno",
-  "Exchange Rate": "Taxa de Troca",
+  "Return Rate": "Taxa de Devolução",
+  "Exchange Rate": "Taxa de Câmbio",
   "Gross Margin": "Margem Bruta",
 
   // === Time / period ===

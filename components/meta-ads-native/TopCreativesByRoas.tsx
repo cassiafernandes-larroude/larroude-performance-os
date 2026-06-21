@@ -64,7 +64,7 @@ export default function TopCreativesByRoas({ ads, currency, top = 10, minSpend =
                   </div>
                 </div>
                 <div className="p-2">
-                  <div className="text-[10px] font-medium truncate mb-1" style={{ color: 'var(--ink)' }} title={ad.name}>
+                  <div className="text-[10px] font-medium truncate mb-1" style={{ color: 'var(--ink)' }} title={ad.name} data-no-translate="true">
                     {ad.name}
                   </div>
                   <div className="text-[9px]" style={{ color: 'var(--ink-muted)' }}>{ad.account}</div>

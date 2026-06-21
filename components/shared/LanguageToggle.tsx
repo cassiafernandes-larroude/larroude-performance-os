@@ -29,18 +29,16 @@ for (const [en, pt] of Object.entries(EN_TO_PT)) {
   if (norm) DIRECT_LOOKUP.set(norm, pt);
 }
 
-// Sort entries by length descending so we replace "Total Sales (Gross)" before "Total Sales"
+// Cassia 2026-06-20: o substring pass SÓ aceita FRASES LONGAS multi-palavra (>=12 chars E
+// com espaço). Palavras curtas/genéricas ("New", "Order", "Email", "Sales", "Spend", "days"…)
+// e fragmentos ficam SOMENTE exact-match (DIRECT_LOOKUP) — assim NUNCA são trocados dentro de
+// nomes de campanha/produto/anúncio/SKU ou textos livres (ex.: "Larroude New", "Pre-Order").
+// Frases longas são distintas o bastante pra não aparecerem dentro de nomes de recursos.
 const allEntries = Object.entries(EN_TO_PT).sort((a, b) => b[0].length - a[0].length);
 for (const [en, pt] of allEntries) {
-  if (en.length < 3) continue;
-  // For long phrases (>=15 chars), use simple substring replace (case-insensitive, no boundary).
-  // For short keys (3-14 chars), use word-boundary regex to avoid partial matches like "all" in "tall".
+  if (en.length < 12 || !/\s/.test(en)) continue; // curtas/sem-espaço -> só exact-match
   const escaped = en.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const useBoundary = en.length < 15 && /^[A-Za-z][A-Za-z0-9\s]*[A-Za-z0-9]$/.test(en);
-  const re = useBoundary
-    ? new RegExp(`\\b${escaped}\\b`, "gi")
-    : new RegExp(escaped, "gi");
-  SORTED_ENTRIES.push([en, pt, re]);
+  SORTED_ENTRIES.push([en, pt, new RegExp(escaped, "gi")]);
 }
 
 // Stash original (EN) text per node so the EN ↦ PT swap is reversible.
@@ -103,6 +101,15 @@ const PROPER_NAME_SELECTORS = [
   ".product-cell",
   ".flow-cell",
   ".campaign-cell",
+  // Cassia 2026-06-20: classes reais de célula de nome usadas nos dashboards (CAC/LTV/Inventory/Category)
+  ".name-cell",
+  ".prod-name",
+  ".promo-name",
+  ".adset-name",
+  ".ad-name",
+  ".dim-name",
+  // Qualquer elemento explicitamente marcado como nome de recurso de ferramenta (campanha/adset/anúncio)
+  "[data-resource-name='true']",
 ];
 
 // Padrões de texto que indicam ID/SKU/código — nunca traduzir.

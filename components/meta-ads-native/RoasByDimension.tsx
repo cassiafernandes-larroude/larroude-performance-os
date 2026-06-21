@@ -32,7 +32,7 @@ export default function RoasByDimension({ title, icon = '🎬', rows, currency, 
             return (
               <div key={r.label} className="flex items-center gap-2 sm:gap-3 text-[11px] sm:text-[12px]">
                 <div className="w-[110px] sm:w-[140px] shrink-0">
-                  <span className="font-bold uppercase tracking-wide" style={{ color: 'var(--ink)' }}>{r.label}</span>
+                  <span className="font-bold uppercase tracking-wide" style={{ color: 'var(--ink)' }} data-no-translate="true">{r.label}</span>
                   <span className="ml-1" style={{ color: 'var(--ink-muted)' }}>({r.ads} ads)</span>
                 </div>
                 <div className="flex-1 h-5 rounded relative overflow-hidden" style={{ background: 'var(--paper)' }}>

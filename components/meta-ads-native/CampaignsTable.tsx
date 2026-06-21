@@ -33,7 +33,7 @@ export default function CampaignsTable({ data, currency = 'USD' }: { data: Campa
           <tbody>
             {data.slice(0, 10).map((r) => (
               <tr key={r.id} className="border-t border-ink-100 hover:bg-brand-50/40">
-                <td className="px-2 py-1.5 max-w-[280px] truncate text-ink-800 font-medium">{r.name}</td>
+                <td className="px-2 py-1.5 max-w-[280px] truncate text-ink-800 font-medium" data-no-translate="true">{r.name}</td>
                 <td className="px-2 py-1.5 text-ink-600">{r.account}</td>
                 <td className="px-2 py-1.5 text-right tabular-nums">{formatCurrency(r.spend, currency, true)}</td>
                 <td className="px-2 py-1.5 text-right tabular-nums">{formatCurrency(r.revenue, currency, true)}</td>

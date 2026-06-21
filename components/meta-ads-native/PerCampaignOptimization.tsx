@@ -221,7 +221,7 @@ export default function PerCampaignOptimization({ ads, currency, maxAdsPerCampai
                             <div style={{ width: 32, height: 32, borderRadius: 4, background: '#eee', flexShrink: 0 }} />
                           )}
                           <div className="flex-1 min-w-0">
-                            <div className="text-[11px] font-medium truncate" style={{ color: 'var(--ink)' }} title={ad.name}>
+                            <div className="text-[11px] font-medium truncate" style={{ color: 'var(--ink)' }} title={ad.name} data-no-translate="true">
                               {ad.name}
                             </div>
                             <div className="text-[9px]" style={{ color: 'var(--ink-muted)' }}>

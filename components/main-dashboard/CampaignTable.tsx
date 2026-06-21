@@ -61,7 +61,7 @@ export default function CampaignTable({ campaigns, market }: Props) {
               const platformStyle = c.platform === 'Google' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700';
               return (
                 <tr key={`${c.platform ?? 'Meta'}-${c.campaign}`} className="border-t border-card-border hover:bg-cloud/60">
-                  <td className="px-4 py-2 font-medium text-ink max-w-[260px] truncate" title={c.campaign}>
+                  <td className="px-4 py-2 font-medium text-ink max-w-[260px] truncate" title={c.campaign} data-no-translate="true">
                     {c.campaign}
                     {c.status === 'ESCALAR' && <span className="ml-1">⭐</span>}
                   </td>

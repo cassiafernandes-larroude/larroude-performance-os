@@ -92,6 +92,7 @@ export default function TopUrlsByRoas({ ads, currency, top = 5, minSpend = 500 }
                       className="underline"
                       style={{ color: '#3b82f6' }}
                       title={r.url}
+                      data-no-translate="true"
                     >
                       {r.url}
                     </a>

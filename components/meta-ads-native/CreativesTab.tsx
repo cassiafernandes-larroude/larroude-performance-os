@@ -303,17 +303,17 @@ function SkuQuadro({
                                 <img src={ad.thumbnail || FALLBACK_IMG} alt="" width={56} height={56} style={{ borderRadius: 6, objectFit: 'cover', background: '#eee', flexShrink: 0 }} onError={(e) => { (e.currentTarget as HTMLImageElement).src = FALLBACK_IMG; }} />
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 mb-0.5">
-                                    <div className="font-medium text-[11px] truncate flex-1" style={{ color: 'var(--ink)' }} title={ad.name}>{ad.name}</div>
+                                    <div className="font-medium text-[11px] truncate flex-1" style={{ color: 'var(--ink)' }} title={ad.name} data-no-translate="true">{ad.name}</div>
                                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-semibold whitespace-nowrap" style={{ background: statusBg, color: statusColor }}>
                                       <span style={{ width: 5, height: 5, borderRadius: '50%', background: statusColor }} />
                                       {statusLabel}
                                     </span>
                                   </div>
                                   <div className="text-[10px] truncate" style={{ color: 'var(--ink-soft)' }} title={`Campanha: ${ad.campaignName || '—'}`}>
-                                    <strong>Campanha:</strong> {ad.campaignName || '—'}
+                                    <strong>Campanha:</strong> <span data-no-translate="true">{ad.campaignName || '—'}</span>
                                   </div>
                                   <div className="text-[10px] truncate" style={{ color: 'var(--ink-soft)' }} title={`Adset: ${ad.adsetName || '—'}`}>
-                                    <strong>Ad set:</strong> {ad.adsetName || '—'}
+                                    <strong>Ad set:</strong> <span data-no-translate="true">{ad.adsetName || '—'}</span>
                                   </div>
                                   <div className="text-[10px]" style={{ color: 'var(--ink-muted)' }}>{ad.account}</div>
                                   <div className="flex items-center gap-3 mt-1 text-[10px]" style={{ color: 'var(--ink-soft)' }}>
