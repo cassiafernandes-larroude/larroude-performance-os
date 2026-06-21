@@ -18,8 +18,35 @@ import {
   NET_SALES_EXPR,
   type Market,
 } from '@/lib/ltv-dashboard/queries';
+import { CHANNEL_UTM_PATTERNS } from '@/lib/shared/channel-utms';
 
 export type { Market };
+
+/**
+ * Origem mídia de um pedido a partir das UTMs do landing_site/referring_site.
+ * Usa os patterns CANÔNICOS de @/lib/shared/channel-utms (mesma lógica de classificação de
+ * canal do channel-costs). `ls`/`rs` = aliases LOWER(IFNULL(landing_site/referring_site,'')).
+ * Precedência: owned/afiliado/criteo → paga (google/meta) → orgânico → direto.
+ */
+function mediaOriginCaseSQL(): string {
+  const P = CHANNEL_UTM_PATTERNS;
+  return `CASE
+    WHEN REGEXP_CONTAINS(ls, r'${P.klaviyo}') THEN 'Klaviyo'
+    WHEN REGEXP_CONTAINS(ls, r'${P.attentive}') THEN 'SMS (Attentive)'
+    WHEN REGEXP_CONTAINS(ls, r'${P.awin}') THEN 'Awin'
+    WHEN REGEXP_CONTAINS(ls, r'${P.shopmy}') THEN 'ShopMy'
+    WHEN REGEXP_CONTAINS(ls, r'${P.agentShop}') THEN 'Agent.shop'
+    WHEN REGEXP_CONTAINS(ls, r'${P.criteo}') OR REGEXP_CONTAINS(rs, r'${P.criteo}') THEN 'Criteo'
+    WHEN REGEXP_CONTAINS(ls, r'${P.googleAds}') THEN 'Google Ads'
+    WHEN REGEXP_CONTAINS(ls, r'${P.meta}') THEN 'Meta Ads'
+    WHEN REGEXP_CONTAINS(ls, r'${P.metaWithMedium}') AND REGEXP_CONTAINS(ls, r'${P.metaPaidMediums}') THEN 'Meta Ads'
+    WHEN REGEXP_CONTAINS(ls, r'utm_medium=email') THEN 'Email'
+    WHEN REGEXP_CONTAINS(ls, r'utm_source=google') OR REGEXP_CONTAINS(rs, r'google') THEN 'Orgânico (Search)'
+    WHEN REGEXP_CONTAINS(rs, r'(instagram|facebook|tiktok|pinterest|t\\.co|lnk\\.bio|linktr)') THEN 'Orgânico (Social)'
+    WHEN ls = '' AND rs = '' THEN 'Direto / Sem UTM'
+    ELSE 'Outros'
+  END`;
+}
 
 export interface CustomerRow {
   customerId: string;
@@ -68,6 +95,53 @@ export interface CohortCell {
 }
 
 const CURRENCY: Record<Market, string> = { US: 'USD', BR: 'BRL' };
+
+export interface CustomerOrder {
+  name: string;            // número do pedido (ex: "#L1024")
+  date: string | null;
+  value: number;           // net sales do pedido
+  mediaOrigin: string;     // canal/origem mídia derivado das UTMs
+  fulfillment: string;     // 'fulfilled' | 'partial' | null→'unfulfilled'
+  financial: string | null;
+}
+
+/**
+ * Pedidos de UM cliente (até 200, mais recentes primeiro) com número do pedido + origem mídia.
+ * On-demand: chamado quando a linha do cliente é expandida na UI.
+ */
+export async function getCustomerOrders(market: Market, customerId: string): Promise<CustomerOrder[]> {
+  const table = ORDERS_TABLE[market];
+  const sql = `
+    WITH o AS (
+      SELECT
+        name,
+        DATE(created_at) AS order_date,
+        ${NET_SALES_EXPR} AS net_sales,
+        fulfillment_status,
+        financial_status,
+        LOWER(IFNULL(landing_site, '')) AS ls,
+        LOWER(IFNULL(referring_site, '')) AS rs
+      FROM \`${table}\`
+      WHERE ${COMMON_FILTERS_DTC(market)}
+        AND JSON_VALUE(customer, '$.id') = @customerId
+    )
+    SELECT
+      name, order_date, net_sales, fulfillment_status, financial_status,
+      ${mediaOriginCaseSQL()} AS media_origin
+    FROM o
+    ORDER BY order_date DESC
+    LIMIT 200
+  `;
+  const rows = await runQuery<any>(sql, { customerId });
+  return rows.map((r) => ({
+    name: r.name ? String(r.name) : '—',
+    date: r.order_date ? String(r.order_date).slice(0, 10) : null,
+    value: Number(r.net_sales) || 0,
+    mediaOrigin: r.media_origin ? String(r.media_origin) : 'Outros',
+    fulfillment: r.fulfillment_status ? String(r.fulfillment_status) : 'unfulfilled',
+    financial: r.financial_status ?? null,
+  }));
+}
 
 /**
  * Novos vs recorrentes no período. NOVO = primeira compra lifetime cai no período;
