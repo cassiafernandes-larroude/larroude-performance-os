@@ -22,7 +22,7 @@ const ADMIN_TOKENS: Record<Market, string | undefined> = {
 // doesn't exist on type 'QueryRoot'"). Continua funcionando apenas na API `unstable` — mas isso
 // é passado POR CHAMADA (param apiVersion), não como default global, p/ não mexer nas chamadas
 // existentes. Override manual via SHOPIFY_API_VERSION_OVERRIDE.
-const API_VERSION = process.env.SHOPIFY_API_VERSION_OVERRIDE || '2024-07';
+const API_VERSION = process.env.SHOPIFY_API_VERSION_OVERRIDE || 'unstable';
 
 /**
  * Executa query ShopifyQL via Admin GraphQL.
@@ -41,18 +41,16 @@ export async function runShopifyQL(market: Market, query: string, apiVersion?: s
   }
   const url = `https://${domain}/admin/api/${apiVersion || API_VERSION}/graphql.json`;
   const body = {
+    // Cassia 2026-06-21: shape da API `unstable` — shopifyqlQuery retorna ShopifyqlQueryResponse
+    // (OBJECT com tableData + parseErrors direto; NÃO é união, não usar `... on TableResponse`).
     query: `query ShopifyQL($q: String!) {
       shopifyqlQuery(query: $q) {
         __typename
-        ... on TableResponse {
-          tableData {
-            rowData
-            columns { name dataType }
-          }
+        tableData {
+          columns { name dataType }
+          rows
         }
-        ... on ParseError {
-          parseErrors { message }
-        }
+        parseErrors
       }
     }`,
     variables: { q: query },
@@ -77,20 +75,31 @@ export async function runShopifyQL(market: Market, query: string, apiVersion?: s
       return { rows: [], error: JSON.stringify(json.errors).slice(0, 200), raw: json };
     }
     const table = json.data?.shopifyqlQuery?.tableData;
+    // Cassia 2026-06-21: parseErrors no unstable é lista de strings (vazio = []). Antes era [{message}].
     const parseErrors = json.data?.shopifyqlQuery?.parseErrors;
-    if (parseErrors && parseErrors.length > 0) {
-      const msg = parseErrors.map((e: any) => e.message).join('; ');
+    const peList = Array.isArray(parseErrors) ? parseErrors : (parseErrors ? [parseErrors] : []);
+    if (peList.length > 0) {
+      const msg = peList.map((e: any) => (typeof e === 'string' ? e : e?.message ?? JSON.stringify(e))).join('; ');
       console.warn(`[shopify-admin ${market}] ShopifyQL parse error: ${msg}`);
       return { rows: [], error: msg, raw: json };
     }
-    if (!table?.rowData || !table?.columns) {
+    if (!table?.columns) {
       return { rows: [], raw: json };
     }
-    const rows = table.rowData.map((row: any[]) => {
-      const obj: Record<string, any> = {};
-      table.columns!.forEach((col: any, i: number) => { obj[col.name] = row[i]; });
-      return obj;
-    });
+    // Cassia 2026-06-21: unstable → tableData.rows já vem como array de OBJETOS keyed por coluna.
+    // (2024-07 usava rowData = array posicional; mantém fallback por segurança.)
+    let rows: Record<string, any>[];
+    if (Array.isArray(table.rows)) {
+      rows = table.rows as Record<string, any>[];
+    } else if (Array.isArray(table.rowData)) {
+      rows = table.rowData.map((row: any[]) => {
+        const obj: Record<string, any> = {};
+        table.columns!.forEach((col: any, i: number) => { obj[col.name] = row[i]; });
+        return obj;
+      });
+    } else {
+      rows = [];
+    }
     const columns = (table.columns || []).map((c: any) => ({ name: c.name, dataType: c.dataType }));
     return { rows, columns, raw: json };
   } catch (err: any) {

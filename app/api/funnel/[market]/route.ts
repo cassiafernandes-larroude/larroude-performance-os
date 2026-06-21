@@ -35,10 +35,13 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
 
   try {
     const result = await memo(`funnel:v1:${market}:${since}:${until}:${gran}`, TTL_10M, async () => {
+      // Cassia 2026-06-21: funil (ShopifyQL) é o core; pagamento (BQ) é não-fatal — se o BQ falhar,
+      // o funil ainda aparece com o bloco de pagamento vazio.
+      const emptyPay = { series: [], totals: { pixPaid: 0, cardPaid: 0, pixPending: 0, otherPaid: 0 } };
       const [series, totals, payment, today] = await Promise.all([
         getFunnelSeries(market, since, until, gran),
         getFunnelTotals(market, since, until),
-        getPaymentSeries(market, since, until),
+        getPaymentSeries(market, since, until).catch((e) => { console.warn('[funnel] payment failed:', e?.message); return emptyPay; }),
         getFunnelTotals(market, 'today', 'today').catch(() => null),
       ]);
 
