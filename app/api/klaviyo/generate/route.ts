@@ -30,7 +30,7 @@ const schema = z.object({
 
 export async function POST(req: NextRequest) {
   if (!hasGeminiCredentials()) {
-    return NextResponse.json({ error: 'Vertex AI (Gemini) não configurado: defina GCP_SA_KEY_BASE64.' }, { status: 503 });
+    return NextResponse.json({ error: 'Gemini não configurado: defina GEMINI_API_KEY (gere em aistudio.google.com/apikey).' }, { status: 503 });
   }
   const json = await req.json().catch(() => null);
   const parsed = schema.safeParse(json);
