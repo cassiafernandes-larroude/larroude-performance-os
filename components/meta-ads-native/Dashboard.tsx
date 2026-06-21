@@ -23,6 +23,7 @@ import DailyBarChart from '@/components/main-dashboard/DailyBarChart';
 import DailyMultiBarChart from '@/components/main-dashboard/DailyMultiBarChart';
 import DuplicatePurchasesDisclaimer from '@/components/shared/DuplicatePurchasesDisclaimer';
 import CreativesTab from './CreativesTab';
+import CollectionsTab from './CollectionsTab';
 import RoasByDimension from './RoasByDimension';
 import TopCreativesByRoas from './TopCreativesByRoas';
 import TopUrlsByRoas from './TopUrlsByRoas';
@@ -91,7 +92,7 @@ export default function MetaAdsDashboard() {
   const dailyChartsGrid = isLongPeriod ? 'grid grid-cols-1 gap-4' : 'grid grid-cols-1 lg:grid-cols-2 gap-4';
 
   // Cassia 2026-06-14: tabs — Performance (default) e Creatives × Shopify
-  const [activeTab, setActiveTab] = useState<'performance' | 'creatives'>('performance');
+  const [activeTab, setActiveTab] = useState<'performance' | 'creatives' | 'collections'>('performance');
 
   return (
     <div>
@@ -132,6 +133,7 @@ export default function MetaAdsDashboard() {
               {([
                 { id: 'performance', label: 'Performance' },
                 { id: 'creatives', label: 'Creatives × Products' },
+                { id: 'collections', label: 'Creatives × Collections' },
               ] as const).map(t => {
                 const active = activeTab === t.id;
                 return (
@@ -154,6 +156,14 @@ export default function MetaAdsDashboard() {
             {activeTab === 'creatives' && (
               <CreativesTab
                 ads={data.ads}
+                region={region}
+                since={data.dateRange.since}
+                until={data.dateRange.until}
+                currency={currency}
+              />
+            )}
+            {activeTab === 'collections' && (
+              <CollectionsTab
                 region={region}
                 since={data.dateRange.since}
                 until={data.dateRange.until}
