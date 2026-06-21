@@ -78,11 +78,19 @@ export default async function ExecutivePage({
             <p className="text-[11px] mt-1" style={{ color: "var(--ink-muted)" }}>
               Active range: <strong style={{ color: "var(--ink-soft)" }}>{c.period.from} → {c.period.to}</strong>
               {" · "}{customRange ? `custom (${searchParams?.from}-${searchParams?.to})` : `preset ${period.toUpperCase()}`}
-              {" · "}{c.source === "BQ" ? "BigQuery Larroude OS" : "Mock data"}
+              {" · "}{c.source === "BQ" ? "BigQuery Larroude OS" : "fonte indisponível"}
             </p>
           </div>
           <DashboardActions />
         </div>
+
+        {c.source === "Unavailable" && (
+          <div className="mb-4 rounded-lg px-4 py-3 text-[12px] lg:text-[13px] flex items-start gap-2"
+               style={{ background: "rgba(255,92,108,0.10)", border: "1px solid rgba(255,92,108,0.35)", color: "#c0334a" }}>
+            <span aria-hidden>⚠</span>
+            <span><strong>Dados indisponíveis.</strong> A fonte (BigQuery) não respondeu — os valores em zero <strong>não são reais</strong>. Nenhum número foi estimado.</span>
+          </div>
+        )}
 
         {/* Cassia 2026-06-12: filtro de periodo igual Main Dashboard */}
         <ExecutiveFilterBar maxDate={maxDate} />

@@ -1,5 +1,7 @@
 import type { Market, Period, MetricBundle, Metric, MetricSource } from "@/types/metric";
-import { dateRangeForPeriod, previousPeriodRange, periodToDays, previousRangeOf } from "@/lib/utils/periods";
+import { previousRangeOf } from "@/lib/utils/periods";
+import { calcPeriod } from "@/lib/main-dashboard/utils";
+import type { PeriodKey } from "@/lib/main-dashboard/types";
 import { formatCurrency, formatMultiplier, formatNumber, formatPercent } from "@/lib/utils/format";
 import { hasBigQueryCredentials, runQuery } from "@/lib/bigquery/client";
 import { aggregatedKpisSQL } from "@/lib/bigquery/queries/metrics";
@@ -32,26 +34,21 @@ type AggRow = {
   cac: number;
 };
 
-// Periodo: ultimos N dias COMPLETOS (sem hoje), igual ao dashboard principal
-function dateRangeCompleted(period: Period, today = new Date()): { from: string; to: string } {
-  const days = periodToDays(period);
-  // "to" = ontem
-  const to = new Date(today.getTime() - 24 * 3600 * 1000);
-  const from = new Date(to.getTime() - (days - 1) * 24 * 3600 * 1000);
-  return {
-    from: from.toISOString().slice(0, 10),
-    to: to.toISOString().slice(0, 10),
-  };
+// Cassia 2026-06-21: CONVERGENCIA com o Dashboard Principal. Antes estas funcoes usavam janela
+// rolling de N dias com "ontem" em UTC; o Main usa calcPeriod (meses-calendario p/ 3M/6M/12M e
+// D-1 no fuso do mercado). Para a MESMA selecao de periodo bater entre Overview e Main, delegamos
+// 100% ao calcPeriod do Main (mesma SQL de janela, mesmo TZ).
+function toPeriodKey(period: Period): PeriodKey {
+  return (period === "today" ? "1d" : period) as PeriodKey;
+}
+function dateRangeCompleted(period: Period, market: Market = "US"): { from: string; to: string } {
+  const cp = calcPeriod(toPeriodKey(period), undefined, market);
+  return { from: cp.start, to: cp.end };
 }
 
-function previousDateRangeCompleted(period: Period, today = new Date()): { from: string; to: string } {
-  const days = periodToDays(period);
-  const to = new Date(today.getTime() - (days + 1) * 24 * 3600 * 1000);
-  const from = new Date(to.getTime() - (days - 1) * 24 * 3600 * 1000);
-  return {
-    from: from.toISOString().slice(0, 10),
-    to: to.toISOString().slice(0, 10),
-  };
+function previousDateRangeCompleted(period: Period, market: Market = "US"): { from: string; to: string } {
+  const cp = calcPeriod(toPeriodKey(period), undefined, market);
+  return { from: cp.prevStart, to: cp.prevEnd };
 }
 
 async function fetchKpis(market: Market, range: { from: string; to: string }, fulCats?: FulfillmentCategory[] | null): Promise<AggRow | null> {
@@ -86,16 +83,13 @@ function pct(curr: number, prev: number): number | null {
   return ((curr - prev) / prev) * 100;
 }
 
-const MOCK_US: AggRow = {
-  gross_sales: 3_252_000, discounts: 313_000, order_revenue: 3_135_000, total_sales: 2_820_000,
-  orders: 10_296, aov: 333, spend: 1_100_000, meta_spend: 945_000, google_spend: 151_000,
-  roas_gross: 3.21, roas_order: 3.13, roas_total: 2.57, new_customers: 4_754, cac: 231,
-};
-
-const MOCK_BR: AggRow = {
-  gross_sales: 9_250_000, discounts: 800_000, order_revenue: 9_400_000, total_sales: 9_530_000,
-  orders: 12_500, aov: 760, spend: 695_000, meta_spend: 442_000, google_spend: 241_000,
-  roas_gross: 13.29, roas_order: 13.70, roas_total: 13.70, new_customers: 7_700, cac: 90,
+// Cassia 2026-06-21: SEM dados-mock. Quando o BigQuery nao responde, devolvemos uma linha
+// ZERADA e marcamos source="Unavailable" — a UI mostra "dados indisponiveis", NUNCA numeros
+// plausiveis inventados (requisito: nenhum dado inventado). Antes havia MOCK_US/MOCK_BR aqui.
+const ZERO_ROW: AggRow = {
+  gross_sales: 0, discounts: 0, order_revenue: 0, total_sales: 0,
+  orders: 0, aov: 0, spend: 0, meta_spend: 0, google_spend: 0,
+  roas_gross: 0, roas_order: 0, roas_total: 0, new_customers: 0, cac: 0,
 };
 
 export async function getMetricBundle(
@@ -107,22 +101,24 @@ export async function getMetricBundle(
   await getPreorderMotherSkus(market); // warm cache p/ exclusão pre-order
   const fulKey = fulCats && fulCats.length ? fulCats.slice().sort().join('+') : 'all';
   const cacheKey = customRange
-    ? `metrics-v14-google-bq:${market}:custom:${customRange.from}:${customRange.to}:ful=${fulKey}`
-    : `metrics-v14-google-bq:${market}:${period}:ful=${fulKey}`;
+    ? `metrics-v15-google-bq:${market}:custom:${customRange.from}:${customRange.to}:ful=${fulKey}`
+    : `metrics-v15-google-bq:${market}:${period}:ful=${fulKey}`;
   return cached(cacheKey, 1800, async () => {
-    const range = customRange ?? dateRangeCompleted(period);
+    const range = customRange ?? dateRangeCompleted(period, market);
     const prevRange = customRange
       ? previousRangeOf(customRange.from, customRange.to)
-      : previousDateRangeCompleted(period);
+      : previousDateRangeCompleted(period, market);
 
     const [curr, prev] = await Promise.all([
       fetchKpis(market, range, fulCats),
       fetchKpis(market, prevRange, fulCats),
     ]);
 
-    const source: MetricSource = curr ? "BQ" : "Mock";
-    const c: AggRow = { ...(curr ?? (market === "US" ? MOCK_US : MOCK_BR)) };
-    const p = prev ?? (market === "US" ? MOCK_US : MOCK_BR);
+    // Cassia 2026-06-21: dataAvailable = temos dado real (BQ) OU dado live de hoje (Shopify D0).
+    // Sem isso, source="Unavailable" e a UI avisa em vez de exibir zeros como se fossem reais.
+    let dataAvailable = !!curr;
+    const c: AggRow = { ...(curr ?? ZERO_ROW) };
+    const p = prev ?? ZERO_ROW;
 
     // Cassia 2026-06-12: se o range eh "hoje" (D0) no fuso do market, BQ ainda
     // nao tem os dados (pipeline diario). Override sales/orders/aov via Shopify
@@ -134,6 +130,7 @@ export async function getMetricBundle(
         const t = await getTodaySales(market);
         const todayRev = t.totalRevenue || 0;
         const todayOrders = t.totalOrders || 0;
+        if (todayOrders > 0 || todayRev > 0) dataAvailable = true; // dado live real de hoje
         // Aproximacao: D0 = sem refunds ainda → total_sales ≈ order_revenue ≈ gross_sales.
         c.gross_sales = todayRev;
         c.order_revenue = todayRev;
@@ -154,6 +151,10 @@ export async function getMetricBundle(
       }
     }
     const currency = market === "US" ? "USD" : "BRL";
+
+    // Cassia 2026-06-21: source reflete disponibilidade real (apos overrides de hoje). Se a fonte
+    // nao respondeu, "Unavailable" — a UI avisa que os valores nao sao reais.
+    const source: MetricSource = dataAvailable ? "BQ" : "Unavailable";
 
     const fresh_until = new Date(Date.now() + 5 * 60 * 1000).toISOString();
     const generated_at = new Date().toISOString();

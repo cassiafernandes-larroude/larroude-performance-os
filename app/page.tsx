@@ -34,8 +34,12 @@ export default async function DailyBriefingPage({
   ]);
   const diagnostics = await runDiagnostics({ us, br });
 
-  const source = us.metrics[0]?.source ?? "Mock";
-  const sourceLabel = source === "BQ" ? "BigQuery Larroude OS" : "Mock data (configure GCP_SA_KEY_BASE64)";
+  const source = us.metrics[0]?.source ?? "Unavailable";
+  // Cassia 2026-06-21: sem dados-mock. Se a fonte nao respondeu, avisamos explicitamente.
+  const usUnavailable = (us.metrics[0]?.source ?? "Unavailable") === "Unavailable";
+  const brUnavailable = (br.metrics[0]?.source ?? "Unavailable") === "Unavailable";
+  const dataUnavailable = usUnavailable || brUnavailable;
+  const sourceLabel = source === "BQ" ? "BigQuery Larroude OS" : "fonte indisponível";
 
   return (
     <>
@@ -73,6 +77,17 @@ export default async function DailyBriefingPage({
         </div>
 
         <RefreshBar />
+
+        {dataUnavailable && (
+          <div className="mb-5 rounded-lg px-4 py-3 text-[12px] lg:text-[13px] flex items-start gap-2"
+               style={{ background: "rgba(255,92,108,0.10)", border: "1px solid rgba(255,92,108,0.35)", color: "#c0334a" }}>
+            <span aria-hidden>⚠</span>
+            <span>
+              <strong>Dados indisponíveis{usUnavailable && brUnavailable ? "" : usUnavailable ? " (US)" : " (BR)"}.</strong>{" "}
+              A fonte (BigQuery) não respondeu — os números exibidos como zero <strong>não são reais</strong>. Verifique a conexão/credenciais e atualize. Nenhum valor foi estimado.
+            </span>
+          </div>
+        )}
 
         <FulfillmentFilter className="mb-5" />
 

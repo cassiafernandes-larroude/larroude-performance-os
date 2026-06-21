@@ -2,7 +2,7 @@ export type Market = "US" | "BR";
 export type Currency = "USD" | "BRL" | null;
 export type Period = "today" | "7d" | "14d" | "28d" | "3M" | "6M" | "12M";
 
-export type MetricSource = "BQ" | "Meta" | "Klaviyo" | "Shopify" | "Google" | "Mock";
+export type MetricSource = "BQ" | "Meta" | "Klaviyo" | "Shopify" | "Google" | "Mock" | "Unavailable";
 
 export type Metric = {
   key: string;

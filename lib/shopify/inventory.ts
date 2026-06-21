@@ -4,7 +4,7 @@ import { cached } from "@/lib/cache";
 
 export type InventorySummary = {
   market: Market;
-  source: "Shopify" | "Mock";
+  source: "Shopify" | "Mock" | "Unavailable";
   fetched_at: string;
   // Resumo geral
   total_variants_sampled: number;
@@ -28,7 +28,7 @@ export type InventorySummary = {
 
 export type FulfillmentSummary = {
   market: Market;
-  source: "Shopify" | "Mock";
+  source: "Shopify" | "Mock" | "Unavailable";
   fetched_at: string;
   pending_count: number;
   late_count: number;        // > 5 dias sem fulfillment
@@ -87,6 +87,16 @@ const MOCK_FF_BR: Omit<FulfillmentSummary, "market" | "source" | "fetched_at"> =
   ],
 };
 
+// Cassia 2026-06-21: SEM dados-mock no fallback. Em falha/sem-credencial → ZEROS + source
+// "Unavailable" (UI avisa). MOCK_* acima ficam so como referencia de shape.
+const ZERO_INV: Omit<InventorySummary, "market" | "source" | "fetched_at"> = {
+  total_variants_sampled: 0, total_units_in_stock: 0, low_stock_count: 0, out_of_stock_count: 0,
+  low_stock_items: [], out_of_stock_items: [],
+};
+const ZERO_FF: Omit<FulfillmentSummary, "market" | "source" | "fetched_at"> = {
+  pending_count: 0, late_count: 0, unfulfilled_orders: [],
+};
+
 // Inventario via GraphQL
 type ProductsResp = {
   products: {
@@ -109,9 +119,9 @@ type ProductsResp = {
 };
 
 export async function getInventory(market: Market): Promise<InventorySummary> {
-  return cached(`inventory-v1:${market}`, 1800, async () => {
+  return cached(`inventory-v2:${market}`, 1800, async () => {
     if (!hasShopifyCredentials(market)) {
-      return { market, source: "Mock" as const, fetched_at: new Date().toISOString(), ...(market === "US" ? MOCK_INV_US : MOCK_INV_BR) };
+      return { market, source: "Unavailable" as const, fetched_at: new Date().toISOString(), ...ZERO_INV };
     }
 
     // Paginar até ~5 paginas (1250 variantes) - rate limit safe
@@ -197,9 +207,9 @@ type OrdersResp = {
 };
 
 export async function getFulfillmentStatus(market: Market): Promise<FulfillmentSummary> {
-  return cached(`fulfillment-v1:${market}`, 900, async () => {
+  return cached(`fulfillment-v2:${market}`, 900, async () => {
     if (!hasShopifyCredentials(market)) {
-      return { market, source: "Mock" as const, fetched_at: new Date().toISOString(), ...(market === "US" ? MOCK_FF_US : MOCK_FF_BR) };
+      return { market, source: "Unavailable" as const, fetched_at: new Date().toISOString(), ...ZERO_FF };
     }
 
     const query = `{
@@ -219,7 +229,7 @@ export async function getFulfillmentStatus(market: Market): Promise<FulfillmentS
 
     const data = await shopifyGraphQL<OrdersResp>(market, query);
     if (!data) {
-      return { market, source: "Mock" as const, fetched_at: new Date().toISOString(), ...(market === "US" ? MOCK_FF_US : MOCK_FF_BR) };
+      return { market, source: "Unavailable" as const, fetched_at: new Date().toISOString(), ...ZERO_FF };
     }
 
     const now = Date.now();

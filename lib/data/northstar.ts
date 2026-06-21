@@ -7,7 +7,7 @@ import { cached } from "@/lib/cache";
 export type NorthStarBundle = {
   market: Market;
   period: { from: string; to: string };
-  source: "BQ" | "Mock";
+  source: "BQ" | "Mock" | "Unavailable";
   // Métricas principais (mesma fórmula do LTV Dashboard oficial)
   ltv_predictive: number;       // AOV × Frequency × Lifetime
   ltv_historical: number;       // net_sales / total_customers
@@ -35,23 +35,18 @@ export type NorthStarBundle = {
 // getLtvKpiSummary do LTV Dashboard (data-prod), garantindo convergencia. Nao havia
 // divergencia de warehouse (data-platform e data-prod tem os mesmos dados); era so' codigo nao usado.
 
-const MOCK_US: Omit<NorthStarBundle, "market" | "period" | "source"> = {
-  ltv_predictive: 455, ltv_historical: 380, ltv_cac: 1.97, cac: 231,
-  returning_rate: 22.3, aov: 333, purchase_frequency: 1.37, customer_lifetime: 1.29,
-  total_customers: 11000, predictive_customers: 10200, returning_customers: 2275,
-  new_customers: 4754, total_ad_spend: 1100000, meta_spend: 945000, google_spend: 151000,
-  total_net_sales: 2820000,
-};
-const MOCK_BR: Omit<NorthStarBundle, "market" | "period" | "source"> = {
-  ltv_predictive: 1167, ltv_historical: 980, ltv_cac: 3.39, cac: 344,
-  returning_rate: 27.6, aov: 738, purchase_frequency: 1.46, customer_lifetime: 1.38,
-  total_customers: 14000, predictive_customers: 13200, returning_customers: 3640,
-  new_customers: 6100, total_ad_spend: 2500000, meta_spend: 2280000, google_spend: 240000,
-  total_net_sales: 7700000,
+// Cassia 2026-06-21: SEM dados-mock. Em falha/sem-credencial devolvemos ZEROS + source
+// "Unavailable" — a UI avisa que os dados nao carregaram, NUNCA exibe LTV/CAC inventados.
+const ZERO_BUNDLE: Omit<NorthStarBundle, "market" | "period" | "source"> = {
+  ltv_predictive: 0, ltv_historical: 0, ltv_cac: 0, cac: 0,
+  returning_rate: 0, aov: 0, purchase_frequency: 0, customer_lifetime: 0,
+  total_customers: 0, predictive_customers: 0, returning_customers: 0,
+  new_customers: 0, total_ad_spend: 0, meta_spend: 0, google_spend: 0,
+  total_net_sales: 0,
 };
 
 export async function getNorthStarBundle(market: Market): Promise<NorthStarBundle> {
-  return cached(`northstar-v6:${market}`, 1800, async () => {
+  return cached(`northstar-v7:${market}`, 1800, async () => {
     // Janela 12 meses, terminando ontem
     const today = new Date();
     const to = new Date(today.getTime() - 24 * 3600 * 1000);
@@ -61,8 +56,8 @@ export async function getNorthStarBundle(market: Market): Promise<NorthStarBundl
 
     if (!hasBigQueryCredentials()) {
       return {
-        market, period: { from: fromStr, to: toStr }, source: "Mock",
-        ...(market === "US" ? MOCK_US : MOCK_BR),
+        market, period: { from: fromStr, to: toStr }, source: "Unavailable",
+        ...ZERO_BUNDLE,
       };
     }
 
@@ -140,8 +135,8 @@ export async function getNorthStarBundle(market: Market): Promise<NorthStarBundl
     } catch (err) {
       console.error("northstar query failed:", err);
       return {
-        market, period: { from: fromStr, to: toStr }, source: "Mock" as const,
-        ...(market === "US" ? MOCK_US : MOCK_BR),
+        market, period: { from: fromStr, to: toStr }, source: "Unavailable" as const,
+        ...ZERO_BUNDLE,
       };
     }
   });

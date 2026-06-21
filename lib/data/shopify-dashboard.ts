@@ -11,7 +11,7 @@ const DATASET: Record<Market, string> = { US: "stg_shopify", BR: "stg_shopify_br
 export type ShopifyBundle = {
   market: Market;
   period: { from: string; to: string };
-  source: "BQ" | "Mock";
+  source: "BQ" | "Mock" | "Unavailable";
   // KPIs
   orders: number;
   gross_sales: number;
@@ -165,6 +165,18 @@ const MOCK_BR: Omit<ShopifyBundle, "market" | "period" | "source"> = {
   ],
 };
 
+// Cassia 2026-06-21: SEM dados-mock no fallback. Em falha/sem-credencial devolvemos ZEROS +
+// source "Unavailable" — a UI avisa, NUNCA exibe vendas/produtos inventados. (MOCK_US/MOCK_BR
+// acima ficam como referencia de shape, nao sao mais usados.)
+const ZERO_SHOPIFY: Omit<ShopifyBundle, "market" | "period" | "source"> = {
+  orders: 0, gross_sales: 0, net_sales: 0, aov: 0, units_sold: 0,
+  conversion_rate_pct: 0, return_rate_pct: 0, discount_pct: 0, avg_discount_per_order: 0,
+  funnel: { abandoned_checkouts: 0, completed_orders: 0, checkout_cvr_pct: 0 },
+  top_products: [], top_variants: [], collections: [],
+  returns: { total_refund_value: 0, refund_orders: 0, return_rate_pct: 0, top_returned: [] },
+  weekday_perf: [], suggestions: [],
+};
+
 // Filtros: exclui canceladas/test/B2B/wholesale/marketplace/redo; orders > cap; BR exclui PIX nao pago
 // alias = prefixo da tabela (ex: "" ou "o.") - usado quando filtros aparecem dentro de JOIN/UNNEST
 function commonFiltersShopify(market: Market, alias: string = ""): string {
@@ -194,11 +206,11 @@ export async function getShopifyBundle(
 ): Promise<ShopifyBundle> {
   await getPreorderMotherSkus(market); // warm cache p/ exclusão pre-order
   const fulKey = fulCats && fulCats.length ? fulCats.slice().sort().join('+') : 'all';
-  return cached(`shopify-v2:${market}:${period.from}:${period.to}:ful=${fulKey}`, 1800, async () => {
+  return cached(`shopify-v3:${market}:${period.from}:${period.to}:ful=${fulKey}`, 1800, async () => {
     const range = period;
 
     if (!hasBigQueryCredentials()) {
-      return { market, period: range, source: "Mock", ...(market === "US" ? MOCK_US : MOCK_BR) };
+      return { market, period: range, source: "Unavailable", ...ZERO_SHOPIFY };
     }
 
     const dataset = DATASET[market];
@@ -495,7 +507,7 @@ export async function getShopifyBundle(
       };
     } catch (err) {
       console.error("shopify dashboard failed:", err);
-      return { market, period: range, source: "Mock", ...(market === "US" ? MOCK_US : MOCK_BR) };
+      return { market, period: range, source: "Unavailable", ...ZERO_SHOPIFY };
     }
   });
 }

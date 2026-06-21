@@ -25,7 +25,7 @@ export default async function SitePerformancePage({
         <div className="text-[12px]" style={{ color: "var(--ink)", fontWeight: 500 }}>Site Performance</div>
         <div className="flex items-center gap-2 text-[11px]" style={{ color: "var(--ink-muted)" }}>
           <div className="pulse-dot" />
-          <span>PageSpeed Insights {us.source === "PageSpeed" ? "live" : "(mock)"}</span>
+          <span>PageSpeed Insights {us.source === "PageSpeed" ? "live" : "indisponível"}</span>
         </div>
       </header>
 
@@ -68,6 +68,23 @@ function SitePerformanceSection({ bundle, flag, label }: {
 
   const cMap = { positive: "var(--positive)", warning: "var(--warning)", negative: "var(--negative)" };
   const bMap = { positive: "var(--positive-soft)", warning: "var(--warning-soft)", negative: "var(--negative-soft)" };
+
+  // Cassia 2026-06-21: sem dados-mock. Se o PageSpeed nao respondeu, avisamos e NAO renderizamos
+  // scores/CWV (que seriam zeros — pareceriam "critico" em vez de "sem dado").
+  if (bundle.source === "Unavailable") {
+    return (
+      <>
+        <div className="section-marker mb-4">
+          <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--ink-muted)" }}>{flag} {label}</span>
+        </div>
+        <div className="mb-6 rounded-lg px-4 py-3 text-[12px] lg:text-[13px] flex items-start gap-2"
+             style={{ background: "rgba(255,92,108,0.10)", border: "1px solid rgba(255,92,108,0.35)", color: "#c0334a" }}>
+          <span aria-hidden>⚠</span>
+          <span><strong>Dados indisponíveis.</strong> O Google PageSpeed Insights não respondeu (rate-limit, chave ausente ou timeout). Nenhum score ou Core Web Vital foi exibido — <strong>nada foi estimado</strong>. Tente atualizar em instantes.</span>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>

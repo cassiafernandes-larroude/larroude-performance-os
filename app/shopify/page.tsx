@@ -48,11 +48,19 @@ export default async function ShopifyPage({
             </p>
             <p className="text-[11px] mt-1" style={{ color: "var(--ink-muted)" }}>
               <Calendar className="inline w-3 h-3 mr-1" />
-              {data.period.from} to {data.period.to} - via {data.source === "BQ" ? "BigQuery Larroude OS" : "Mock"}
+              {data.period.from} to {data.period.to} - via {data.source === "BQ" ? "BigQuery Larroude OS" : "fonte indisponível"}
             </p>
           </div>
           <DashboardActions />
         </div>
+
+        {data.source === "Unavailable" && (
+          <div className="mb-4 rounded-lg px-4 py-3 text-[12px] lg:text-[13px] flex items-start gap-2"
+               style={{ background: "rgba(255,92,108,0.10)", border: "1px solid rgba(255,92,108,0.35)", color: "#c0334a" }}>
+            <span aria-hidden>⚠</span>
+            <span><strong>Dados indisponíveis.</strong> A fonte (BigQuery) não respondeu — os valores em zero <strong>não são reais</strong>. Nenhum número foi estimado.</span>
+          </div>
+        )}
 
         <FiltersBar showFulfillment />
 
@@ -228,7 +236,7 @@ export default async function ShopifyPage({
           </div>
         </div>
 
-        <SectionHeader title={"INVENTORY (SHOPIFY ADMIN API)"} extra={inventory.source === "Shopify" ? "live - " + inventory.total_variants_sampled + " variants sampled" : "mock - " + inventory.total_variants_sampled + " variants"} />
+        <SectionHeader title={"INVENTORY (SHOPIFY ADMIN API)"} extra={inventory.source === "Shopify" ? "live - " + inventory.total_variants_sampled + " variants sampled" : "indisponível - sem dados"} />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-3">
           <div className="card">
             <div className="label-meta mb-1">UNITS IN STOCK</div>
@@ -278,7 +286,7 @@ export default async function ShopifyPage({
           </div>
         )}
 
-        <SectionHeader title="PENDING & LATE ORDERS" extra={fulfillment.source === "Shopify" ? "live - top 100 open orders" : "mock - top 100 open orders"} />
+        <SectionHeader title="PENDING & LATE ORDERS" extra={fulfillment.source === "Shopify" ? "live - top 100 open orders" : "indisponível - sem dados"} />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
           <div className="card">
             <div className="label-meta mb-1">PENDING FULFILLMENT</div>

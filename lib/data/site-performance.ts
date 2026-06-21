@@ -40,7 +40,7 @@ export type SitePerformanceMetrics = {
   market: Market;
   url: string;
   strategy: Strategy;
-  source: "PageSpeed" | "Mock";
+  source: "PageSpeed" | "Mock" | "Unavailable";
   fetched_at: string;
   // Scores
   performance_score: number;
@@ -84,72 +84,22 @@ export type SitePerformanceMetrics = {
   }>;
 };
 
-const MOCK_BASE = (market: Market, strategy: Strategy): Omit<SitePerformanceMetrics, "fetched_at" | "source"> => {
-  const isBR = market === "BR";
-  const m = (v: number, brMult = 5, mobileMult = 1.5) => Math.round(v * (isBR ? brMult : 1) * (strategy === "mobile" ? mobileMult : 1));
-  return {
-    market, url: SITE_URLS[market], strategy,
-    performance_score: isBR ? 37 : (strategy === "mobile" ? 78 : 92),
-    accessibility_score: isBR ? 82 : 92, best_practices_score: isBR ? 75 : 88, seo_score: isBR ? 88 : 95,
-    lcp_ms: m(2400, 9.5), inp_ms: m(180, 2.5), cls: isBR ? 0.18 : 0.04,
-    ttfb_ms: m(420, 4.3), fcp_ms: m(1200, 3.5), si_ms: m(3200, 4.5), tbt_ms: m(280, 4),
-    field: {
-      available: true,
-      lcp_ms: m(2800, 8), inp_ms: m(220, 2), cls: isBR ? 0.15 : 0.05, ttfb_ms: m(380, 4),
-      lcp_distributions: { good: isBR ? 18 : 67, ni: isBR ? 32 : 22, poor: isBR ? 50 : 11 },
-      cls_distributions: { good: isBR ? 45 : 82, ni: isBR ? 28 : 12, poor: isBR ? 27 : 6 },
-      inp_distributions: { good: isBR ? 38 : 72, ni: isBR ? 35 : 20, poor: isBR ? 27 : 8 },
-      overall_category: isBR ? "SLOW" : "AVERAGE",
-    },
-    total_byte_weight: isBR ? 8_500_000 : 3_200_000,
-    resources: {
-      total_bytes: isBR ? 8_500_000 : 3_200_000,
-      total_requests: isBR ? 142 : 78,
-      by_type: [
-        { type: "Imagens", bytes: isBR ? 4_800_000 : 1_700_000, requests: isBR ? 62 : 30, pct: isBR ? 56 : 53 },
-        { type: "JavaScript", bytes: isBR ? 2_100_000 : 850_000, requests: isBR ? 32 : 22, pct: isBR ? 25 : 27 },
-        { type: "CSS", bytes: isBR ? 480_000 : 280_000, requests: isBR ? 8 : 6, pct: isBR ? 6 : 9 },
-        { type: "Fontes", bytes: isBR ? 720_000 : 280_000, requests: isBR ? 12 : 8, pct: isBR ? 8 : 9 },
-        { type: "HTML/Outros", bytes: isBR ? 400_000 : 90_000, requests: isBR ? 28 : 12, pct: isBR ? 5 : 2 },
-      ],
-    },
-    third_parties: isBR ? [
-      { entity: "Google Tag Manager", blocking_ms: 480, transfer_size: 350_000 },
-      { entity: "Meta Pixel (Facebook)", blocking_ms: 320, transfer_size: 280_000 },
-      { entity: "Klaviyo", blocking_ms: 240, transfer_size: 180_000 },
-      { entity: "Hotjar", blocking_ms: 180, transfer_size: 120_000 },
-    ] : [
-      { entity: "Google Tag Manager", blocking_ms: 220, transfer_size: 340_000 },
-      { entity: "Meta Pixel (Facebook)", blocking_ms: 180, transfer_size: 270_000 },
-      { entity: "Klaviyo", blocking_ms: 120, transfer_size: 150_000 },
-    ],
-    dom_size: isBR ? 2_800 : 1_400,
-    unused_js_bytes: isBR ? 1_200_000 : 380_000,
-    unused_css_bytes: isBR ? 180_000 : 60_000,
-    render_blocking_count: isBR ? 8 : 3,
-    image_optimization_savings: isBR ? 2_100_000 : 420_000,
-    opportunities: isBR ? [
-      { id: "lcp", title: "LCP critico: 23s", description: "Lazy-load + CDN edge BR + image priority", savings_ms: 18000, impact: "high" },
-      { id: "render-blocking", title: "JavaScript bloqueando render", description: "Inline critical CSS, defer scripts nao essenciais", savings_ms: 3500, impact: "high" },
-      { id: "image-opt", title: "Imagens nao otimizadas", description: "Converter para WebP/AVIF + lazy loading", savings_ms: 2100, impact: "high" },
-      { id: "unused-js", title: "JavaScript nao utilizado", description: "Remover bundles de tracking nao usados", savings_ms: 1200, impact: "medium" },
-      { id: "cache", title: "Cache do browser", description: "Cache-Control de longa duracao para assets estaticos", savings_ms: 800, impact: "medium" },
-      { id: "preconnect", title: "Preconnect para origins", description: "Adicionar preconnect para CDNs e Klaviyo", savings_ms: 400, impact: "low" },
-    ] : [
-      { id: "unused-js", title: "Reduzir JavaScript nao utilizado", description: "Tree-shaking + code splitting", savings_ms: 850, impact: "medium" },
-      { id: "image-format", title: "Otimizar imagens", description: "Servir em WebP/AVIF", savings_ms: 620, impact: "medium" },
-      { id: "preconnect", title: "Preconnect para CDNs", description: "Adicionar dns-prefetch para origins de terceiros", savings_ms: 200, impact: "low" },
-    ],
-    audits_failed: isBR ? [
-      { id: "uses-text-compression", title: "Habilitar compressao gzip/brotli", score: 0, category: "performance" },
-      { id: "uses-long-cache-ttl", title: "Cache TTL muito curto", score: 0.3, category: "performance" },
-      { id: "image-size-responsive", title: "Imagens sem srcset", score: 0.5, category: "performance" },
-      { id: "color-contrast", title: "Contraste insuficiente em CTAs", score: 0, category: "accessibility" },
-    ] : [
-      { id: "uses-long-cache-ttl", title: "Aumentar Cache TTL", score: 0.6, category: "performance" },
-    ],
-  };
-};
+// Cassia 2026-06-21: SEM dados-mock. Quando o PageSpeed Insights falha (rate-limit, sem chave,
+// timeout), devolvemos uma estrutura ZERADA com source "Unavailable" e field.available=false —
+// a UI avisa "dados indisponiveis" e NAO renderiza Core Web Vitals/scores inventados.
+// Antes havia um MOCK_BASE com scores/CWV/CrUX/third-parties hardcoded e plausiveis.
+const ZERO_PERF = (market: Market, strategy: Strategy): Omit<SitePerformanceMetrics, "fetched_at" | "source"> => ({
+  market, url: SITE_URLS[market], strategy,
+  performance_score: 0, accessibility_score: 0, best_practices_score: 0, seo_score: 0,
+  lcp_ms: 0, inp_ms: 0, cls: 0, ttfb_ms: 0, fcp_ms: 0, si_ms: 0, tbt_ms: 0,
+  field: { available: false },
+  total_byte_weight: 0,
+  resources: { total_bytes: 0, total_requests: 0, by_type: [] },
+  third_parties: [],
+  dom_size: 0, unused_js_bytes: 0, unused_css_bytes: 0,
+  render_blocking_count: 0, image_optimization_savings: 0,
+  opportunities: [], audits_failed: [],
+});
 
 async function fetchPageSpeed(market: Market, strategy: Strategy): Promise<SitePerformanceMetrics | null> {
   const url = SITE_URLS[market];
@@ -312,12 +262,12 @@ async function fetchPageSpeed(market: Market, strategy: Strategy): Promise<SiteP
 }
 
 export async function getSitePerformance(market: Market, strategy: Strategy = "mobile"): Promise<SitePerformanceMetrics> {
-  return cached(`site-perf-v2:${market}:${strategy}`, 3600, async () => {
+  return cached(`site-perf-v3:${market}:${strategy}`, 3600, async () => {
     const real = await fetchPageSpeed(market, strategy);
     if (real) return real;
     return {
-      ...MOCK_BASE(market, strategy),
-      source: "Mock" as const,
+      ...ZERO_PERF(market, strategy),
+      source: "Unavailable" as const,
       fetched_at: new Date().toISOString(),
     };
   });

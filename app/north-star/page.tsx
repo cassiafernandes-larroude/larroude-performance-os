@@ -37,11 +37,19 @@ export default async function NorthStarPage() {
               4 anchor metrics for Larroude - same logic as the official LTV Dashboard
             </p>
             <p className="text-[11px] mt-1" style={{ color: "var(--ink-muted)" }}>
-              Window: {us.period.from} to {us.period.to} - {us.source === "BQ" ? "BigQuery Larroude OS" : "Mock"}
+              Window: {us.period.from} to {us.period.to} - {us.source === "BQ" ? "BigQuery Larroude OS" : "fonte indisponível"}
             </p>
           </div>
           <DashboardActions />
         </div>
+
+        {(us.source === "Unavailable" || br.source === "Unavailable") && (
+          <div className="mb-6 rounded-lg px-4 py-3 text-[12px] lg:text-[13px] flex items-start gap-2"
+               style={{ background: "rgba(255,92,108,0.10)", border: "1px solid rgba(255,92,108,0.35)", color: "#c0334a" }}>
+            <span aria-hidden>⚠</span>
+            <span><strong>Dados indisponíveis.</strong> A fonte (BigQuery/LTV) não respondeu — os valores em zero <strong>não são reais</strong>. Nenhum número foi estimado.</span>
+          </div>
+        )}
 
         {/* US */}
         <MarketSection bundle={us} flag="🇺🇸" label="UNITED STATES" currency="USD" />

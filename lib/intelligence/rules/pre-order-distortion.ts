@@ -3,16 +3,19 @@ import type { DiagnosticContext } from "../diagnostics";
 import { makeDiagnostic } from "../utils";
 
 export async function rulePreOrderDistortion(ctx: DiagnosticContext): Promise<Diagnostic[]> {
-  // Static rule baseada no contexto Larroude: pre-orders ~58% da receita US
+  // Cassia 2026-06-21: caveat ESTRUTURAL qualitativo (nao quantitativo). Antes esta regra
+  // exibia metricas FIXAS inventadas (share 58%, nCAC $142/$118) como se medidas — removidas
+  // para nao inventar dado. Quando houver query real de receita pre-order vs core, popular
+  // `metrics` com os valores calculados de BQ.
   return [makeDiagnostic({
     ruleId: "pre-order-distortion",
     market: "US",
     severity: "warning",
     category: "Pre-Order",
     title: "Pre-orders distorcem qualidade de novos clientes US",
-    body: "Pre-orders representam ~58% da receita US. Conta PRE-ORDER puxa nCAC para baixo. Sem segregar, mascara o real custo de aquisicao core.",
+    body: "A conta PRE-ORDER (pré-lançamentos) puxa o nCAC para baixo. Sem segregar core vs pre-order, o custo real de aquisição do core fica mascarado. Caveat estrutural — sem número medido aqui.",
     sources: ["Meta", "Shopify", "BQ"],
-    metrics: { share_pct: 58, ncac_core_estimate: "$142", ncac_blended_estimate: "$118" },
-    recommendation: "Separar tracking core vs pre-order na camada de relatorios",
+    metrics: {},
+    recommendation: "Separar tracking core vs pre-order na camada de relatorios e quantificar o share via BQ",
   })];
 }

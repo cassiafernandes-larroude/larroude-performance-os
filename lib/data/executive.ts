@@ -25,7 +25,7 @@ export type ChannelRow = {
 export type ExecutiveBundle = {
   market: Market;
   period: { from: string; to: string };
-  source: "BQ" | "Mock";
+  source: "BQ" | "Mock" | "Unavailable";
   net_revenue: number;
   gross_revenue: number;
   ad_spend: number;
@@ -52,7 +52,7 @@ export type ExecutiveBundle = {
  */
 export type ExecutiveConsolidated = {
   period: { from: string; to: string };
-  source: "BQ" | "Mock";
+  source: "BQ" | "Mock" | "Unavailable";
   currency: "USD";
   fxBrlUsd: number;          // taxa usada para converter BR
   total_revenue: number;     // net (total_sales) US + BR em USD
@@ -145,32 +145,28 @@ function computeUeApprox(opts: {
   return { profit, marginPct };
 }
 
-const MOCK: Record<Market, Omit<ExecutiveBundle, "market" | "period" | "source">> = {
-  US: {
-    net_revenue: 2820000, gross_revenue: 3520000, ad_spend: 1100000,
-    meta_spend: 945000, google_spend: 151000,
-    marketing_efficiency: 2.57, contribution_margin: 1720000, contribution_margin_pct: 61,
-    burn_rate_pct: 39, cac: 231, ltv_predictive: 403, payback_period_months: 6.9,
-    channels: [],
-  },
-  BR: {
-    net_revenue: 7700000, gross_revenue: 9250000, ad_spend: 2500000,
-    meta_spend: 2280000, google_spend: 240000,
-    marketing_efficiency: 3.08, contribution_margin: 5200000, contribution_margin_pct: 67.5,
-    burn_rate_pct: 32.5, cac: 344, ltv_predictive: 1167, payback_period_months: 3.5,
-    channels: [],
-  },
+// Cassia 2026-06-21: SEM dados-mock. Em falha/sem-credencial devolvemos ZEROS + source
+// "Unavailable" — a UI avisa que nao carregou, NUNCA exibe net revenue/CAC/payback inventados.
+const ZERO_EXEC: Omit<ExecutiveBundle, "market" | "period" | "source"> = {
+  net_revenue: 0, gross_revenue: 0, ad_spend: 0,
+  meta_spend: 0, google_spend: 0,
+  marketing_efficiency: 0, contribution_margin: 0, contribution_margin_pct: 0,
+  burn_rate_pct: 0, cac: 0, ltv_predictive: 0, payback_period_months: 0,
+  channels: [],
+};
+const ZERO_EXEC_BY_MARKET: Record<Market, Omit<ExecutiveBundle, "market" | "period" | "source">> = {
+  US: ZERO_EXEC, BR: ZERO_EXEC,
 };
 
 export async function getExecutiveBundle(market: Market): Promise<ExecutiveBundle> {
-  return cached(`executive-v6-mainChannel:${market}`, 1800, async () => {
+  return cached(`executive-v7-mainChannel:${market}`, 1800, async () => {
     const today = new Date();
     const to = new Date(today.getTime() - 24 * 3600 * 1000);
     const from = new Date(to.getTime() - 27 * 24 * 3600 * 1000);
     const range = { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
 
     if (!hasBigQueryCredentials()) {
-      return { market, period: range, source: "Mock", ...MOCK[market] };
+      return { market, period: range, source: "Unavailable", ...ZERO_EXEC_BY_MARKET[market] };
     }
 
     try {
@@ -237,7 +233,7 @@ export async function getExecutiveBundle(market: Market): Promise<ExecutiveBundl
       };
     } catch (err) {
       console.error("executive query failed:", err);
-      return { market, period: range, source: "Mock" as const, ...MOCK[market] };
+      return { market, period: range, source: "Unavailable" as const, ...ZERO_EXEC_BY_MARKET[market] };
     }
   });
 }
@@ -312,21 +308,16 @@ export async function getExecutiveConsolidated(
     const fxRate = await getRecentBrlUsdRate(); // BRL → USD
 
     if (!hasBigQueryCredentials()) {
-      const mockUsd = { US: 2820000, BR: 7700000 * fxRate };
-      const mockSpend = { US: 1100000, BR: 2500000 * fxRate };
-      const totalRev = mockUsd.US + mockUsd.BR;
-      const totalSpend = mockSpend.US + mockSpend.BR;
+      // Cassia 2026-06-21: SEM mock. Sem credencial → ZEROS + source "Unavailable" (UI avisa).
       return {
-        period: range, source: "Mock", currency: "USD", fxBrlUsd: fxRate,
-        total_revenue: totalRev, total_gross_revenue: totalRev * 1.1, total_units: 0,
-        total_ad_spend: totalSpend, total_meta_spend: totalSpend * 0.85, total_google_spend: totalSpend * 0.15,
-        roas: totalRev / totalSpend, roas_gross: (totalRev * 1.1) / totalSpend, profit: totalRev - totalSpend,
-        profit_margin_pct: ((totalRev - totalSpend) / totalRev) * 100,
+        period: range, source: "Unavailable", currency: "USD", fxBrlUsd: fxRate,
+        total_revenue: 0, total_gross_revenue: 0, total_units: 0, total_ad_spend: 0, total_meta_spend: 0, total_google_spend: 0,
+        roas: 0, roas_gross: 0, profit: 0, profit_margin_pct: 0,
         daily: { spend: [], total_sales: [], gross_sales: [], margin_total_sales: [], roas_total: [] },
         channels: [],
         by_market: {
-          US: { revenue: mockUsd.US, spend: mockSpend.US, meta: mockSpend.US * 0.85, google: mockSpend.US * 0.15, tools: 0, percent_rev: 0, units: 0, profit: mockUsd.US - mockSpend.US, profit_margin_pct: ((mockUsd.US - mockSpend.US) / mockUsd.US) * 100, ue_profit: 0, ue_margin_pct: 0, byChannel: {} },
-          BR: { revenue: mockUsd.BR, spend: mockSpend.BR, meta: mockSpend.BR * 0.85, google: mockSpend.BR * 0.15, tools: 0, percent_rev: 0, units: 0, revenue_brl: 7700000, spend_brl: 2500000, profit: mockUsd.BR - mockSpend.BR, profit_margin_pct: ((mockUsd.BR - mockSpend.BR) / mockUsd.BR) * 100, profit_brl: 7700000 - 2500000, ue_profit: 0, ue_margin_pct: 0, byChannel: {} },
+          US: { revenue: 0, spend: 0, meta: 0, google: 0, tools: 0, percent_rev: 0, units: 0, profit: 0, profit_margin_pct: 0, ue_profit: 0, ue_margin_pct: 0, byChannel: {} },
+          BR: { revenue: 0, spend: 0, meta: 0, google: 0, tools: 0, percent_rev: 0, units: 0, revenue_brl: 0, spend_brl: 0, profit: 0, profit_margin_pct: 0, profit_brl: 0, ue_profit: 0, ue_margin_pct: 0, byChannel: {} },
         },
       };
     }
@@ -528,7 +519,7 @@ export async function getExecutiveConsolidated(
     } catch (err) {
       console.error("executive consolidated failed:", err);
       return {
-        period: range, source: "Mock", currency: "USD", fxBrlUsd: fxRate,
+        period: range, source: "Unavailable", currency: "USD", fxBrlUsd: fxRate,
         total_revenue: 0, total_gross_revenue: 0, total_units: 0, total_ad_spend: 0, total_meta_spend: 0, total_google_spend: 0,
         roas: 0, roas_gross: 0, profit: 0, profit_margin_pct: 0,
         daily: { spend: [], total_sales: [], gross_sales: [], margin_total_sales: [], roas_total: [] },
