@@ -5,12 +5,18 @@
 // Nunca inventa etapa: product-views NÃO é etapa do funil de sessão do Shopify, fica de fora.
 
 import { runShopifyQL } from '@/lib/main-dashboard/shopify-admin';
-import { runQuery } from '@/lib/bigquery/client';
-import { ORDERS_TABLE } from '@/lib/ltv-dashboard/queries';
-import { EXCLUDED_TAGS_REGEX } from '@/lib/shared/dtc-filters';
+import { runQuery } from '@/lib/ltv-dashboard/bigquery';
 
 export type Market = 'US' | 'BR';
 export type Granularity = 'day' | 'week' | 'month';
+
+// Cassia 2026-06-21: tabela de orders local (evita importar o módulo pesado ltv-dashboard/queries
+// no bundle da rota). Regex de tags inline (mesmo valor canônico).
+const ORDERS_TABLE: Record<Market, string> = {
+  US: 'larroude-data-prod.stg_shopify.orders',
+  BR: 'larroude-data-prod.stg_shopify_br.orders',
+};
+const EXCLUDED_TAGS_REGEX = 'b2b|wholesale|marketplace|redo|influencer';
 
 export interface FunnelPoint {
   date: string;
