@@ -67,16 +67,36 @@ function materialBucketsOf(p: { materials: string[]; name: string }): string[] {
   const s = (p.materials.join(' ') + ' ' + p.name).toLowerCase();
   const has = (w: string) => s.includes(w);
   const b: string[] = [];
+  // Materiais específicos (não-couro) primeiro.
   if (has('patent')) b.push('Couro Verniz');         // couro verniz tem precedência sobre couro
-  if (has('leather') && !has('patent')) b.push('Couro');
   if (has('suede')) b.push('Camurça');
   if (has('raffia')) b.push('Raffia');
   if (has('vinyl') || has('vinil')) b.push('Vinil');
   if (has('crochet') || has('croch')) b.push('Crochê');
   if (has('macrame') || has('macram')) b.push('Macramê');
   if (has('satin') || has('cetim')) b.push('Cetim');
+  // Couro só se tem leather E NÃO está em nenhuma categoria não-couro acima.
+  if (has('leather') && b.length === 0) b.push('Couro');
   if (!b.length) b.push('Outros');
   return b;
+}
+
+// Cores extras (PT) detectadas por palavra-chave no nome/cor — Cassia 2026-06-21.
+const COLOR_KEYWORDS: Record<string, string[]> = {
+  Caramelo: ['caramel'],
+  Rainbow: ['rainbow'],
+  Azul: ['blue', 'indigo', 'navy', 'denim'],
+  Vermelho: ['red', 'scarlet', 'carmine'],
+  Transparente: ['clear', 'transparent', 'pvc'],
+};
+const COLOR_EXTRAS = Object.keys(COLOR_KEYWORDS);
+function colorMatches(p: { name: string; colors: string[] }, sel: string): boolean {
+  const kws = COLOR_KEYWORDS[sel];
+  if (kws) {
+    const s = (p.name + ' ' + p.colors.join(' ')).toLowerCase();
+    return kws.some((k) => s.includes(k));
+  }
+  return p.colors.includes(sel);
 }
 interface RawBucket { date: string; units: number; grossRevenue: number; discount: number; }
 interface SeriesPoint { date: string; units: number; revenue: number; }
@@ -286,7 +306,7 @@ export default function ProductPerformancePage() {
       case 'material':
         return !matSel || materialBucketsOf(p).includes(matSel);
       case 'cor':
-        return !colorSel || p.colors.includes(colorSel);
+        return !colorSel || colorMatches(p, colorSel);
       default: return true;
     }
   }
@@ -503,7 +523,7 @@ export default function ProductPerformancePage() {
         <div className="mb-3 flex items-center gap-1.5 flex-wrap">
           <span className="text-[10px] font-bold uppercase mr-1" style={{ color: '#9ca3af' }}>Cor</span>
           <button onClick={() => setColorSel(null)} className="px-2.5 py-1 rounded-full text-[11px]" style={{ background: !colorSel ? '#1a1a1a' : '#ebe9e3', color: !colorSel ? '#fff' : '#1a1a1a' }}>Todas</button>
-          {colors.map((cl) => (
+          {[...COLOR_EXTRAS, ...colors.filter((c) => !COLOR_EXTRAS.includes(c))].map((cl) => (
             <button key={cl} onClick={() => setColorSel(colorSel === cl ? null : cl)} className="px-2.5 py-1 rounded-full text-[11px]" style={{ background: colorSel === cl ? '#1a1a1a' : '#ebe9e3', color: colorSel === cl ? '#fff' : '#1a1a1a' }}>{cl}</button>
           ))}
         </div>
