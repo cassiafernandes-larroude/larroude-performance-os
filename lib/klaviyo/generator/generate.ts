@@ -35,8 +35,8 @@ function sanitizeSlug(slug: string): string {
 export async function generateCampaign(
   input: GeneratorInput
 ): Promise<{ campaign: GeneratedCampaign; context: PerformanceContext }> {
-  // Janela 6M: equilíbrio entre análise ampla e tempo de resposta (a voz já está embutida em brand-voice.ts).
-  const context = await buildPerformanceContext(input.market, input.type, input.period || '6M');
+  // Janela 3M: contexto mais leve = mais rápido (cabe no limite de 60s do Hobby); a voz já está em brand-voice.ts.
+  const context = await buildPerformanceContext(input.market, input.type, input.period || '3M');
 
   // Plano de segmentação pela meta de faturamento (determinístico, em código).
   let goalPlan: GoalPlan | null = null;
@@ -65,7 +65,7 @@ export async function generateCampaign(
     system: systemPrompt(input.market),
     user: userPrompt(input, context, goalPlanText),
     schema: CAMPAIGN_RESPONSE_SCHEMA,
-    maxOutputTokens: 16384,
+    maxOutputTokens: 40000,
   });
 
   // Segmentação: meta (código) tem prioridade; senão, escolha do Claude validada.
