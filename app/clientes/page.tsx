@@ -1,15 +1,22 @@
-// Cassia 2026-06-21: Aba Clientes — visão 360° do cliente (DTC). Client component faz o fetch
-// de /api/clientes/[market]; esta page é só o shell server.
-import { Suspense } from 'react';
+// Cassia 2026-06-21: Aba Clientes 360 — mesmo design system do LTV por Produto. Carrega o CSS
+// escopado do LTV e renderiza dentro de .ltv-root; ClientesDashboard usa Header/PeriodFilter/.card
+// do LTV. Fetch de dados é client-side (/api/clientes); esta page resolve só o freshness.
 import ClientesDashboard from '@/components/clientes/ClientesDashboard';
+import { getDataFreshness } from '@/lib/ltv-dashboard/queries';
+import '../ltv-native/ltv-dashboard.css';
 
-// Cassia 2026-06-21: dinâmica — ClientesDashboard usa useSearchParams (filtro FiltersBar via URL).
-export const dynamic = 'force-dynamic';
+export const revalidate = 3600;
 
-export default function ClientesPage() {
+export default async function ClientesPage() {
+  let freshness = '';
+  try {
+    freshness = await getDataFreshness();
+  } catch (err) {
+    console.error('[clientes] freshness failed', err);
+  }
   return (
-    <Suspense fallback={null}>
-      <ClientesDashboard />
-    </Suspense>
+    <div className="ltv-root">
+      <ClientesDashboard freshness={freshness} />
+    </div>
   );
 }

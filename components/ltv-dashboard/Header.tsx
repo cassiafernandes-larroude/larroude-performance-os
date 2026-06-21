@@ -6,10 +6,14 @@ export default function Header({
   market,
   onMarketChange,
   freshness,
+  title = 'Larroudé · LTV Dashboard',
+  subtitle,
 }: {
   market: Market;
   onMarketChange: (m: Market) => void;
   freshness: string;
+  title?: string;
+  subtitle?: React.ReactNode;
 }) {
   const fresh = freshness
     ? new Date(freshness + 'T12:00:00').toLocaleDateString('en-US', {
@@ -21,7 +25,7 @@ export default function Header({
 
   return (
     <header className="header">
-      <h1 className="title">Larroudé · LTV Dashboard</h1>
+      <h1 className="title">{title}</h1>
       <div className="toggle">
         <button
           className={`toggle-btn ${market === 'US' ? 'active' : ''}`}
@@ -43,8 +47,12 @@ export default function Header({
         </button>
       </div>
       <div className="subtitle">
-        Customer Lifetime Value (LTV), AOV and Repeat Purchase Rate by store and product · data from <b>{fresh}</b> ·
-        Shopify orders via BigQuery
+        {subtitle ?? (
+          <>
+            Customer Lifetime Value (LTV), AOV and Repeat Purchase Rate by store and product · data from <b>{fresh}</b> ·
+            Shopify orders via BigQuery
+          </>
+        )}
       </div>
     </header>
   );

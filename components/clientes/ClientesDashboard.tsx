@@ -1,14 +1,14 @@
 'use client';
-// Cassia 2026-06-21: Aba Clientes — visão 360° (DTC). Consome /api/clientes/[market].
-// Self-contained (Tailwind + .card global), responsivo. Nunca exibe dado inventado:
-// se available=false, mostra banner de indisponível.
+// Cassia 2026-06-21: Aba Clientes — visão 360° (DTC). MESMO design system do LTV por Produto
+// (Header + PeriodFilter + .section-label + .card-section + .prod-table + KpiCard), renderizado
+// dentro de .ltv-root pela página. Consome /api/clientes/[market]. Nunca exibe dado inventado.
 
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { FiltersBar } from '@/components/filters/FiltersBar';
-
-type Market = 'US' | 'BR';
-type PeriodKey = 'today' | '7d' | '14d' | '28d' | '3M' | '6M' | '12M';
+import Header from '@/components/ltv-dashboard/Header';
+import PeriodFilter, { presetRange, type PeriodState } from '@/components/ltv-dashboard/PeriodFilter';
+import KpiCard from '@/components/ltv-dashboard/KpiCard';
+import type { Market } from '@/lib/ltv-dashboard/queries';
+import { formatMoney, formatNumber, formatPercent } from '@/lib/ltv-dashboard/format';
 
 interface CustRow {
   customerId: string; name: string; emailMasked: string | null;
@@ -19,6 +19,7 @@ interface OpenRow {
   customerId: string; name: string; emailMasked: string | null;
   openOrders: number; openValue: number; oldestDays: number;
 }
+interface OrderDetail { name: string; date: string | null; value: number; mediaOrigin: string; fulfillment: string; financial: string | null; }
 interface Bundle {
   available: boolean; market: Market; start: string; end: string; currency: string;
   kpis: any; retention: any; newVsReturning: any;
@@ -28,56 +29,37 @@ interface Bundle {
   cohorts: Array<{ cohort: string; size: number; offsets: number[] }>;
 }
 
-// Mesmos presets do FiltersBar padrão (to = ontem). Usado quando não há range customizado.
-function presetRange(key: PeriodKey): { start: string; end: string } {
-  const DAY = 86400000;
-  const end = new Date(Date.now() - DAY); // ontem
-  const days = ({ today: 1, '7d': 7, '14d': 14, '28d': 28, '3M': 90, '6M': 180, '12M': 365 } as Record<string, number>)[key] ?? 28;
-  const start = new Date(end.getTime() - (days - 1) * DAY);
-  const iso = (d: Date) => d.toISOString().slice(0, 10);
-  return { start: iso(start), end: iso(end) };
+const ORIGIN_COLORS: Record<string, string> = {
+  'Meta Ads': '#1877f2', 'Google Ads': '#ea4335', 'Klaviyo': '#5d4ec5', 'SMS (Attentive)': '#a855f7',
+  'Email': '#0ea5e9', 'Awin': '#f59e0b', 'ShopMy': '#ec4899', 'Agent.shop': '#14b8a6', 'Criteo': '#f97316',
+  'Orgânico (Search)': '#10b981', 'Orgânico (Social)': '#22c55e', 'Direto / Sem UTM': '#6b7280', 'Outros': '#9ca3af',
+};
+function fulfillmentLabel(f: string): { label: string; color: string } {
+  if (f === 'fulfilled') return { label: 'Enviado', color: '#2c7a5b' };
+  if (f === 'partial') return { label: 'Parcial', color: '#b45309' };
+  return { label: 'Não enviado', color: '#b45309' };
 }
 
-function fmtMoney(v: number, cur: string, compact = false): string {
-  if (!isFinite(v)) v = 0;
-  try {
-    return new Intl.NumberFormat(cur === 'BRL' ? 'pt-BR' : 'en-US', {
-      style: 'currency', currency: cur, notation: compact ? 'compact' : 'standard',
-      maximumFractionDigits: compact ? 1 : 0,
-    }).format(v);
-  } catch { return String(Math.round(v)); }
-}
-const fmtNum = (v: number) => new Intl.NumberFormat('pt-BR').format(Math.round(v || 0));
-const fmtDec = (v: number, d = 1) => (v || 0).toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d });
-const fmtPct = (v: number) => `${fmtDec(v)}%`;
-
-export default function ClientesDashboard() {
-  // Cassia 2026-06-21: filtro de período/mercado via FiltersBar padrão (URL-driven), igual aos
-  // demais dashboards (?market, ?period, ?from, ?to).
-  const params = useSearchParams();
-  const market = (params.get('market') || 'US') as Market;
-  const periodParam = (params.get('period') || '28d') as PeriodKey;
-  const urlFrom = params.get('from');
-  const urlTo = params.get('to');
-  const { start, end } = urlFrom && urlTo ? { start: urlFrom, end: urlTo } : presetRange(periodParam);
-
+export default function ClientesDashboard({ freshness }: { freshness: string }) {
+  const [market, setMarket] = useState<Market>('US');
+  const [period, setPeriod] = useState<PeriodState>(() =>
+    presetRange('12M', freshness || new Date().toISOString().slice(0, 10))
+  );
   const [data, setData] = useState<Bundle | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [query, setQuery] = useState('');
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true); setErr(null);
-    fetch(`/api/clientes/${market}?start=${start}&end=${end}`)
+    fetch(`/api/clientes/${market}?start=${period.start}&end=${period.end}`)
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then((d: Bundle) => { if (!cancelled) setData(d); })
       .catch((e) => { if (!cancelled) setErr(e.message); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [market, start, end]);
-
-  const cur = data?.currency ?? (market === 'US' ? 'USD' : 'BRL');
+  }, [market, period.start, period.end]);
 
   const filteredCustomers = useMemo(() => {
     const list = data?.customers ?? [];
@@ -86,149 +68,139 @@ export default function ClientesDashboard() {
     return list.filter((c) => c.name.toLowerCase().includes(q) || (c.emailMasked ?? '').toLowerCase().includes(q));
   }, [data, query]);
 
+  const k = data?.kpis;
+  const r = data?.retention;
+  const nvr = data?.newVsReturning;
+
   return (
-    <div className="px-4 lg:px-8 py-5 lg:py-8 max-w-[1500px] mx-auto">
-      {/* Header */}
-      <div className="mb-3">
-        <h1 className="font-display text-[26px] lg:text-[36px]" style={{ color: 'var(--ink)' }}>Clientes</h1>
-        <p className="text-[12px] lg:text-[14px] mt-1" style={{ color: 'var(--ink-soft)' }}>
-          Visão 360° — recorrência, novos × recorrentes, LTV, pedidos em aberto, melhores clientes. DTC only.
-        </p>
+    <main className="page">
+      <div className="container">
+        <Header
+          market={market}
+          onMarketChange={setMarket}
+          freshness={freshness}
+          title="Larroudé · Clientes"
+          subtitle={<>Visão 360° — recorrência, novos × recorrentes, LTV, pedidos em aberto e melhores clientes · DTC · Shopify via BigQuery</>}
+        />
+
+        <PeriodFilter value={period} onChange={setPeriod} maxDate={freshness || new Date().toISOString().slice(0, 10)} />
+
+        {loading && <div className="card" style={{ padding: 40, textAlign: 'center' }}><span className="spinner" />Carregando clientes…</div>}
+        {err && <div className="card" style={{ borderColor: '#b3382f', background: '#fff5f5', color: '#b3382f' }}><strong>Erro:</strong> {err}</div>}
+
+        {data && !data.available && (
+          <div className="card" style={{ borderColor: '#b3382f', background: '#fff5f5', color: '#b3382f' }}>
+            <strong>Dados indisponíveis.</strong> A fonte (BigQuery) não respondeu — nada foi exibido nem estimado.
+          </div>
+        )}
+
+        {data && data.available && k && (
+          <>
+            {/* KPIs */}
+            <div className="section-label"><span>{'\u{1F465}'}</span><span>Visão geral · {market === 'US' ? 'United States' : 'Brazil'}</span></div>
+            <div className="kpi-grid">
+              <KpiCard label="Clientes" value={formatNumber(k.totalCustomers, market)} sub="compradores DTC no período" />
+              <KpiCard label="% Recorrentes" value={formatPercent(k.returningCustomerRate)} sub="≥2 compras na janela" highlight />
+              <KpiCard label="LTV preditivo" value={formatMoney(k.ltvPredictive, market)} sub="AOV × freq × lifetime" />
+              <KpiCard label="AOV" value={formatMoney(k.aov, market)} sub="ticket médio" />
+              <KpiCard label="Frequência" value={`${(k.purchaseFrequency || 0).toFixed(2)}×`} sub="pedidos / cliente" />
+              <KpiCard label="Receita" value={formatMoney(k.totalRevenue, market)} sub="net sales no período" />
+            </div>
+
+            {/* Novos x Recorrentes */}
+            <div className="section-label"><span>{'\u{1F501}'}</span><span>Novos × Recorrentes · período</span></div>
+            <div className="card-section">
+              {nvr && <NvR nvr={nvr} market={market} />}
+            </div>
+
+            {/* Recorrência & retenção */}
+            <div className="section-label"><span>{'\u{1F4C8}'}</span><span>Recorrência & retenção</span></div>
+            <div className="kpi-grid">
+              <KpiCard label="Voltam a comprar" value={formatPercent(r.returningRateAllTime)} sub="vida toda (≥2 compras)" />
+              <KpiCard label="2ª compra em 90d" value={formatPercent(r.repeat90d)} />
+              <KpiCard label="2ª compra em 12m" value={formatPercent(r.repeat12m)} />
+              <KpiCard label="Dias 1ª→2ª (mediana)" value={`${formatNumber(k.medianDaysBetweenPurchases, market)} d`} />
+              <KpiCard label="Frequência anual" value={`${(r.purchaseFrequencyAnnual || 0).toFixed(2)}×`} />
+              <KpiCard label="LTV mediano" value={formatMoney(k.ltvMedian, market)} />
+            </div>
+
+            {/* Tendência mensal */}
+            {data.monthly.length > 0 && (
+              <>
+                <div className="section-label"><span>{'\u{1F4C5}'}</span><span>Clientes por mês · novos vs recorrentes</span></div>
+                <div className="card-section"><MonthlyBars rows={data.monthly} /></div>
+              </>
+            )}
+
+            {/* Melhores clientes */}
+            <div className="section-label"><span>{'\u{1F3C6}'}</span><span>Melhores clientes</span></div>
+            <div className="card-section">
+              <div className="section-head">
+                <span className="section-badge" style={{ background: '#d44a8a', color: '#fff' }}>TOP</span>
+                <h3>Por receita no período</h3>
+                <span className="section-meta">clique para ver os pedidos · email mascarado</span>
+              </div>
+              <CustomerTable rows={data.customers.slice(0, 20)} market={market} rank />
+            </div>
+
+            {/* Pedidos em aberto */}
+            <div className="section-label"><span>{'\u{1F4E6}'}</span><span>Pedidos em aberto · não enviados</span></div>
+            <div className="card-section">
+              <div className="section-head">
+                <span className="section-badge" style={{ background: '#b45309', color: '#fff' }}>{formatNumber(data.openOrders.totalOpenOrders, market)}</span>
+                <h3>{formatMoney(data.openOrders.totalOpenValue, market)} em {formatNumber(data.openOrders.customersWithOpen, market)} clientes</h3>
+              </div>
+              <OpenOrdersTable rows={data.openOrders.byCustomer} market={market} />
+            </div>
+
+            {/* Cohorts */}
+            {data.cohorts.length > 0 && (
+              <>
+                <div className="section-label"><span>{'\u{1F4CA}'}</span><span>Cohorts de retenção · por safra de aquisição</span></div>
+                <div className="card-section">
+                  <div className="table-scroll"><CohortHeatmap cohorts={data.cohorts} /></div>
+                </div>
+              </>
+            )}
+
+            {/* Lista pesquisável */}
+            <div className="section-label"><span>{'\u{1F50E}'}</span><span>Clientes · LTV individual</span></div>
+            <div className="card-section">
+              <div className="section-head">
+                <span className="section-badge" style={{ background: '#2c7a5b', color: '#fff' }}>{formatNumber(data.customers.length, market)}</span>
+                <h3>Top por receita</h3>
+                <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar nome / email…"
+                  className="section-meta" style={{ marginLeft: 'auto', padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)', background: '#fff', minWidth: 200 }} />
+              </div>
+              <CustomerTable rows={filteredCustomers.slice(0, 100)} market={market} />
+              {filteredCustomers.length > 100 && <p className="section-meta" style={{ marginTop: 8 }}>Mostrando 100 de {formatNumber(filteredCustomers.length, market)} — refine a busca.</p>}
+            </div>
+          </>
+        )}
       </div>
-
-      {/* Filtro padrão (US/BR + período + calendário + Aplicar), igual aos demais dashboards */}
-      <FiltersBar />
-
-      {loading && <div className="card text-center py-8" style={{ color: 'var(--ink-soft)' }}>Carregando clientes…</div>}
-      {err && <div className="card border-rose-300 bg-rose-50 text-rose-700 text-sm">Erro: {err}</div>}
-
-      {data && !data.available && (
-        <div className="card" style={{ background: 'rgba(255,92,108,0.10)', border: '1px solid rgba(255,92,108,0.35)', color: '#c0334a' }}>
-          <strong>Dados indisponíveis.</strong> A fonte (BigQuery) não respondeu — nenhum número foi exibido. Nada foi estimado.
-        </div>
-      )}
-
-      {data && data.available && (
-        <div className="space-y-6">
-          {/* KPIs */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 lg:gap-3">
-            <Kpi label="Clientes" value={fmtNum(data.kpis.totalCustomers)} hint="compradores DTC no período" />
-            <Kpi label="% Recorrentes" value={fmtPct(data.kpis.returningCustomerRate)} hint="≥2 compras na janela" color="#5d4ec5" />
-            <Kpi label="LTV preditivo" value={fmtMoney(data.kpis.ltvPredictive, cur)} hint="AOV × freq × lifetime" color="#10b981" />
-            <Kpi label="AOV" value={fmtMoney(data.kpis.aov, cur)} />
-            <Kpi label="Frequência" value={`${fmtDec(data.kpis.purchaseFrequency, 2)}×`} hint="pedidos / cliente" />
-            <Kpi label="Receita" value={fmtMoney(data.kpis.totalRevenue, cur, true)} />
-          </div>
-
-          {/* Novos x Recorrentes */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="card">
-              <h3 className="text-[14px] font-semibold mb-3" style={{ color: 'var(--ink)' }}>Novos × Recorrentes (período)</h3>
-              <NewVsReturning nvr={data.newVsReturning} cur={cur} />
-            </div>
-            <div className="card">
-              <h3 className="text-[14px] font-semibold mb-3" style={{ color: 'var(--ink)' }}>Recorrência & retenção</h3>
-              <div className="grid grid-cols-2 gap-3 text-[12px]">
-                <Stat label="Voltam a comprar (vida toda)" value={fmtPct(data.retention.returningRateAllTime)} />
-                <Stat label="2ª compra em 90d" value={fmtPct(data.retention.repeat90d)} />
-                <Stat label="2ª compra em 12m" value={fmtPct(data.retention.repeat12m)} />
-                <Stat label="Mediana dias 1ª→2ª" value={`${fmtNum(data.kpis.medianDaysBetweenPurchases)} dias`} />
-                <Stat label="Frequência anual" value={`${fmtDec(data.retention.purchaseFrequencyAnnual, 2)}×`} />
-                <Stat label="LTV mediano" value={fmtMoney(data.kpis.ltvMedian, cur)} />
-              </div>
-            </div>
-          </div>
-
-          {/* Tendência mensal novos x recorrentes */}
-          {data.monthly.length > 0 && (
-            <div className="card">
-              <h3 className="text-[14px] font-semibold mb-3" style={{ color: 'var(--ink)' }}>Clientes por mês — novos vs recorrentes</h3>
-              <MonthlyBars rows={data.monthly} />
-            </div>
-          )}
-
-          {/* Melhores clientes */}
-          <div className="card">
-            <h3 className="text-[14px] font-semibold mb-1" style={{ color: 'var(--ink)' }}>Melhores clientes</h3>
-            <p className="text-[11px] mb-3" style={{ color: 'var(--ink-soft)' }}>Top por receita no período. Email mascarado por privacidade.</p>
-            <CustomerTable rows={data.customers.slice(0, 20)} cur={cur} market={market} />
-          </div>
-
-          {/* Pedidos em aberto */}
-          <div className="card">
-            <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
-              <h3 className="text-[14px] font-semibold" style={{ color: 'var(--ink)' }}>Pedidos em aberto (não enviados)</h3>
-              <div className="flex gap-2 lg:gap-3 text-[11px]">
-                <Stat label="Pedidos" value={fmtNum(data.openOrders.totalOpenOrders)} />
-                <Stat label="Valor" value={fmtMoney(data.openOrders.totalOpenValue, cur, true)} color="#f59e0b" />
-                <Stat label="Clientes" value={fmtNum(data.openOrders.customersWithOpen)} />
-              </div>
-            </div>
-            <OpenOrdersTable rows={data.openOrders.byCustomer} cur={cur} />
-          </div>
-
-          {/* Cohorts */}
-          {data.cohorts.length > 0 && (
-            <div className="card overflow-x-auto">
-              <h3 className="text-[14px] font-semibold mb-1" style={{ color: 'var(--ink)' }}>Cohorts de retenção</h3>
-              <p className="text-[11px] mb-3" style={{ color: 'var(--ink-soft)' }}>% da safra (mês da 1ª compra) que voltou a comprar em cada mês seguinte.</p>
-              <CohortHeatmap cohorts={data.cohorts} />
-            </div>
-          )}
-
-          {/* Lista pesquisável */}
-          <div className="card">
-            <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
-              <h3 className="text-[14px] font-semibold" style={{ color: 'var(--ink)' }}>Clientes — LTV individual <span className="text-[11px] font-normal" style={{ color: 'var(--ink-muted)' }}>(top {fmtNum(data.customers.length)} por receita)</span></h3>
-              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar nome / email…"
-                className="text-[12px] px-3 py-1.5 rounded-lg" style={{ border: '1px solid var(--border)', background: 'var(--paper)', color: 'var(--ink)', minWidth: 200 }} />
-            </div>
-            <CustomerTable rows={filteredCustomers.slice(0, 100)} cur={cur} market={market} showRank={false} />
-            {filteredCustomers.length > 100 && <p className="text-[11px] mt-2" style={{ color: 'var(--ink-muted)' }}>Mostrando 100 de {fmtNum(filteredCustomers.length)} — refine a busca.</p>}
-          </div>
-        </div>
-      )}
-    </div>
+    </main>
   );
 }
 
-function Kpi({ label, value, hint, color }: { label: string; value: string; hint?: string; color?: string }) {
-  return (
-    <div className="card" style={{ padding: '12px 14px' }}>
-      <div className="text-[9px] uppercase tracking-wider" style={{ color: 'var(--ink-muted)' }}>{label}</div>
-      <div className="font-num font-bold text-[18px] lg:text-[20px] mt-0.5" style={{ color: color ?? 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</div>
-      {hint && <div className="text-[9px] mt-0.5" style={{ color: 'var(--ink-muted)' }}>{hint}</div>}
-    </div>
-  );
-}
-function Stat({ label, value, color }: { label: string; value: string; color?: string }) {
-  return (
-    <div className="rounded-lg p-2" style={{ background: 'var(--paper)' }}>
-      <div className="text-[9px] uppercase tracking-wider" style={{ color: 'var(--ink-muted)' }}>{label}</div>
-      <div className="font-num font-bold text-[13px] mt-0.5" style={{ color: color ?? 'var(--ink)' }}>{value}</div>
-    </div>
-  );
-}
-
-function NewVsReturning({ nvr, cur }: { nvr: any; cur: string }) {
+function NvR({ nvr, market }: { nvr: any; market: Market }) {
   const totalC = (nvr.newCustomers || 0) + (nvr.returningCustomers || 0);
   const newPct = totalC > 0 ? (nvr.newCustomers / totalC) * 100 : 0;
   return (
     <div>
-      <div className="flex h-3 rounded-full overflow-hidden mb-3" style={{ background: 'var(--border)' }}>
-        <div style={{ width: `${newPct}%`, background: '#5d4ec5' }} />
-        <div style={{ width: `${100 - newPct}%`, background: '#10b981' }} />
+      <div style={{ display: 'flex', height: 12, borderRadius: 99, overflow: 'hidden', background: 'var(--bg-deep)', marginBottom: 14 }}>
+        <div style={{ width: `${newPct}%`, background: '#d44a8a' }} />
+        <div style={{ width: `${100 - newPct}%`, background: '#2c7a5b' }} />
       </div>
-      <div className="grid grid-cols-2 gap-3 text-[12px]">
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
         <div>
-          <div className="flex items-center gap-1.5"><span style={{ width: 8, height: 8, borderRadius: 99, background: '#5d4ec5' }} /><span style={{ color: 'var(--ink-soft)' }}>Novos</span></div>
-          <div className="font-num font-bold text-[16px]" style={{ color: 'var(--ink)' }}>{fmtNum(nvr.newCustomers)}</div>
-          <div className="text-[11px]" style={{ color: 'var(--ink-muted)' }}>{fmtMoney(nvr.newRevenue, cur, true)} · {fmtNum(nvr.newOrders)} pedidos</div>
+          <div className="kpi-label" style={{ color: '#d44a8a' }}>● Novos</div>
+          <div className="kpi-value" style={{ fontSize: 24 }}>{formatNumber(nvr.newCustomers, market)}</div>
+          <div className="kpi-sub">{formatMoney(nvr.newRevenue, market)} · {formatNumber(nvr.newOrders, market)} pedidos</div>
         </div>
         <div>
-          <div className="flex items-center gap-1.5"><span style={{ width: 8, height: 8, borderRadius: 99, background: '#10b981' }} /><span style={{ color: 'var(--ink-soft)' }}>Recorrentes</span></div>
-          <div className="font-num font-bold text-[16px]" style={{ color: 'var(--ink)' }}>{fmtNum(nvr.returningCustomers)}</div>
-          <div className="text-[11px]" style={{ color: 'var(--ink-muted)' }}>{fmtMoney(nvr.returningRevenue, cur, true)} · {fmtNum(nvr.returningOrders)} pedidos</div>
+          <div className="kpi-label" style={{ color: '#2c7a5b' }}>● Recorrentes</div>
+          <div className="kpi-value" style={{ fontSize: 24 }}>{formatNumber(nvr.returningCustomers, market)}</div>
+          <div className="kpi-sub">{formatMoney(nvr.returningRevenue, market)} · {formatNumber(nvr.returningOrders, market)} pedidos</div>
         </div>
       </div>
     </div>
@@ -238,142 +210,108 @@ function NewVsReturning({ nvr, cur }: { nvr: any; cur: string }) {
 function MonthlyBars({ rows }: { rows: Array<{ month: string; newCustomers: number; returningCustomers: number }> }) {
   const max = Math.max(1, ...rows.map((r) => r.newCustomers + r.returningCustomers));
   return (
-    <div className="overflow-x-auto -mx-2 px-2">
-      <div className="flex items-end gap-1.5" style={{ minWidth: rows.length * 26, height: 140 }}>
+    <div className="table-scroll">
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, minWidth: rows.length * 30, height: 160 }}>
         {rows.map((r) => {
           const total = r.newCustomers + r.returningCustomers;
-          const h = (total / max) * 120;
+          const h = (total / max) * 130;
           const newH = total > 0 ? (r.newCustomers / total) * h : 0;
           return (
-            <div key={r.month} className="flex flex-col items-center gap-1" style={{ flex: '1 0 22px' }} title={`${r.month}: ${total} clientes (${r.newCustomers} novos)`}>
-              <div className="w-full rounded-t flex flex-col justify-end" style={{ height: 120 }}>
-                <div style={{ height: total > 0 ? h - newH : 0, background: '#10b981' }} />
-                <div style={{ height: newH, background: '#5d4ec5' }} />
+            <div key={r.month} style={{ flex: '1 0 26px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }} title={`${r.month}: ${total} (${r.newCustomers} novos)`}>
+              <div style={{ height: 130, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', width: '100%' }}>
+                <div style={{ height: total > 0 ? h - newH : 0, background: '#2c7a5b', borderRadius: '3px 3px 0 0' }} />
+                <div style={{ height: newH, background: '#d44a8a' }} />
               </div>
-              <div className="text-[8px]" style={{ color: 'var(--ink-muted)', transform: 'rotate(-45deg)', whiteSpace: 'nowrap' }}>{r.month.slice(2)}</div>
+              <div style={{ fontSize: 8.5, color: 'var(--ink-mute)', transform: 'rotate(-45deg)', whiteSpace: 'nowrap' }}>{r.month.slice(2)}</div>
             </div>
           );
         })}
       </div>
-      <div className="flex gap-3 mt-2 text-[10px]" style={{ color: 'var(--ink-soft)' }}>
-        <span className="flex items-center gap-1"><span style={{ width: 8, height: 8, background: '#5d4ec5' }} />Novos</span>
-        <span className="flex items-center gap-1"><span style={{ width: 8, height: 8, background: '#10b981' }} />Recorrentes</span>
+      <div style={{ display: 'flex', gap: 14, marginTop: 8, fontSize: 11, color: 'var(--ink-soft)' }}>
+        <span>● <span style={{ color: '#d44a8a' }}>Novos</span></span>
+        <span>● <span style={{ color: '#2c7a5b' }}>Recorrentes</span></span>
       </div>
     </div>
   );
 }
 
-interface OrderDetail { name: string; date: string | null; value: number; mediaOrigin: string; fulfillment: string; financial: string | null; }
-
-const ORIGIN_COLORS: Record<string, string> = {
-  'Meta Ads': '#1877f2', 'Google Ads': '#ea4335', 'Klaviyo': '#5d4ec5', 'SMS (Attentive)': '#a855f7',
-  'Email': '#0ea5e9', 'Awin': '#f59e0b', 'ShopMy': '#ec4899', 'Agent.shop': '#14b8a6', 'Criteo': '#f97316',
-  'Orgânico (Search)': '#10b981', 'Orgânico (Social)': '#22c55e', 'Direto / Sem UTM': '#6b7280', 'Outros': '#9ca3af',
-};
-function fulfillmentLabel(f: string): { label: string; color: string; bg: string } {
-  if (f === 'fulfilled') return { label: 'Enviado', color: '#0d9488', bg: 'rgba(16,185,129,0.14)' };
-  if (f === 'partial') return { label: 'Parcial', color: '#b45309', bg: 'rgba(245,158,11,0.16)' };
-  return { label: 'Não enviado', color: '#b45309', bg: 'rgba(245,158,11,0.16)' };
-}
-
-function CustomerTable({ rows, cur, market, showRank = true }: { rows: CustRow[]; cur: string; market: Market; showRank?: boolean }) {
+function CustomerTable({ rows, market, rank = false }: { rows: CustRow[]; market: Market; rank?: boolean }) {
   const [open, setOpen] = useState<string | null>(null);
-  const [ordersCache, setOrdersCache] = useState<Record<string, OrderDetail[] | 'loading' | 'error'>>({});
-  const cols = (showRank ? 7 : 6) + 1; // +1 da coluna de expandir
+  const [cache, setCache] = useState<Record<string, OrderDetail[] | 'loading' | 'error'>>({});
+  const maxRev = Math.max(1, ...rows.map((r) => r.revenue));
+  const cols = (rank ? 1 : 0) + 6;
 
   function toggle(id: string) {
     const next = open === id ? null : id;
     setOpen(next);
-    if (next && ordersCache[id] === undefined) {
-      setOrdersCache((p) => ({ ...p, [id]: 'loading' }));
+    if (next && cache[id] === undefined) {
+      setCache((p) => ({ ...p, [id]: 'loading' }));
       fetch(`/api/clientes/${market}/orders?customerId=${encodeURIComponent(id)}`)
-        .then((r) => r.json())
-        .then((d) => setOrdersCache((p) => ({ ...p, [id]: (d.orders ?? []) as OrderDetail[] })))
-        .catch(() => setOrdersCache((p) => ({ ...p, [id]: 'error' })));
+        .then((res) => res.json())
+        .then((d) => setCache((p) => ({ ...p, [id]: (d.orders ?? []) as OrderDetail[] })))
+        .catch(() => setCache((p) => ({ ...p, [id]: 'error' })));
     }
   }
 
-  if (rows.length === 0) return <div className="text-[12px] py-4 text-center" style={{ color: 'var(--ink-muted)' }}>Nenhum cliente.</div>;
+  if (rows.length === 0) return <p className="section-meta">Nenhum cliente.</p>;
   return (
-    <div className="overflow-x-auto -mx-3 sm:mx-0">
-      <table className="w-full text-[11px] sm:text-[12px] min-w-[680px]">
-        <thead style={{ background: 'var(--paper)', color: 'var(--ink-soft)' }}>
+    <div className="table-scroll">
+      <table className="prod-table">
+        <thead>
           <tr>
-            {showRank && <th className="text-left px-2 py-1.5" style={{ width: 36 }}>#</th>}
-            <th className="text-left px-2 py-1.5">Cliente</th>
-            <th className="text-right px-2 py-1.5">Pedidos</th>
-            <th className="text-right px-2 py-1.5">LTV (período)</th>
-            <th className="text-right px-2 py-1.5">AOV</th>
-            <th className="text-left px-2 py-1.5">1ª compra</th>
-            <th className="text-left px-2 py-1.5">Tipo</th>
-            <th className="px-2 py-1.5" style={{ width: 28 }}></th>
+            {rank && <th style={{ width: 32 }}>#</th>}
+            <th>Cliente</th>
+            <th className="num">Pedidos</th>
+            <th className="num">LTV (período)</th>
+            <th className="num">AOV</th>
+            <th>1ª compra</th>
+            <th>Tipo</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((c, i) => {
             const isOpen = open === c.customerId;
-            const detail = ordersCache[c.customerId];
+            const detail = cache[c.customerId];
             return (
               <>
-                <tr key={c.customerId} className="border-t cursor-pointer" style={{ borderColor: 'var(--border)', background: isOpen ? 'var(--paper)' : undefined }} onClick={() => toggle(c.customerId)}>
-                  {showRank && <td className="px-2 py-1.5 tabular-nums font-semibold" style={{ color: 'var(--ink-muted)' }}>{i + 1}</td>}
-                  <td className="px-2 py-1.5">
-                    <div className="font-semibold" style={{ color: 'var(--ink)' }} data-no-translate="true">{c.name}</div>
-                    <div className="text-[10px]" style={{ color: 'var(--ink-muted)' }} data-no-translate="true">{c.emailMasked ?? '—'}</div>
+                <tr key={c.customerId} onClick={() => toggle(c.customerId)} style={{ cursor: 'pointer' }} className={isOpen ? 'row-highlight' : ''}>
+                  {rank && <td className="rank-cell">{i + 1}</td>}
+                  <td className="name-cell">
+                    <div className="prod-name">{c.name} <span style={{ color: 'var(--ink-mute)', fontWeight: 400 }}>{isOpen ? '▾' : '▸'}</span></div>
+                    <div className="prod-sku">{c.emailMasked ?? '—'}</div>
                   </td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{fmtNum(c.orders)}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums font-semibold">{fmtMoney(c.revenue, cur)}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{fmtMoney(c.aov, cur)}</td>
-                  <td className="px-2 py-1.5 text-[10px]" style={{ color: 'var(--ink-soft)' }}>{c.firstOrder ?? '—'}</td>
-                  <td className="px-2 py-1.5">
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: c.isReturning ? 'rgba(16,185,129,0.14)' : 'rgba(93,78,197,0.14)', color: c.isReturning ? '#0d9488' : '#5d4ec5' }}>
-                      {c.isReturning ? 'Recorrente' : 'Novo'}
-                    </span>
-                  </td>
-                  <td className="px-2 py-1.5 text-center" style={{ color: 'var(--ink-muted)' }}>{isOpen ? '▾' : '▸'}</td>
+                  <td className="num">{formatNumber(c.orders, market)}</td>
+                  <td className="num"><span className="bar-cell"><span className="mini-bar"><span className="mini-bar-fill" style={{ width: `${(c.revenue / maxRev) * 100}%`, background: '#2c7a5b' }} /></span><span className="ltv-cell">{formatMoney(c.revenue, market)}</span></span></td>
+                  <td className="num">{formatMoney(c.aov, market)}</td>
+                  <td style={{ color: 'var(--ink-soft)', fontSize: 12 }}>{c.firstOrder ?? '—'}</td>
+                  <td><span style={{ fontSize: 11, fontWeight: 700, color: c.isReturning ? '#2c7a5b' : '#d44a8a' }}>{c.isReturning ? 'Recorrente' : 'Novo'}</span></td>
                 </tr>
                 {isOpen && (
-                  <tr key={`${c.customerId}-d`} style={{ background: 'var(--paper)' }}>
-                    <td colSpan={cols} className="px-3 py-2">
-                      <div className="text-[10px] uppercase tracking-wider font-semibold mb-2" style={{ color: 'var(--ink-muted)' }}>Pedidos de {c.name} — número + origem mídia</div>
-                      {detail === 'loading' && <div className="text-[11px] py-2" style={{ color: 'var(--ink-soft)' }}>Carregando pedidos…</div>}
-                      {detail === 'error' && <div className="text-[11px] py-2 text-rose-600">Falha ao carregar pedidos.</div>}
-                      {Array.isArray(detail) && detail.length === 0 && <div className="text-[11px] py-2" style={{ color: 'var(--ink-muted)' }}>Sem pedidos no filtro DTC.</div>}
+                  <tr key={`${c.customerId}-d`}>
+                    <td colSpan={cols} style={{ background: 'var(--bg-soft)', padding: '10px 14px' }}>
+                      <div className="section-meta" style={{ marginBottom: 8 }}>Pedidos de {c.name} — número + origem mídia</div>
+                      {detail === 'loading' && <p className="section-meta">Carregando pedidos…</p>}
+                      {detail === 'error' && <p style={{ color: '#b3382f', fontSize: 12 }}>Falha ao carregar.</p>}
+                      {Array.isArray(detail) && detail.length === 0 && <p className="section-meta">Sem pedidos (filtro DTC, trocas excluídas).</p>}
                       {Array.isArray(detail) && detail.length > 0 && (
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-[11px] min-w-[480px]">
-                            <thead style={{ color: 'var(--ink-muted)' }}>
-                              <tr>
-                                <th className="text-left px-2 py-1">Pedido</th>
-                                <th className="text-left px-2 py-1">Data</th>
-                                <th className="text-right px-2 py-1">Valor</th>
-                                <th className="text-left px-2 py-1">Origem mídia</th>
-                                <th className="text-left px-2 py-1">Status</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {detail.map((o, j) => {
-                                const ff = fulfillmentLabel(o.fulfillment);
-                                const oc = ORIGIN_COLORS[o.mediaOrigin] ?? '#9ca3af';
-                                return (
-                                  <tr key={`${o.name}-${j}`} className="border-t" style={{ borderColor: 'var(--border)' }}>
-                                    <td className="px-2 py-1 font-mono font-semibold" style={{ color: 'var(--ink)' }} data-no-translate="true">{o.name}</td>
-                                    <td className="px-2 py-1" style={{ color: 'var(--ink-soft)' }}>{o.date ?? '—'}</td>
-                                    <td className="px-2 py-1 text-right tabular-nums">{fmtMoney(o.value, cur)}</td>
-                                    <td className="px-2 py-1">
-                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: `${oc}22`, color: oc }}>
-                                        <span style={{ width: 6, height: 6, borderRadius: 99, background: oc }} />{o.mediaOrigin}
-                                      </span>
-                                    </td>
-                                    <td className="px-2 py-1">
-                                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: ff.bg, color: ff.color }}>{ff.label}</span>
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
+                        <table className="prod-table" style={{ background: '#fff', borderRadius: 8 }}>
+                          <thead><tr><th>Pedido</th><th>Data</th><th className="num">Valor</th><th>Origem mídia</th><th>Status</th></tr></thead>
+                          <tbody>
+                            {detail.map((o, j) => {
+                              const ff = fulfillmentLabel(o.fulfillment);
+                              const oc = ORIGIN_COLORS[o.mediaOrigin] ?? '#9ca3af';
+                              return (
+                                <tr key={`${o.name}-${j}`}>
+                                  <td style={{ fontFamily: 'ui-monospace, monospace', fontWeight: 600 }}>{o.name}</td>
+                                  <td style={{ color: 'var(--ink-soft)', fontSize: 12 }}>{o.date ?? '—'}</td>
+                                  <td className="num">{formatMoney(o.value, market)}</td>
+                                  <td><span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, color: oc }}><span style={{ width: 6, height: 6, borderRadius: 99, background: oc }} />{o.mediaOrigin}</span></td>
+                                  <td><span style={{ fontSize: 11, fontWeight: 600, color: ff.color }}>{ff.label}</span></td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
                       )}
                     </td>
                   </tr>
@@ -387,29 +325,19 @@ function CustomerTable({ rows, cur, market, showRank = true }: { rows: CustRow[]
   );
 }
 
-function OpenOrdersTable({ rows, cur }: { rows: OpenRow[]; cur: string }) {
-  if (rows.length === 0) return <div className="text-[12px] py-4 text-center" style={{ color: 'var(--ink-muted)' }}>Nenhum pedido em aberto. 🎉</div>;
+function OpenOrdersTable({ rows, market }: { rows: OpenRow[]; market: Market }) {
+  if (rows.length === 0) return <p className="section-meta">Nenhum pedido em aberto. 🎉</p>;
   return (
-    <div className="overflow-x-auto -mx-3 sm:mx-0">
-      <table className="w-full text-[11px] sm:text-[12px] min-w-[560px]">
-        <thead style={{ background: 'var(--paper)', color: 'var(--ink-soft)' }}>
-          <tr>
-            <th className="text-left px-2 py-1.5">Cliente</th>
-            <th className="text-right px-2 py-1.5">Em aberto</th>
-            <th className="text-right px-2 py-1.5">Valor</th>
-            <th className="text-right px-2 py-1.5">Mais antigo</th>
-          </tr>
-        </thead>
+    <div className="table-scroll">
+      <table className="prod-table">
+        <thead><tr><th>Cliente</th><th className="num">Em aberto</th><th className="num">Valor</th><th className="num">Mais antigo</th></tr></thead>
         <tbody>
           {rows.map((c) => (
-            <tr key={c.customerId} className="border-t" style={{ borderColor: 'var(--border)' }}>
-              <td className="px-2 py-1.5">
-                <div className="font-semibold" style={{ color: 'var(--ink)' }} data-no-translate="true">{c.name}</div>
-                <div className="text-[10px]" style={{ color: 'var(--ink-muted)' }} data-no-translate="true">{c.emailMasked ?? '—'}</div>
-              </td>
-              <td className="px-2 py-1.5 text-right tabular-nums">{fmtNum(c.openOrders)}</td>
-              <td className="px-2 py-1.5 text-right tabular-nums font-semibold">{fmtMoney(c.openValue, cur)}</td>
-              <td className="px-2 py-1.5 text-right tabular-nums" style={{ color: c.oldestDays > 7 ? '#e11d48' : 'var(--ink-soft)' }}>{c.oldestDays}d</td>
+            <tr key={c.customerId}>
+              <td className="name-cell"><div className="prod-name">{c.name}</div><div className="prod-sku">{c.emailMasked ?? '—'}</div></td>
+              <td className="num">{formatNumber(c.openOrders, market)}</td>
+              <td className="num ltv-cell">{formatMoney(c.openValue, market)}</td>
+              <td className="num" style={{ color: c.oldestDays > 7 ? '#b3382f' : 'var(--ink-soft)' }}>{c.oldestDays} d</td>
             </tr>
           ))}
         </tbody>
@@ -420,34 +348,23 @@ function OpenOrdersTable({ rows, cur }: { rows: OpenRow[]; cur: string }) {
 
 function CohortHeatmap({ cohorts }: { cohorts: Array<{ cohort: string; size: number; offsets: number[] }> }) {
   const maxOff = Math.max(0, ...cohorts.map((c) => c.offsets.length - 1));
-  const color = (p: number) => {
-    if (p <= 0) return 'transparent';
-    const a = Math.min(0.85, 0.12 + (p / 100) * 0.8);
-    return `rgba(93,78,197,${a})`;
-  };
+  const color = (p: number) => (p <= 0 ? 'transparent' : `rgba(44,122,91,${Math.min(0.85, 0.12 + (p / 100) * 0.8)})`);
   return (
-    <table className="text-[10px] sm:text-[11px]" style={{ borderCollapse: 'separate', borderSpacing: 2 }}>
+    <table className="prod-table" style={{ borderCollapse: 'separate', borderSpacing: 2 }}>
       <thead>
         <tr>
-          <th className="text-left px-2 py-1" style={{ color: 'var(--ink-soft)' }}>Safra</th>
-          <th className="text-right px-2 py-1" style={{ color: 'var(--ink-soft)' }}>Clientes</th>
-          {Array.from({ length: maxOff + 1 }, (_, k) => (
-            <th key={k} className="text-center px-1 py-1" style={{ color: 'var(--ink-muted)', minWidth: 34 }}>M{k}</th>
-          ))}
+          <th>Safra</th><th className="num">Clientes</th>
+          {Array.from({ length: maxOff + 1 }, (_, j) => <th key={j} className="num" style={{ minWidth: 36 }}>M{j}</th>)}
         </tr>
       </thead>
       <tbody>
         {cohorts.map((c) => (
           <tr key={c.cohort}>
-            <td className="px-2 py-1 font-semibold whitespace-nowrap" style={{ color: 'var(--ink)' }}>{c.cohort}</td>
-            <td className="px-2 py-1 text-right tabular-nums" style={{ color: 'var(--ink-soft)' }}>{fmtNum(c.size)}</td>
-            {Array.from({ length: maxOff + 1 }, (_, k) => {
-              const p = c.offsets[k] ?? 0;
-              return (
-                <td key={k} className="text-center tabular-nums" style={{ background: color(p), color: p > 50 ? 'white' : 'var(--ink-soft)', borderRadius: 4, minWidth: 34, padding: '4px 2px' }}>
-                  {k < c.offsets.length ? `${Math.round(p)}` : ''}
-                </td>
-              );
+            <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{c.cohort}</td>
+            <td className="num">{c.size}</td>
+            {Array.from({ length: maxOff + 1 }, (_, j) => {
+              const p = c.offsets[j] ?? 0;
+              return <td key={j} className="num" style={{ background: color(p), color: p > 50 ? '#fff' : 'var(--ink-soft)', borderRadius: 4 }}>{j < c.offsets.length ? Math.round(p) : ''}</td>;
             })}
           </tr>
         ))}
