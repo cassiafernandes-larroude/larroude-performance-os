@@ -56,7 +56,8 @@ export type Market = 'US' | 'BR';
 // Tabelas BQ no projeto larroude-data-prod (mesmo usado pelo Main Dashboard / Overview).
 // O Dashboard LTV original usava 'larroude-data-platform.shopify_us.orders' -
 // no lpos os dados Shopify estao em larroude-data-prod.stg_shopify(_br).orders.
-const ORDERS_TABLE: Record<Market, string> = {
+// Cassia 2026-06-21: exportado para a aba Clientes reusar a MESMA tabela/filtros (sem duplicar).
+export const ORDERS_TABLE: Record<Market, string> = {
   US: 'larroude-data-prod.stg_shopify.orders',
   BR: 'larroude-data-prod.stg_shopify_br.orders',
 };
@@ -114,7 +115,7 @@ function dtcExtras(market: Market): string {
 }
 
 /** COMMON_FILTERS + threshold + PIX (BR). Use sempre que houver market disponível. */
-function COMMON_FILTERS_DTC(market: Market): string {
+export function COMMON_FILTERS_DTC(market: Market): string {
   return COMMON_FILTERS_BASE + dtcExtras(market);
 }
 
@@ -125,7 +126,7 @@ const COMMON_FILTERS = COMMON_FILTERS_BASE;
  * net_sales = total_line_items_price - total_discounts - refunds
  * Refunds are summed across the refunds.transactions[].amount array.
  */
-const NET_SALES_EXPR = `
+export const NET_SALES_EXPR = `
   CAST(total_line_items_price AS FLOAT64)
   - CAST(total_discounts AS FLOAT64)
   - IFNULL((
