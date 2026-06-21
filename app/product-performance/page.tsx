@@ -106,6 +106,8 @@ export default function ProductPerformancePage() {
   const [fulCats, setFulCats] = useState<FulfillmentCategory[]>([]); // origem: vazio = todas
   const [perf, setPerf] = useState<PerfResp | null>(null);
   const [loadingPerf, setLoadingPerf] = useState(true);
+  const [carProducts, setCarProducts] = useState<ProductRow[] | null>(null); // lista do carrossel filtrada por origem
+  const [loadingCar, setLoadingCar] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [today, setToday] = useState<TodayData | null>(null);
   const [seriesBySku, setSeriesBySku] = useState<Record<string, SeriesPoint[]>>({});
@@ -140,7 +142,8 @@ export default function ProductPerformancePage() {
   useEffect(() => {
     let cancelled = false;
     setLoadingPerf(true);
-    fetch(`/api/product-performance/${market}?${rangeQS}${originQS}`, { cache: 'no-store' })
+    // SEM origem: tabela, KPIs e gráficos sempre mostram todas as origens (origem só no carrossel).
+    fetch(`/api/product-performance/${market}?${rangeQS}`, { cache: 'no-store' })
       .then((r) => r.json())
       .then((j: PerfResp & { error?: string }) => {
         if (cancelled || j.error) { setLoadingPerf(false); return; }
@@ -150,6 +153,23 @@ export default function ProductPerformancePage() {
         setLoadingPerf(false);
       })
       .catch(() => setLoadingPerf(false));
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [market, rangeQS]);
+
+  // Lista filtrada por ORIGEM — usada SOMENTE pelo carrossel. Sem filtro de origem, cai no perf.
+  useEffect(() => {
+    if (!fulCats.length) { setCarProducts(null); return; }
+    let cancelled = false;
+    setLoadingCar(true);
+    fetch(`/api/product-performance/${market}?${rangeQS}${originQS}`, { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((j: PerfResp & { error?: string }) => {
+        if (cancelled || j.error) { setLoadingCar(false); return; }
+        setCarProducts(j.products || []);
+        setLoadingCar(false);
+      })
+      .catch(() => setLoadingCar(false));
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [market, rangeQS, originQS]);
@@ -204,7 +224,7 @@ export default function ProductPerformancePage() {
     setLoadingSeries(true);
     const fx = perf?.fx || 5.45;
     const fetchTs = (mk: RealMarket, sku: string) =>
-      fetch(`/api/unit-economics/${mk}/timeseries?sku=${encodeURIComponent(sku)}&${rangeQS}${originQS}`, { cache: 'no-store' })
+      fetch(`/api/unit-economics/${mk}/timeseries?sku=${encodeURIComponent(sku)}&${rangeQS}`, { cache: 'no-store' })
         .then((r) => r.json()).then((j: { buckets: RawBucket[] }) => j.buckets || []).catch(() => [] as RawBucket[]);
     const one = async (sku: string): Promise<readonly [string, SeriesPoint[]]> => {
       if (market !== 'ALL') return [sku, normSeries(await fetchTs(market, sku), 1)] as const;
@@ -218,17 +238,26 @@ export default function ProductPerformancePage() {
     });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [market, rangeQS, originQS, selKey, perf?.fx]);
+  }, [market, rangeQS, selKey, perf?.fx]);
 
   const products = perf?.products || [];
-  // Lista COMPLETA (todos os produtos do período) filtrada+ordenada — sem corte.
+  // Fonte do CARROSSEL: filtrada por origem (carProducts) quando há filtro; senão = todas as origens.
+  const carSource = fulCats.length && carProducts ? carProducts : products;
+  // TABELA (todas as origens) — independe do filtro de origem.
   const ranked = useMemo(() => {
     const q = search.trim().toLowerCase();
     return [...products]
       .filter((p) => !q || p.motherSku.toLowerCase().includes(q) || p.name.toLowerCase().includes(q))
       .sort((a, b) => (sortBy === 'units' ? b.units - a.units : b.revenue - a.revenue));
   }, [products, search, sortBy]);
-  // Filtro de categoria (abas do carrossel). Tabela acima continua mostrando tudo.
+  // CARROSSEL — ordenado a partir da fonte filtrada por origem.
+  const carRanked = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return [...carSource]
+      .filter((p) => !q || p.motherSku.toLowerCase().includes(q) || p.name.toLowerCase().includes(q))
+      .sort((a, b) => (sortBy === 'units' ? b.units - a.units : b.revenue - a.revenue));
+  }, [carSource, search, sortBy]);
+  // Filtro de categoria (abas do carrossel).
   function matchesCat(p: ProductRow): boolean {
     switch (cat) {
       case 'novos': return p.isNew;
@@ -244,17 +273,16 @@ export default function ProductPerformancePage() {
       default: return true;
     }
   }
-  const catFiltered = useMemo(() => ranked.filter(matchesCat), [ranked, cat, matSel, colorSel]);
-  // Materiais/cores disponíveis (pra aba Material/Cor), do conjunto do período.
+  const catFiltered = useMemo(() => carRanked.filter(matchesCat), [carRanked, cat, matSel, colorSel]);
+  // Materiais/cores disponíveis (aba Material/Cor), da fonte do carrossel.
   const { materials, colors } = useMemo(() => {
     const ms = new Set<string>(); const cs = new Set<string>();
-    for (const p of products) { p.materials.forEach((m) => ms.add(m)); p.colors.forEach((c) => cs.add(c)); }
+    for (const p of carSource) { p.materials.forEach((m) => ms.add(m)); p.colors.forEach((c) => cs.add(c)); }
     return { materials: Array.from(ms).sort(), colors: Array.from(cs).sort() };
-  }, [products]);
+  }, [carSource]);
   const catCount = (k: CatKey): number => {
-    if (k === 'all') return ranked.length;
-    if (k === 'material') return ranked.length;
-    return ranked.filter((p) => k === 'novos' ? p.isNew : k === 'collab' ? p.isCollab : k === 'b2b' ? p.isB2B : p.group === k).length;
+    if (k === 'all' || k === 'material') return carRanked.length;
+    return carRanked.filter((p) => k === 'novos' ? p.isNew : k === 'collab' ? p.isCollab : k === 'b2b' ? p.isB2B : p.group === k).length;
   };
   // Render incremental pra não pesar: mostra INITIAL_CARDS e expande sob demanda.
   const INITIAL_CARDS = 60;
@@ -354,7 +382,7 @@ export default function ProductPerformancePage() {
           const active = g.cats.every((c) => fulCats.includes(c as FulfillmentCategory));
           return <button key={g.key} onClick={() => toggleFulGroup(g.cats)} className={pillBtn(active)}>{g.label}</button>;
         })}
-        {fulCats.length > 0 && <span className="text-[11px] italic" style={{ color: '#9ca3af' }}>ranking, KPIs do período e gráficos · "hoje" mostra todas as origens</span>}
+        {fulCats.length > 0 && <span className="text-[11px] italic" style={{ color: '#9ca3af' }}>filtra apenas o carrossel de mais vendidos abaixo</span>}
       </div>
       {/* Mais vendidos — cards com imagem (logo abaixo do filtro de período) */}
       <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
@@ -398,8 +426,8 @@ export default function ProductPerformancePage() {
         </div>
       )}
 
-      {loadingPerf && <div className="card p-8 text-center text-sm mb-6" style={{ color: '#6b7280' }}>Carregando…</div>}
-      {!loadingPerf && (
+      {(loadingPerf || loadingCar) && <div className="card p-8 text-center text-sm mb-6" style={{ color: '#6b7280' }}>Carregando…</div>}
+      {!loadingPerf && !loadingCar && (
         <div className="relative mb-4">
           <button onClick={() => scrollCarousel(-1)} aria-label="Anterior"
             className="hidden sm:flex absolute left-[-6px] top-[90px] z-20 items-center justify-center"
@@ -453,14 +481,14 @@ export default function ProductPerformancePage() {
           </div>
         </div>
       )}
-      {!loadingPerf && !search.trim() && catFiltered.length > visible.length && (
+      {!loadingPerf && !loadingCar && !search.trim() && catFiltered.length > visible.length && (
         <div className="text-center mb-8">
           <button onClick={() => setShowAll(true)} className={PILL_INACTIVE} style={{ cursor: 'pointer' }}>
             Mostrar todos os {catFiltered.length} produtos
           </button>
         </div>
       )}
-      {!loadingPerf && showAll && !search.trim() && catFiltered.length > INITIAL_CARDS && (
+      {!loadingPerf && !loadingCar && showAll && !search.trim() && catFiltered.length > INITIAL_CARDS && (
         <div className="text-center mb-8">
           <button onClick={() => setShowAll(false)} className="text-[12px] underline" style={{ color: '#9ca3af' }}>mostrar menos</button>
         </div>
