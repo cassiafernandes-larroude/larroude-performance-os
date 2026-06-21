@@ -55,7 +55,7 @@ const CAT_TABS: { key: CatKey; label: string }[] = [
   { key: 'collab', label: 'Collabs' },
   { key: 'b2b', label: 'B2B' },
   { key: 'tenis', label: 'Tênis' },
-  { key: 'bolsas', label: 'Bolsas/Acessórios' },
+  { key: 'bolsas', label: 'Bolsas' },
   { key: 'vestuario', label: 'Vestuário' },
   { key: 'material', label: 'Material' },
   { key: 'cor', label: 'Cor' },
