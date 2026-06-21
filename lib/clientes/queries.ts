@@ -115,7 +115,7 @@ export async function getCustomerOrders(market: Market, customerId: string): Pro
     WITH o AS (
       SELECT
         name,
-        DATE(created_at) AS order_date,
+        FORMAT_DATE('%Y-%m-%d', DATE(created_at)) AS order_date,
         ${NET_SALES_EXPR} AS net_sales,
         fulfillment_status,
         financial_status,
@@ -208,7 +208,7 @@ export async function getTopCustomers(market: Market, start: string, end: string
         ANY_VALUE(JSON_VALUE(customer, '$.email'))      AS email,
         COUNT(*) AS orders,
         SUM(${NET_SALES_EXPR}) AS revenue,
-        MAX(DATE(created_at)) AS last_order
+        FORMAT_DATE('%Y-%m-%d', MAX(DATE(created_at))) AS last_order
       FROM \`${table}\`
       WHERE ${COMMON_FILTERS_DTC(market)}
         AND DATE(created_at) BETWEEN @start AND @end
@@ -217,7 +217,7 @@ export async function getTopCustomers(market: Market, start: string, end: string
     SELECT
       p.customer_id, p.first_name, p.last_name, p.email,
       p.orders, p.revenue, p.last_order,
-      fo.first_dt AS first_order,
+      FORMAT_DATE('%Y-%m-%d', fo.first_dt) AS first_order,
       (fo.first_dt < @start) AS is_returning
     FROM period p JOIN first_order fo USING (customer_id)
     WHERE p.revenue > 0
