@@ -44,20 +44,24 @@
   <div class="sub">19 jun → 21 jun 2026 · 3 eixos: convergência de dados · dados inventados · responsividade mobile · 4 agentes de varredura paralelos</div>
 
   <div class="scorerow">
-    <div class="score"><div class="n" style="color:var(--alta)">7</div><div class="l">achados ALTA<br>(4 fabricação · 3 convergência)</div></div>
-    <div class="score"><div class="n" style="color:var(--media)">8</div><div class="l">achados MÉDIA</div></div>
-    <div class="score"><div class="n" style="color:var(--ok)">9</div><div class="l">já corrigidos<br>(commit f946c0d)</div></div>
+    <div class="score"><div class="n" style="color:var(--ok)">✓</div><div class="l">fabricação<br>eliminada (6 dashboards)</div></div>
+    <div class="score"><div class="n" style="color:var(--ok)">✓</div><div class="l">convergência<br>de spend + período</div></div>
+    <div class="score"><div class="n" style="color:var(--ok)">✓</div><div class="l">mobile<br>sem quebras</div></div>
+  </div>
+  <div class="card" style="background:rgba(39,192,147,.08);border-color:rgba(39,192,147,.35)">
+    <strong style="color:var(--ok)">Status: tudo aplicado e no ar.</strong> <span style="color:var(--soft);font-size:13.5px">Commits <code>f946c0d</code> (convergência+mobile) e <code>d077c4a</code> (remoção de mock + convergência de período). Build Vercel verde; dashboards verificados em produção servindo dados reais.</span>
   </div>
 
   <!-- HEADLINE -->
-  <h2>🔴 Item nº1 — Dados inventados (mock) ainda exibidos como reais <span class="pill alta">ABERTO · decisão sua</span></h2>
+  <h2>Item nº1 — Dados inventados (mock) <span class="pill ok">✓ ELIMINADO</span></h2>
   <div class="card lead">
-    <p style="margin:0 0 10px">Quatro dashboards <b>substituem os KPIs reais por objetos <code>MOCK</code> hardcoded com números plausíveis</b> sempre que o BigQuery/PageSpeed falha <i>ou</i> está sem credenciais. O único aviso é um texto pequeno "Mock" no cabeçalho — os cards/gráficos em si não têm marcação. <b>Viola diretamente "nenhum dado inventado".</b></p>
+    <p style="margin:0 0 10px"><b>Seis</b> dashboards substituíam os KPIs reais por objetos <code>MOCK</code> com números plausíveis quando o BigQuery/PageSpeed falhava ou estava sem credencial. <b>Corrigido:</b> agora retornam ZEROS + <code>source: "Unavailable"</code> e a UI mostra um banner vermelho <i>"Dados indisponíveis — não são valores reais, nada foi estimado"</i>. Nenhum número fabricado chega mais ao usuário.</p>
     <div class="finding alta"><div class="t">Overview (home <code>/</code>)</div><div class="m"><span class="file">lib/data/metrics.ts:88-124</span> — <code>MOCK_US/MOCK_BR</code> (gross 3,25M · CAC 231 · ROAS 3,21…) entram quando a query retorna null/erro. Alimentam todos os MetricCards.</div></div>
     <div class="finding alta"><div class="t">North Star</div><div class="m"><span class="file">lib/data/northstar.ts:37-65,135-141</span> — LTV 455 · LTV/CAC 1,97 · CAC 231 fabricados no catch de erro.</div></div>
     <div class="finding alta"><div class="t">Consolidated / Executive</div><div class="m"><span class="file">lib/data/executive.ts:148-163,315-329</span> — net revenue 2,82M, payback 6,9m, e split de canais com multiplicadores inventados (<code>meta = mockSpend*0.85</code>).</div></div>
-    <div class="finding alta"><div class="t">Site Performance</div><div class="m"><span class="file">lib/data/site-performance.ts:87-150,314-323</span> — Core Web Vitals (LCP/INP/CLS), score e CrUX hardcoded. Cai no mock em <b>qualquer</b> falha do PageSpeed (rate-limit incluso) — o fallback mais provável de disparar em produção.</div></div>
-    <p style="margin:12px 0 0;color:var(--soft);font-size:13px">⤷ Esperando sua escolha de como tratar "sem dados" (ver pergunta no chat). A correção remove os números plausíveis em todos os quatro.</p>
+    <div class="finding ok"><div class="t">Site Performance</div><div class="m"><span class="file">lib/data/site-performance.ts</span> — CWV/score/CrUX hardcoded removidos. Quando o PageSpeed não responde, a seção mostra banner e <b>não</b> renderiza scores (zeros parariam parecendo "crítico").</div></div>
+    <div class="finding ok"><div class="t">+ Shopify e Inventory (achados extra além do escopo dos agentes)</div><div class="m"><span class="file">lib/data/shopify-dashboard.ts</span> e <span class="file">lib/shopify/inventory.ts</span> tinham o MESMO padrão de mock — também eliminados.</div></div>
+    <div class="finding ok"><div class="t">+ Diagnóstico pre-order-distortion</div><div class="m"><span class="file">lib/intelligence/rules/pre-order-distortion.ts</span> — cravava share 58% / nCAC $142/$118 fixos como se medidos. Reescrito como caveat qualitativo, sem números inventados.</div></div>
   </div>
 
   <!-- CONVERGENCIA -->
@@ -66,7 +70,7 @@
     <div class="finding ok"><div class="t"><span class="done">✓ Corrigido</span> · Ajuste Meta US +$400k (Set/2025) ausente no Overview e North Star</div><div class="m">Agora aplicam <code>getMetaSpendAdjustment</code> antes de <code>computeTotalSpend</code>, igual a Main/CAC/LTV. <span class="file">metrics.ts</span> · <span class="file">northstar.ts</span></div></div>
     <div class="finding ok"><div class="t"><span class="done">✓ Corrigido</span> · Unit Economics usava só Meta+Google</div><div class="m">Marketing-por-unidade/CAC implícito agora via <code>computeTotalSpend</code> (todos os canais). <span class="file">api/unit-economics/[market]/route.ts</span></div></div>
     <div class="finding ok"><div class="t"><span class="done">✓ Corrigido</span> · Regex de tags DTC sem <code>influencer</code> em 4 lugares</div><div class="m">shopify-dashboard, channel-costs-bq, rotas meta-ads creatives/skus — agora usam <code>EXCLUDED_TAGS_REGEX</code> canônico. Antes incluíam pedidos de influencer/seeding que o resto do DTC exclui.</div></div>
-    <div class="finding media"><div class="t">Overview vs Main: mesma seleção de período → janelas diferentes</div><div class="m">Main usa meses-calendário + D-1 no fuso do mercado; Overview usa janela rolling de N dias + D-1 em UTC. Para "3M/6M/12M" cobrem intervalos distintos → orders/spend/AOV não batem entre as abas. <span class="file">metrics.ts:35-44</span> vs <span class="file">main-dashboard/utils.ts:51-73</span>. <b>Fix sugerido:</b> Overview reutilizar <code>calcPeriod</code>.</div></div>
+    <div class="finding ok"><div class="t"><span class="done">✓ Corrigido</span> · Overview vs Main: mesma seleção de período → janelas diferentes</div><div class="m">Overview (<code>dateRangeCompleted</code>) agora delega ao <code>calcPeriod</code> do Main — meses-calendário p/ 3M/6M/12M + D-1 no fuso do mercado. A mesma seleção passa a cobrir o mesmo intervalo nas duas abas. <span class="file">lib/data/metrics.ts</span></div></div>
     <div class="finding baixa"><div class="t">Duplicação residual de regex/constantes</div><div class="m"><code>EXCLUDED_TAGS_REGEX</code> re-declarado em unit-economics/queries + literais em 4 arquivos shopify-* (hoje coincidem, mas podem divergir). Arquivo morto <span class="file">lib/bigquery/queries/metrics.ts.clean</span> com filtro defasado — remover.</div></div>
   </div>
 
@@ -92,7 +96,18 @@
     </ul>
   </div>
 
-  <div class="sub" style="margin-top:28px">Gerado por auditoria multi-agente · correções no commit <code>f946c0d</code> · item nº1 (mock) aguardando decisão.</div>
+  <h2>Pendências menores (não bloqueiam) <span class="pill baixa">opcional</span></h2>
+  <div class="card">
+    <p style="margin:0 0 8px;color:var(--soft);font-size:13.5px">Você optou por fazer só a convergência de período entre os MÉDIA. Ficaram de fora (a pedido), todos cosméticos/baixo impacto:</p>
+    <ul>
+      <li>FX BRL→USD 5,45 aplicado sem mostrar a taxa/data ao usuário (Executive, Product Performance)</li>
+      <li>Duplicação residual de regex/constantes + arquivo morto <code>metrics.ts.clean</code></li>
+      <li>Polimento mobile: larguras fixas do Executive channel-share, grids do CampaignGenerator, pills do DiagnosticsFilters</li>
+    </ul>
+    <p style="margin:8px 0 0;color:var(--soft);font-size:13px">É só pedir que eu faço qualquer um destes.</p>
+  </div>
+
+  <div class="sub" style="margin-top:28px">Auditoria multi-agente · correções nos commits <code>f946c0d</code> + <code>d077c4a</code> · verificado em produção.</div>
 </div>
 </body>
 </html>
