@@ -88,7 +88,17 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
       const metaAdj = getMetaSpendAdjustment(market, start, end);
       const metaSpend = (Number(metaTotal.spend) || 0) + metaAdj;
       const googleSpend = Number(googleTotal.spend) || 0;
-      const totalMarketingSpend = metaSpend + googleSpend;
+      // Cassia 2026-06-21: REGRA CANONICA — spend total via computeTotalSpend (Meta+Google+Klaviyo+
+      // Attentive+Criteo+Awin+ShopMy+Agent.shop), MESMO denominador do Main/CAC/LTV/Overview.
+      // Antes era so metaSpend+googleSpend, subestimando o marketing-por-unidade / CAC implicito.
+      let totalMarketingSpend = metaSpend + googleSpend;
+      try {
+        const { computeTotalSpend } = await import('@/lib/channel-costs-bq');
+        const bd = await computeTotalSpend(market as any, start, end, metaSpend, googleSpend);
+        totalMarketingSpend = bd.total;
+      } catch (err) {
+        console.warn('[ue] computeTotalSpend failed, fallback Meta+Google:', err);
+      }
       const marketingPerUnit = sells.totalUnits > 0 ? totalMarketingSpend / sells.totalUnits : 0;
       const currency = sells.currency;
 

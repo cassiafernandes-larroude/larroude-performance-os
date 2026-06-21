@@ -6,6 +6,7 @@ import { aggregatedKpisSQL } from "@/lib/bigquery/queries/metrics";
 import { type FulfillmentCategory } from "@/lib/shared/fulfillment-category";
 import { getPreorderMotherSkus } from "@/lib/shared/preorder-skus";
 import { getMetaSpendApi, hasMetaCredentials } from "@/lib/meta-api";
+import { getMetaSpendAdjustment } from "@/lib/shared/meta-adjustments";
 import { cached } from "@/lib/cache";
 import { getFixedToolsCostInRange, getAgentShopCost, CHANNEL_COSTS } from "@/lib/channel-costs";
 import { todayInMarket } from "@/lib/utils/market-tz";
@@ -231,6 +232,11 @@ export async function getMetricBundle(
     // Cassia 2026-06-14: REGRA CANONICA — spend total via computeTotalSpend (mesma formula de
     // Main Dashboard, CAC, LTV, NorthStar). Inclui Meta + Google + Klaviyo + Attentive + Criteo
     // + Agent.shop (BR) + Awin (US+BR) + ShopMy (US). UTMs reais do Shopify.
+    // Cassia 2026-06-21: ajuste manual Meta US +$400k Set/2025 (pro-rata), MESMA regra do
+    // Main/CAC/LTV/Consolidated. Sem isso o Overview divergia ~$400k em spend/ROAS/CAC nos
+    // periodos que cobrem Set/2025. getMetaSpendAdjustment retorna 0 fora de US/Set-2025.
+    cMetaSpend += getMetaSpendAdjustment(market, range.from, range.to);
+    pMetaSpend += getMetaSpendAdjustment(market, prevRange.from, prevRange.to);
     let cSpend = cMetaSpend + cGoogleSpend;
     let pSpend = pMetaSpend + pGoogleSpend;
     try {

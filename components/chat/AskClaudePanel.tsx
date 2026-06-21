@@ -103,7 +103,7 @@ export function AskClaudePanel() {
       </div>
 
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto scroll-area px-6 py-6">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto scroll-area px-3 sm:px-6 py-6">
         {messages.length === 0 ? (
           <div className="max-w-2xl mx-auto">
             <div className="text-center mb-8">
@@ -137,7 +137,7 @@ export function AskClaudePanel() {
             {messages.map((m) => (
               <div key={m.id}>
                 {m.role === "user" ? (
-                  <div className="chat-msg-user ml-auto max-w-md">
+                  <div className="chat-msg-user ml-auto max-w-[85%] sm:max-w-md">
                     <p className="text-[13px]" style={{ color: "var(--ink)" }}>{m.content}</p>
                   </div>
                 ) : (

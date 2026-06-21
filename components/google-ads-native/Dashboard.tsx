@@ -115,7 +115,7 @@ export default function GoogleAdsDashboard() {
       {data && (
         <>
           {/* KPIs */}
-          <section className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
+          <section className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
             <KpiCard kpi={data.kpis.spend} currency={data.currency} />
             <KpiCard kpi={data.kpis.value} currency={data.currency} hint="Valor de conversão (Google)" />
             <KpiCard kpi={data.kpis.roas} currency={data.currency} hint="Valor / Investimento" />
@@ -131,7 +131,7 @@ export default function GoogleAdsDashboard() {
 
           {/* Por tipo de campanha */}
           <div className="card-title">POR TIPO DE CAMPANHA</div>
-          <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
+          <section className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
             {data.byType.map((t) => (
               <div key={t.name} className="card p-4" style={{ borderTop: `3px solid ${typeColor[t.name] || '#9ca3af'}` }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: '#1A1A1A' }}>{t.name}</div>

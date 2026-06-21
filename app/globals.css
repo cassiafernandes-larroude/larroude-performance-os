@@ -468,6 +468,10 @@ body {
   color: var(--ink);
   line-height: 1.15;
   white-space: nowrap;
+  /* Cassia 2026-06-21: evita vazar a borda do card em grid de 2 col no mobile */
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 @media (min-width: 1024px) {
   .metric-value {

@@ -38,7 +38,7 @@ export default function CampaignTable({ campaigns, market }: Props) {
         <div className="text-[11px] text-steel mt-1">Nível: Campanha · ROAS = purchase_conversion_value / spend</div>
       </div>
       <div className="overflow-x-auto thin-scroll">
-        <table className="w-full text-xs">
+        <table className="w-full text-xs min-w-[900px]">
           <thead className="bg-cloud sticky top-0">
             <tr className="text-left text-[10px] uppercase font-bold text-steel tracking-wide">
               <th className="px-4 py-2.5">Campanha</th>

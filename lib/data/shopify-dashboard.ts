@@ -3,6 +3,7 @@ import { runQuery, hasBigQueryCredentials } from "@/lib/bigquery/client";
 import { cached } from "@/lib/cache";
 import { fulfillmentCategoryFilterSQL, type FulfillmentCategory } from "@/lib/shared/fulfillment-category";
 import { getPreorderMotherSkus } from "@/lib/shared/preorder-skus";
+import { EXCLUDED_TAGS_REGEX } from "@/lib/shared/dtc-filters";
 
 const TZ: Record<Market, string> = { US: "America/New_York", BR: "America/Sao_Paulo" };
 const DATASET: Record<Market, string> = { US: "stg_shopify", BR: "stg_shopify_br" };
@@ -178,9 +179,9 @@ function commonFiltersShopify(market: Market, alias: string = ""): string {
     AND JSON_VALUE(${a}customer, '$.id') != '5025734230182'
     AND (
       JSON_VALUE(${a}customer, '$.tags') IS NULL
-      OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(${a}customer, '$.tags')), r'b2b|wholesale|marketplace|redo')
+      OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(${a}customer, '$.tags')), r'${EXCLUDED_TAGS_REGEX}')
     )
-    AND NOT REGEXP_CONTAINS(LOWER(IFNULL(${a}tags, '')), r'b2b|wholesale|marketplace|redo')
+    AND NOT REGEXP_CONTAINS(LOWER(IFNULL(${a}tags, '')), r'${EXCLUDED_TAGS_REGEX}')
     AND CAST(${a}total_price AS NUMERIC) < ${cap}
     ${pix}
   `;
@@ -282,9 +283,9 @@ export async function getShopifyBundle(
             AND o.financial_status NOT IN ('voided','refunded')
             AND (
               JSON_VALUE(o.customer, '$.tags') IS NULL
-              OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(o.customer, '$.tags')), r'b2b|wholesale|marketplace|redo')
+              OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(o.customer, '$.tags')), r'${EXCLUDED_TAGS_REGEX}')
             )
-            AND NOT REGEXP_CONTAINS(LOWER(IFNULL(o.tags, '')), r'b2b|wholesale|marketplace|redo')
+            AND NOT REGEXP_CONTAINS(LOWER(IFNULL(o.tags, '')), r'${EXCLUDED_TAGS_REGEX}')
             AND CAST(o.total_price AS NUMERIC) < ${market === "US" ? 30000 : 25000}
             ${market === "BR" ? `
             AND LOWER(IFNULL(o.financial_status, '')) NOT IN ('pending', 'expired', 'authorized')` : ""}
@@ -326,9 +327,9 @@ export async function getShopifyBundle(
           AND o.financial_status NOT IN ('voided','refunded')
           AND (
             JSON_VALUE(o.customer, '$.tags') IS NULL
-            OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(o.customer, '$.tags')), r'b2b|wholesale|marketplace|redo')
+            OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(o.customer, '$.tags')), r'${EXCLUDED_TAGS_REGEX}')
           )
-          AND NOT REGEXP_CONTAINS(LOWER(IFNULL(o.tags, '')), r'b2b|wholesale|marketplace|redo')
+          AND NOT REGEXP_CONTAINS(LOWER(IFNULL(o.tags, '')), r'${EXCLUDED_TAGS_REGEX}')
           AND CAST(o.total_price AS NUMERIC) < ${market === "US" ? 30000 : 25000}
           ${market === "BR" ? `
           AND LOWER(IFNULL(o.financial_status, '')) NOT IN ('pending', 'expired', 'authorized')` : ""}
@@ -354,9 +355,9 @@ export async function getShopifyBundle(
           AND o.financial_status NOT IN ('voided','refunded')
           AND (
             JSON_VALUE(o.customer, '$.tags') IS NULL
-            OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(o.customer, '$.tags')), r'b2b|wholesale|marketplace|redo')
+            OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(o.customer, '$.tags')), r'${EXCLUDED_TAGS_REGEX}')
           )
-          AND NOT REGEXP_CONTAINS(LOWER(IFNULL(o.tags, '')), r'b2b|wholesale|marketplace|redo')
+          AND NOT REGEXP_CONTAINS(LOWER(IFNULL(o.tags, '')), r'${EXCLUDED_TAGS_REGEX}')
           AND CAST(o.total_price AS NUMERIC) < ${market === "US" ? 30000 : 25000}
           ${market === "BR" ? `
           AND LOWER(IFNULL(o.financial_status, '')) NOT IN ('pending', 'expired', 'authorized')` : ""}

@@ -16,6 +16,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { hasBigQueryCredentials } from '@/lib/bigquery/client';
 import { shopifyGraphQL, hasShopifyCredentials } from '@/lib/shopify/admin';
 import { extractAdRefFromName } from '@/lib/meta-ads-native/sku-extractor';
+import { EXCLUDED_TAGS_REGEX } from '@/lib/shared/dtc-filters';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 600;
@@ -74,7 +75,8 @@ interface SkuRow {
 
 const MAX_ORDER_VALUE = { US: 30000, BR: 25000 } as const;
 const TZ = { US: 'America/New_York', BR: 'America/Sao_Paulo' } as const;
-const EXCLUDED_TAGS = 'b2b|wholesale|marketplace|redo';
+// Cassia 2026-06-21: regex DTC canonica (inclui `influencer`) para convergir com Main/Overview/Shopify.
+const EXCLUDED_TAGS = EXCLUDED_TAGS_REGEX;
 
 export async function POST(req: NextRequest) {
   try {

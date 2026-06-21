@@ -129,7 +129,7 @@ export default function MetaAdsDashboard() {
             )}
 
             {/* Cassia 2026-06-14: nav tabs — Performance / Creatives × Shopify */}
-            <div className="flex items-center gap-2 mb-4 border-b" style={{ borderColor: 'var(--border)' }}>
+            <div className="flex items-center gap-2 mb-4 border-b overflow-x-auto" style={{ borderColor: 'var(--border)' }}>
               {([
                 { id: 'performance', label: 'Performance' },
                 { id: 'creatives', label: 'Creatives × Products' },
@@ -140,7 +140,7 @@ export default function MetaAdsDashboard() {
                   <button
                     key={t.id}
                     onClick={() => setActiveTab(t.id)}
-                    className="px-4 py-2 text-[13px] font-semibold transition-colors"
+                    className="px-4 py-2 text-[13px] font-semibold transition-colors whitespace-nowrap flex-shrink-0"
                     style={{
                       color: active ? 'var(--pink-deep)' : 'var(--ink-soft)',
                       borderBottom: active ? '2px solid var(--pink-deep)' : '2px solid transparent',

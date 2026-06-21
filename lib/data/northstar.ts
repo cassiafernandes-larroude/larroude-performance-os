@@ -1,6 +1,7 @@
 import type { Market } from "@/types/metric";
 import { runQuery, hasBigQueryCredentials } from "@/lib/bigquery/client";
 import { getMetaSpendApi, hasMetaCredentials } from "@/lib/meta-api";
+import { getMetaSpendAdjustment } from "@/lib/shared/meta-adjustments";
 import { cached } from "@/lib/cache";
 
 export type NorthStarBundle = {
@@ -100,6 +101,10 @@ export async function getNorthStarBundle(market: Market): Promise<NorthStarBundl
         );
         googleSpend = Number(googleRows[0]?.google_spend) || 0;
       } catch {}
+
+      // Cassia 2026-06-21: ajuste manual Meta US +$400k Set/2025 (pro-rata), MESMA regra do
+      // Main/CAC/LTV/Overview. Retorna 0 fora de US/Set-2025.
+      metaSpend += getMetaSpendAdjustment(market, fromStr, toStr);
 
       // Cassia 2026-06-14: REGRA CANONICA — spend inclui TODOS canais (Meta+Google+tools+%revenue)
       let totalAdSpend = metaSpend + googleSpend;
