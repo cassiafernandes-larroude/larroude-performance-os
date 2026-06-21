@@ -131,7 +131,7 @@ export default function MetaAdsDashboard() {
             <div className="flex items-center gap-2 mb-4 border-b" style={{ borderColor: 'var(--border)' }}>
               {([
                 { id: 'performance', label: 'Performance' },
-                { id: 'creatives', label: 'Creatives × Shopify' },
+                { id: 'creatives', label: 'Creatives × Products' },
               ] as const).map(t => {
                 const active = activeTab === t.id;
                 return (
