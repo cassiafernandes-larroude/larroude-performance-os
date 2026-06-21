@@ -9,6 +9,7 @@ const titleMap: Record<string, string> = {
   "/executive": "Executive View",
   "/dashboard-principal": "Main Dashboard",
   "/ltv-cohorts": "LTV",
+  "/ltv-por-produto": "LTV por Produto",
   "/cac-ncac-crc": "CAC",
   "/clientes": "Clientes",
   "/klaviyo": "Klaviyo Journey",
