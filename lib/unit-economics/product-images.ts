@@ -62,6 +62,14 @@ function groupOf(productType: string): ProductGroup {
   return 'calcados'; // boot, sandal, mule, flat, pump, wedge, heel, etc.
 }
 
+// Materiais conhecidos da Larroudé — o título quase sempre traz ("...In Black Suede",
+// "Loulou Mule Beige Raffia"), enquanto a tag "Shop By Material" só cobre ~10% do catálogo.
+const MATERIAL_KEYWORDS = ['Raffia', 'Leather', 'Suede', 'Velvet', 'Vinyl', 'Metallic', 'Specchio', 'Patent', 'Denim', 'Fabric', 'Cork', 'Satin', 'Mesh', 'Croc', 'Crystal', 'Knit', 'Canvas', 'Rubber', 'Wool', 'Jelly'];
+function materialsFromTitle(title: string): string[] {
+  const t = (title || '').toLowerCase();
+  return MATERIAL_KEYWORDS.filter((m) => t.includes(m.toLowerCase()));
+}
+
 export interface ProductMeta {
   name: string;
   image: string | null;
@@ -109,7 +117,10 @@ export async function getProductImages(market: Market, timeoutMs = 45_000): Prom
         isB2B: tags.includes('Catalog_B2B'),
         isCollab: tags.some((t) => /collab/i.test(t)),
         isNew: typeof p.createdAt === 'string' && p.createdAt >= cutoff,
-        materials: tags.filter((t) => t.startsWith('Shop By Material - ')).map((t) => t.replace('Shop By Material - ', '').trim()),
+        materials: Array.from(new Set([
+          ...tags.filter((t) => t.startsWith('Shop By Material - ')).map((t) => t.replace('Shop By Material - ', '').trim()),
+          ...materialsFromTitle(p.title || ''),
+        ])),
         colors: tags.filter((t) => t.startsWith('Collection-')).map((t) => t.replace('Collection-', '').replace(/-/g, ' ').trim()),
       };
       for (const vEdge of p.variants.edges) {
