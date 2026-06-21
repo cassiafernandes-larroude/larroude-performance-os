@@ -145,7 +145,7 @@ export default function DashboardPrincipalPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
           {([
             { label: 'SHARE — EM ESTOQUE', d: data.originShare.inStock, color: '#16A34A' },
-            { label: 'SHARE — PRE-ORDER', d: data.originShare.preOrder, color: '#FF3D8B' },
+            { label: 'SHARE — ON-DEMAND', d: data.originShare.preOrder, color: '#FF3D8B' },
           ] as const).map((c) => (
             <div key={c.label} className="card p-4" style={{ borderTop: `3px solid ${c.color}` }}>
               <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', color: '#6b7280' }}>{c.label}</div>
