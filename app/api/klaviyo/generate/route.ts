@@ -6,7 +6,7 @@ import { generateCampaign } from '@/lib/klaviyo/generator/generate';
 import type { GeneratorInput } from '@/types/klaviyo/generator';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 300; // gerar inclui histórico do Klaviyo + Gemini; precisa de folga
 
 const schema = z.object({
   market: z.enum(['US', 'BR']),
