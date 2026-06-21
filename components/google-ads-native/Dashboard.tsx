@@ -135,13 +135,13 @@ export default function GoogleAdsDashboard() {
 
           {/* Séries diárias */}
           <section className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-            <BarLineChart title="INVESTIMENTO / TEMPO" data={data.series.spend as BarPoint[]} color="#1f2d44" unit="currency" market={mkt} height={240} />
-            <BarLineChart title="VALOR DE CONVERSÃO / TEMPO" data={data.series.value as BarPoint[]} color="#16A34A" unit="currency" market={mkt} height={240} />
-            <BarLineChart title="ROAS / TEMPO" data={data.series.roas as BarPoint[]} color="#5d4ec5" unit="multiple" market={mkt} height={240} />
-            <BarLineChart title="CONVERSÕES / TEMPO" data={data.series.conversions as BarPoint[]} color="#2563eb" unit="number" market={mkt} height={240} />
-            <BarLineChart title="CLIQUES / TEMPO" data={data.series.clicks as BarPoint[]} color="#0891b2" unit="number" market={mkt} height={240} />
-            <BarLineChart title="CTR / TEMPO" data={data.series.ctr as BarPoint[]} color="#7c3aed" unit="percent" market={mkt} height={240} />
-            <BarLineChart title="CPC / TEMPO" data={data.series.cpc as BarPoint[]} color="#c2410c" unit="currency" market={mkt} height={240} />
+            <BarLineChart title="INVESTIMENTO" data={data.series.spend as BarPoint[]} color="#1f2d44" unit="currency" market={mkt} height={240} />
+            <BarLineChart title="VALOR DE CONVERSÃO" data={data.series.value as BarPoint[]} color="#16A34A" unit="currency" market={mkt} height={240} />
+            <BarLineChart title="ROAS" data={data.series.roas as BarPoint[]} color="#5d4ec5" unit="multiple" market={mkt} height={240} />
+            <BarLineChart title="CONVERSÕES" data={data.series.conversions as BarPoint[]} color="#2563eb" unit="number" market={mkt} height={240} />
+            <BarLineChart title="CLIQUES" data={data.series.clicks as BarPoint[]} color="#0891b2" unit="number" market={mkt} height={240} />
+            <BarLineChart title="CTR" data={data.series.ctr as BarPoint[]} color="#7c3aed" unit="percent" market={mkt} height={240} />
+            <BarLineChart title="CPC" data={data.series.cpc as BarPoint[]} color="#c2410c" unit="currency" market={mkt} height={240} />
           </section>
 
           {/* Tabela de campanhas */}
