@@ -18,9 +18,11 @@ const ADMIN_TOKENS: Record<Market, string | undefined> = {
   BR: process.env.SHOPIFY_BR_ADMIN_API_TOKEN,
 };
 
-// FORÇA 2024-07 porque shopifyqlQuery foi removido em 2025-01.
-// Para override manual, use SHOPIFY_API_VERSION_OVERRIDE.
-const API_VERSION = process.env.SHOPIFY_API_VERSION_OVERRIDE || '2024-07';
+// Cassia 2026-06-21: shopifyqlQuery foi REMOVIDO da 2024-07 (probe: "Field 'shopifyqlQuery'
+// doesn't exist on type 'QueryRoot'"). Continua funcionando apenas na API `unstable` (confirmado
+// via conector Shopify). Por isso o default agora é `unstable` — revive sessões/CVR/funil.
+// Override manual via SHOPIFY_API_VERSION_OVERRIDE.
+const API_VERSION = process.env.SHOPIFY_API_VERSION_OVERRIDE || 'unstable';
 
 /**
  * Executa query ShopifyQL via Admin GraphQL.
