@@ -1,5 +1,27 @@
 ﻿import type { CampaignType, FlowType, FlowCategory } from '@/types/klaviyo/models';
 
+// Cassia 2026-06-20: rótulos e código de nome para os 6 tipos do dashboard (usados pelo Gerador de Campanhas).
+export const CAMPAIGN_TYPE_LABELS: Record<CampaignType, string> = {
+  FULLPRICE: 'Full Price',
+  MARKDOWN: 'Markdown / Sale',
+  PREORDER: 'Pre-Order',
+  FLASH: 'Flash',
+  VIP: 'VIP',
+  OTHER: 'Outros',
+};
+
+// Código usado no nome do rascunho — segue os PREFIXOS REAIS da conta (AAAAMMDD_<CODE>_<slug>).
+// A conta só usa 4 prefixos: FP/MD/PO/CS. VIP e FLASH são markdowns (ex.: MD_VIP50EarlyAccess,
+// MD_WeekendRush24hLeft); Outros ≈ CS. O slug carrega o detalhe (ex.: MD_VIPEarlyAccess).
+export const CAMPAIGN_TYPE_CODE: Record<CampaignType, string> = {
+  FULLPRICE: 'FP',
+  MARKDOWN: 'MD',
+  PREORDER: 'PO',
+  FLASH: 'MD',
+  VIP: 'MD',
+  OTHER: 'CS',
+};
+
 // Classificação automática por nome — baseada nos benchmarks documentados.
 export function classifyCampaign(name: string): CampaignType {
   const n = (name || '').toUpperCase();

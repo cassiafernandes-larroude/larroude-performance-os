@@ -5,6 +5,7 @@ import TabCampaigns from './TabCampaigns';
 import TabFlows from './TabFlows';
 import TabSegments from './TabSegments';
 import TabBenchmarks from './TabBenchmarks';
+import CampaignGenerator from './CampaignGenerator';
 import type { Market, Period, CustomRange } from '@/types/klaviyo/models';
 
 const TABS = [
@@ -12,7 +13,8 @@ const TABS = [
   { id: 'campaigns', label: 'Campaigns' },
   { id: 'flows',     label: 'Flows' },
   { id: 'segments',  label: 'Segments' },
-  { id: 'benchmarks',label: 'Benchmarks' }
+  { id: 'benchmarks',label: 'Benchmarks' },
+  { id: 'gerador',   label: 'Gerador de Campanha' }
 ] as const;
 type TabId = typeof TABS[number]['id'];
 
@@ -78,6 +80,7 @@ export default function Dashboard() {
         </div>
       </header>
 
+      {tab !== 'gerador' && (
       <div className="filter-card">
         <div className="filter-group">
           <span className="filter-label">Period</span>
@@ -104,12 +107,14 @@ export default function Dashboard() {
         )}
         <button className="btn-pill" onClick={() => location.reload()}>↻ Refresh</button>
       </div>
+      )}
 
       {tab === 'overview' && <TabOverview market={market} period={period} custom={effectiveCustom} />}
       {tab === 'campaigns' && <TabCampaigns market={market} period={period} custom={effectiveCustom} />}
       {tab === 'flows' && <TabFlows market={market} period={period} custom={effectiveCustom} />}
       {tab === 'segments' && <TabSegments market={market} period={period} custom={effectiveCustom} />}
       {tab === 'benchmarks' && <TabBenchmarks market={market} period={period} custom={effectiveCustom} />}
+      {tab === 'gerador' && <CampaignGenerator initialMarket={market} />}
 
       <div className="foot">
         Larroudé - CRM Klaviyo · {market} · {periodLabel} · generated {new Date().toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit' })} · 12h cache
