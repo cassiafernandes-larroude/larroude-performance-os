@@ -84,7 +84,7 @@ function groupOf(productType: string): ProductGroup {
 
 // Materiais conhecidos da Larroudé — o título quase sempre traz ("...In Black Suede",
 // "Loulou Mule Beige Raffia"), enquanto a tag "Shop By Material" só cobre ~10% do catálogo.
-const MATERIAL_KEYWORDS = ['Raffia', 'Leather', 'Suede', 'Velvet', 'Vinyl', 'Metallic', 'Specchio', 'Patent', 'Denim', 'Fabric', 'Cork', 'Satin', 'Mesh', 'Croc', 'Crystal', 'Knit', 'Canvas', 'Rubber', 'Wool', 'Jelly'];
+const MATERIAL_KEYWORDS = ['Raffia', 'Leather', 'Suede', 'Velvet', 'Vinyl', 'Metallic', 'Specchio', 'Patent', 'Denim', 'Fabric', 'Cork', 'Satin', 'Mesh', 'Croc', 'Crystal', 'Knit', 'Canvas', 'Rubber', 'Wool', 'Jelly', 'Crochet', 'Macrame', 'Macramé', 'Crochê'];
 function materialsFromTitle(title: string): string[] {
   const t = (title || '').toLowerCase();
   return MATERIAL_KEYWORDS.filter((m) => t.includes(m.toLowerCase()));

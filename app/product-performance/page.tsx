@@ -49,7 +49,7 @@ interface ProductRow {
   group: ProductGroup; isB2B: boolean; isCollab: boolean; isNew: boolean;
   materials: string[]; colors: string[]; collab: string | null;
 }
-type CatKey = 'all' | 'novos' | 'collab' | 'b2b' | 'tenis' | 'bolsas' | 'vestuario' | 'material';
+type CatKey = 'all' | 'novos' | 'collab' | 'b2b' | 'tenis' | 'bolsas' | 'vestuario' | 'material' | 'cor';
 const CAT_TABS: { key: CatKey; label: string }[] = [
   { key: 'all', label: 'Todos' },
   { key: 'novos', label: 'Lançamentos' },
@@ -58,8 +58,27 @@ const CAT_TABS: { key: CatKey; label: string }[] = [
   { key: 'tenis', label: 'Tênis' },
   { key: 'bolsas', label: 'Bolsas/Acessórios' },
   { key: 'vestuario', label: 'Vestuário' },
-  { key: 'material', label: 'Material/Cor' },
+  { key: 'material', label: 'Material' },
+  { key: 'cor', label: 'Cor' },
 ];
+
+// Buckets fixos de material (Cassia 2026-06-21). Outros = demais materiais / sem material.
+const MATERIAL_BUCKETS = ['Couro', 'Camurça', 'Raffia', 'Vinil', 'Crochê', 'Macramê', 'Cetim', 'Couro Verniz', 'Outros'];
+function materialBucketsOf(p: { materials: string[]; name: string }): string[] {
+  const s = (p.materials.join(' ') + ' ' + p.name).toLowerCase();
+  const has = (w: string) => s.includes(w);
+  const b: string[] = [];
+  if (has('patent')) b.push('Couro Verniz');         // couro verniz tem precedência sobre couro
+  if (has('leather') && !has('patent')) b.push('Couro');
+  if (has('suede')) b.push('Camurça');
+  if (has('raffia')) b.push('Raffia');
+  if (has('vinyl') || has('vinil')) b.push('Vinil');
+  if (has('crochet') || has('croch')) b.push('Crochê');
+  if (has('macrame') || has('macram')) b.push('Macramê');
+  if (has('satin') || has('cetim')) b.push('Cetim');
+  if (!b.length) b.push('Outros');
+  return b;
+}
 interface RawBucket { date: string; units: number; grossRevenue: number; discount: number; }
 interface SeriesPoint { date: string; units: number; revenue: number; }
 interface TodayData {
@@ -267,21 +286,22 @@ export default function ProductPerformancePage() {
       case 'bolsas': return p.group === 'bolsas';
       case 'vestuario': return p.group === 'vestuario';
       case 'material':
-        if (matSel && !p.materials.includes(matSel)) return false;
-        if (colorSel && !p.colors.includes(colorSel)) return false;
-        return true;
+        return !matSel || materialBucketsOf(p).includes(matSel);
+      case 'cor':
+        return !colorSel || p.colors.includes(colorSel);
       default: return true;
     }
   }
   const catFiltered = useMemo(() => carRanked.filter(matchesCat), [carRanked, cat, matSel, colorSel]);
-  // Materiais/cores disponíveis (aba Material/Cor), da fonte do carrossel.
-  const { materials, colors } = useMemo(() => {
-    const ms = new Set<string>(); const cs = new Set<string>();
-    for (const p of carSource) { p.materials.forEach((m) => ms.add(m)); p.colors.forEach((c) => cs.add(c)); }
-    return { materials: Array.from(ms).sort(), colors: Array.from(cs).sort() };
+  // Cores disponíveis (aba Cor), da fonte do carrossel. Material usa buckets fixos.
+  const colors = useMemo(() => {
+    const cs = new Set<string>();
+    for (const p of carSource) p.colors.forEach((c) => cs.add(c));
+    return Array.from(cs).sort();
   }, [carSource]);
+  const matBucketCount = (bucket: string): number => carRanked.filter((p) => materialBucketsOf(p).includes(bucket)).length;
   const catCount = (k: CatKey): number => {
-    if (k === 'all' || k === 'material') return carRanked.length;
+    if (k === 'all' || k === 'material' || k === 'cor') return carRanked.length;
     return carRanked.filter((p) => k === 'novos' ? p.isNew : k === 'collab' ? p.isCollab : k === 'b2b' ? p.isB2B : p.group === k).length;
   };
   // Render incremental pra não pesar: mostra INITIAL_CARDS e expande sob demanda.
@@ -445,31 +465,35 @@ export default function ProductPerformancePage() {
         {CAT_TABS.map((tabItem) => {
           const active = cat === tabItem.key;
           return (
-            <button key={tabItem.key} onClick={() => { setCat(tabItem.key); if (tabItem.key !== 'material') { setMatSel(null); setColorSel(null); } }}
+            <button key={tabItem.key} onClick={() => { setCat(tabItem.key); setMatSel(null); setColorSel(null); }}
               className={active ? PILL_ACTIVE_DARK : PILL_INACTIVE} style={{ fontSize: 12 }}>
-              {tabItem.label}{tabItem.key !== 'material' && <span style={{ opacity: 0.6, marginLeft: 6 }}>{catCount(tabItem.key)}</span>}
+              {tabItem.label}{tabItem.key !== 'material' && tabItem.key !== 'cor' && <span style={{ opacity: 0.6, marginLeft: 6 }}>{catCount(tabItem.key)}</span>}
             </button>
           );
         })}
       </div>
 
-      {/* Sub-chips de material/cor */}
+      {/* Sub-chips de MATERIAL (buckets fixos) */}
       {cat === 'material' && (
-        <div className="mb-3 flex flex-col gap-2">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-[10px] font-bold uppercase mr-1" style={{ color: '#9ca3af' }}>Material</span>
-            <button onClick={() => setMatSel(null)} className="px-2.5 py-1 rounded-full text-[11px]" style={{ background: !matSel ? '#1a1a1a' : '#ebe9e3', color: !matSel ? '#fff' : '#1a1a1a' }}>Todos</button>
-            {materials.map((mt) => (
-              <button key={mt} onClick={() => setMatSel(matSel === mt ? null : mt)} className="px-2.5 py-1 rounded-full text-[11px]" style={{ background: matSel === mt ? '#1a1a1a' : '#ebe9e3', color: matSel === mt ? '#fff' : '#1a1a1a' }}>{mt}</button>
-            ))}
-          </div>
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-[10px] font-bold uppercase mr-1" style={{ color: '#9ca3af' }}>Cor</span>
-            <button onClick={() => setColorSel(null)} className="px-2.5 py-1 rounded-full text-[11px]" style={{ background: !colorSel ? '#1a1a1a' : '#ebe9e3', color: !colorSel ? '#fff' : '#1a1a1a' }}>Todas</button>
-            {colors.map((cl) => (
-              <button key={cl} onClick={() => setColorSel(colorSel === cl ? null : cl)} className="px-2.5 py-1 rounded-full text-[11px]" style={{ background: colorSel === cl ? '#1a1a1a' : '#ebe9e3', color: colorSel === cl ? '#fff' : '#1a1a1a' }}>{cl}</button>
-            ))}
-          </div>
+        <div className="mb-3 flex items-center gap-1.5 flex-wrap">
+          <span className="text-[10px] font-bold uppercase mr-1" style={{ color: '#9ca3af' }}>Material</span>
+          <button onClick={() => setMatSel(null)} className="px-2.5 py-1 rounded-full text-[11px]" style={{ background: !matSel ? '#1a1a1a' : '#ebe9e3', color: !matSel ? '#fff' : '#1a1a1a' }}>Todos</button>
+          {MATERIAL_BUCKETS.map((mt) => (
+            <button key={mt} onClick={() => setMatSel(matSel === mt ? null : mt)} className="px-2.5 py-1 rounded-full text-[11px]" style={{ background: matSel === mt ? '#1a1a1a' : '#ebe9e3', color: matSel === mt ? '#fff' : '#1a1a1a' }}>
+              {mt} <span style={{ opacity: 0.55 }}>{matBucketCount(mt)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Sub-chips de COR */}
+      {cat === 'cor' && (
+        <div className="mb-3 flex items-center gap-1.5 flex-wrap">
+          <span className="text-[10px] font-bold uppercase mr-1" style={{ color: '#9ca3af' }}>Cor</span>
+          <button onClick={() => setColorSel(null)} className="px-2.5 py-1 rounded-full text-[11px]" style={{ background: !colorSel ? '#1a1a1a' : '#ebe9e3', color: !colorSel ? '#fff' : '#1a1a1a' }}>Todas</button>
+          {colors.map((cl) => (
+            <button key={cl} onClick={() => setColorSel(colorSel === cl ? null : cl)} className="px-2.5 py-1 rounded-full text-[11px]" style={{ background: colorSel === cl ? '#1a1a1a' : '#ebe9e3', color: colorSel === cl ? '#fff' : '#1a1a1a' }}>{cl}</button>
+          ))}
         </div>
       )}
 
