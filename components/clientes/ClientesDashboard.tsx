@@ -4,9 +4,11 @@
 // se available=false, mostra banner de indisponível.
 
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { FiltersBar } from '@/components/filters/FiltersBar';
 
 type Market = 'US' | 'BR';
-type PeriodKey = '28d' | '3M' | '6M' | '12M';
+type PeriodKey = 'today' | '7d' | '14d' | '28d' | '3M' | '6M' | '12M';
 
 interface CustRow {
   customerId: string; name: string; emailMasked: string | null;
@@ -26,14 +28,11 @@ interface Bundle {
   cohorts: Array<{ cohort: string; size: number; offsets: number[] }>;
 }
 
-const PERIODS: { key: PeriodKey; label: string }[] = [
-  { key: '28d', label: '28D' }, { key: '3M', label: '3M' }, { key: '6M', label: '6M' }, { key: '12M', label: '12M' },
-];
-
-function rangeFor(key: PeriodKey): { start: string; end: string } {
+// Mesmos presets do FiltersBar padrão (to = ontem). Usado quando não há range customizado.
+function presetRange(key: PeriodKey): { start: string; end: string } {
   const DAY = 86400000;
   const end = new Date(Date.now() - DAY); // ontem
-  const days = key === '28d' ? 28 : key === '3M' ? 90 : key === '6M' ? 180 : 365;
+  const days = ({ today: 1, '7d': 7, '14d': 14, '28d': 28, '3M': 90, '6M': 180, '12M': 365 } as Record<string, number>)[key] ?? 28;
   const start = new Date(end.getTime() - (days - 1) * DAY);
   const iso = (d: Date) => d.toISOString().slice(0, 10);
   return { start: iso(start), end: iso(end) };
@@ -53,21 +52,22 @@ const fmtDec = (v: number, d = 1) => (v || 0).toLocaleString('pt-BR', { minimumF
 const fmtPct = (v: number) => `${fmtDec(v)}%`;
 
 export default function ClientesDashboard() {
-  const [market, setMarket] = useState<Market>('US');
-  const [period, setPeriod] = useState<PeriodKey>('12M');
+  // Cassia 2026-06-21: filtro de período/mercado via FiltersBar padrão (URL-driven), igual aos
+  // demais dashboards (?market, ?period, ?from, ?to).
+  const params = useSearchParams();
+  const market = (params.get('market') || 'US') as Market;
+  const periodParam = (params.get('period') || '28d') as PeriodKey;
+  const urlFrom = params.get('from');
+  const urlTo = params.get('to');
+  const { start, end } = urlFrom && urlTo ? { start: urlFrom, end: urlTo } : presetRange(periodParam);
+
   const [data, setData] = useState<Bundle | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [query, setQuery] = useState('');
 
   useEffect(() => {
-    const saved = typeof window !== 'undefined' ? window.localStorage.getItem('clientes:mkt') : null;
-    if (saved === 'US' || saved === 'BR') setMarket(saved);
-  }, []);
-
-  useEffect(() => {
     let cancelled = false;
-    const { start, end } = rangeFor(period);
     setLoading(true); setErr(null);
     fetch(`/api/clientes/${market}?start=${start}&end=${end}`)
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
@@ -75,7 +75,7 @@ export default function ClientesDashboard() {
       .catch((e) => { if (!cancelled) setErr(e.message); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [market, period]);
+  }, [market, start, end]);
 
   const cur = data?.currency ?? (market === 'US' ? 'USD' : 'BRL');
 
@@ -89,34 +89,15 @@ export default function ClientesDashboard() {
   return (
     <div className="px-4 lg:px-8 py-5 lg:py-8 max-w-[1500px] mx-auto">
       {/* Header */}
-      <div className="mb-5 flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="font-display text-[26px] lg:text-[36px]" style={{ color: 'var(--ink)' }}>Clientes</h1>
-          <p className="text-[12px] lg:text-[14px] mt-1" style={{ color: 'var(--ink-soft)' }}>
-            Visão 360° — recorrência, novos × recorrentes, LTV, pedidos em aberto, melhores clientes. DTC only.
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex rounded-lg overflow-hidden" style={{ border: '1px solid var(--border)' }}>
-            {(['US', 'BR'] as Market[]).map((m) => (
-              <button key={m} onClick={() => { setMarket(m); try { window.localStorage.setItem('clientes:mkt', m); } catch {} }}
-                className="px-3 py-1.5 text-[12px] font-semibold"
-                style={{ background: market === m ? 'var(--pink-deep)' : 'transparent', color: market === m ? 'white' : 'var(--ink-soft)' }}>
-                {m === 'US' ? '🇺🇸 US' : '🇧🇷 BR'}
-              </button>
-            ))}
-          </div>
-          <div className="flex rounded-lg overflow-hidden" style={{ border: '1px solid var(--border)' }}>
-            {PERIODS.map((p) => (
-              <button key={p.key} onClick={() => setPeriod(p.key)}
-                className="px-3 py-1.5 text-[12px] font-semibold"
-                style={{ background: period === p.key ? 'var(--ink)' : 'transparent', color: period === p.key ? 'white' : 'var(--ink-soft)' }}>
-                {p.label}
-              </button>
-            ))}
-          </div>
-        </div>
+      <div className="mb-3">
+        <h1 className="font-display text-[26px] lg:text-[36px]" style={{ color: 'var(--ink)' }}>Clientes</h1>
+        <p className="text-[12px] lg:text-[14px] mt-1" style={{ color: 'var(--ink-soft)' }}>
+          Visão 360° — recorrência, novos × recorrentes, LTV, pedidos em aberto, melhores clientes. DTC only.
+        </p>
       </div>
+
+      {/* Filtro padrão (US/BR + período + calendário + Aplicar), igual aos demais dashboards */}
+      <FiltersBar />
 
       {loading && <div className="card text-center py-8" style={{ color: 'var(--ink-soft)' }}>Carregando clientes…</div>}
       {err && <div className="card border-rose-300 bg-rose-50 text-rose-700 text-sm">Erro: {err}</div>}
