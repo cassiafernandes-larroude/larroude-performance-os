@@ -152,7 +152,7 @@ export const NET_SALES_EXPR = `
  * Prepend this to a query's WITH clause, then filter target table with
  *   ... AND id IN (SELECT order_id FROM valid_orders)
  */
-function validOrdersCte(table: string, market: Market): string {
+export function validOrdersCte(table: string, market: Market): string {
   return `
   __vo_refunded AS (
     SELECT o.id AS order_id,

@@ -16,6 +16,7 @@ import {
   ORDERS_TABLE,
   COMMON_FILTERS_DTC,
   NET_SALES_EXPR,
+  validOrdersCte,
   type Market,
 } from '@/lib/ltv-dashboard/queries';
 import { CHANNEL_UTM_PATTERNS } from '@/lib/shared/channel-utms';
@@ -111,8 +112,46 @@ export interface CustomerOrder {
  */
 export async function getCustomerOrders(market: Market, customerId: string): Promise<CustomerOrder[]> {
   const table = ORDERS_TABLE[market];
+  // Cassia 2026-06-21: trocas não aparecem como compra (valid_orders ESCOPADO a este cliente —
+  // barato, sem varrer a tabela inteira). Mesma definição do motor LTV: exclui TroquEcommerce/Loop
+  // (já no COMMON_FILTERS_DTC) + recompra de mesmo produto+cor (size-swap). Assim a lista bate com
+  // o nº de pedidos do cliente.
   const sql = `
-    WITH o AS (
+    WITH
+    refunded AS (
+      SELECT id AS order_id,
+             CAST(JSON_VALUE(rli, '$.line_item_id') AS INT64) AS line_item_id,
+             SUM(CAST(JSON_VALUE(rli, '$.quantity') AS FLOAT64)) AS refunded_qty
+      FROM \`${table}\`,
+        UNNEST(JSON_QUERY_ARRAY(refunds)) AS r,
+        UNNEST(JSON_QUERY_ARRAY(r, '$.refund_line_items')) AS rli
+      WHERE cancelled_at IS NULL AND test = FALSE AND JSON_VALUE(customer, '$.id') = @customerId
+      GROUP BY order_id, line_item_id
+    ),
+    raw_li AS (
+      SELECT id AS order_id,
+             DATE(created_at) AS order_date,
+             CAST(JSON_VALUE(li, '$.id') AS INT64) AS line_item_id,
+             TRIM(REGEXP_REPLACE(JSON_VALUE(li, '$.title'), r'\\s+', ' ')) AS title_norm,
+             CAST(JSON_VALUE(li, '$.quantity') AS FLOAT64) AS qty
+      FROM \`${table}\`,
+        UNNEST(JSON_QUERY_ARRAY(line_items)) AS li
+      WHERE ${COMMON_FILTERS_DTC(market)}
+        AND JSON_VALUE(customer, '$.id') = @customerId
+    ),
+    clean_li AS (
+      SELECT r.*, r.qty - IFNULL(rf.refunded_qty, 0) AS net_qty
+      FROM raw_li r LEFT JOIN refunded rf USING (order_id, line_item_id)
+      WHERE r.qty - IFNULL(rf.refunded_qty, 0) > 0
+    ),
+    valid_orders AS (
+      SELECT order_id FROM (
+        SELECT order_id,
+          ROW_NUMBER() OVER (PARTITION BY title_norm ORDER BY order_date, order_id, line_item_id) AS rn
+        FROM clean_li
+      ) WHERE rn = 1
+    ),
+    o AS (
       SELECT
         name,
         FORMAT_DATE('%Y-%m-%d', DATE(created_at)) AS order_date,
@@ -124,6 +163,7 @@ export async function getCustomerOrders(market: Market, customerId: string): Pro
       FROM \`${table}\`
       WHERE ${COMMON_FILTERS_DTC(market)}
         AND JSON_VALUE(customer, '$.id') = @customerId
+        AND id IN (SELECT order_id FROM valid_orders)
     )
     SELECT
       name, order_date, net_sales, fulfillment_status, financial_status,
@@ -149,11 +189,16 @@ export async function getCustomerOrders(market: Market, customerId: string): Pro
  */
 export async function getNewVsReturning(market: Market, start: string, end: string): Promise<NewVsReturning> {
   const table = ORDERS_TABLE[market];
+  // Cassia 2026-06-21: trocas NÃO contam como compra — usa valid_orders (mesma regra do
+  // getLtvKpiSummary/getRetentionStats: exclui TroquEcommerce/Loop + recompra de mesmo produto+cor).
   const sql = `
-    WITH first_order AS (
+    WITH
+    ${validOrdersCte(table, market)},
+    first_order AS (
       SELECT JSON_VALUE(customer, '$.id') AS customer_id, MIN(DATE(created_at)) AS first_dt
       FROM \`${table}\`
       WHERE ${COMMON_FILTERS_DTC(market)}
+        AND id IN (SELECT order_id FROM valid_orders)
       GROUP BY customer_id
     ),
     period AS (
@@ -162,6 +207,7 @@ export async function getNewVsReturning(market: Market, start: string, end: stri
              SUM(${NET_SALES_EXPR}) AS revenue
       FROM \`${table}\`
       WHERE ${COMMON_FILTERS_DTC(market)}
+        AND id IN (SELECT order_id FROM valid_orders)
         AND DATE(created_at) BETWEEN @start AND @end
       GROUP BY customer_id
     )
@@ -193,11 +239,16 @@ export async function getNewVsReturning(market: Market, start: string, end: stri
  */
 export async function getTopCustomers(market: Market, start: string, end: string, limit = 500): Promise<CustomerRow[]> {
   const table = ORDERS_TABLE[market];
+  // Cassia 2026-06-21: trocas NÃO contam (valid_orders) — nº de pedidos, LTV e tipo (novo/recorrente)
+  // são genuínos, consistentes com o KPI "% Recorrentes".
   const sql = `
-    WITH first_order AS (
+    WITH
+    ${validOrdersCte(table, market)},
+    first_order AS (
       SELECT JSON_VALUE(customer, '$.id') AS customer_id, MIN(DATE(created_at)) AS first_dt
       FROM \`${table}\`
       WHERE ${COMMON_FILTERS_DTC(market)}
+        AND id IN (SELECT order_id FROM valid_orders)
       GROUP BY customer_id
     ),
     period AS (
@@ -211,6 +262,7 @@ export async function getTopCustomers(market: Market, start: string, end: string
         FORMAT_DATE('%Y-%m-%d', MAX(DATE(created_at))) AS last_order
       FROM \`${table}\`
       WHERE ${COMMON_FILTERS_DTC(market)}
+        AND id IN (SELECT order_id FROM valid_orders)
         AND DATE(created_at) BETWEEN @start AND @end
       GROUP BY customer_id
     )
@@ -306,11 +358,15 @@ export async function getOpenOrders(market: Market, limit = 50): Promise<OpenOrd
  */
 export async function getCohorts(market: Market): Promise<CohortCell[]> {
   const table = ORDERS_TABLE[market];
+  // Cassia 2026-06-21: retenção genuína — trocas não contam como "voltar a comprar" (valid_orders).
   const sql = `
-    WITH first_order AS (
+    WITH
+    ${validOrdersCte(table, market)},
+    first_order AS (
       SELECT JSON_VALUE(customer, '$.id') AS customer_id, MIN(DATE(created_at)) AS first_dt
       FROM \`${table}\`
       WHERE ${COMMON_FILTERS_DTC(market)}
+        AND id IN (SELECT order_id FROM valid_orders)
       GROUP BY customer_id
     ),
     cohorts AS (
@@ -323,6 +379,7 @@ export async function getCohorts(market: Market): Promise<CohortCell[]> {
              DATE_TRUNC(DATE(created_at), MONTH) AS order_month
       FROM \`${table}\`
       WHERE ${COMMON_FILTERS_DTC(market)}
+        AND id IN (SELECT order_id FROM valid_orders)
       GROUP BY customer_id, order_month
     )
     SELECT
