@@ -69,7 +69,11 @@ function collabOf(title: string, titles: string[]): string | null {
     if (m) { const n = cleanCollab(m[1]); if (n) names.push(n); }
   }
   if (names.length) return names.sort((a, b) => a.length - b.length)[0]; // base do designer
-  // fallback pelo título: "Jonathan Cohen by L.: ..."
+  // fallback pelo TÍTULO (muitos produtos só têm a coleção genérica "Larroudé Collabs"):
+  //   "Larroudé x/×/by/for <Designer>: ..."  (ex.: "Larroudé x Kenneth Cole: Sandal", "Larroudé x Nicolò B.: Nana")
+  const tx = title.match(/^\s*larroud[eé]\s*(?:x|×|by|for)\s+(.+)$/i);
+  if (tx) { const n = cleanCollab(tx[1]); if (n) return n; }
+  //   "<Designer> by L.: ..."
   const t = title.match(/^(.+?)\s+by\s+l\.?\s*[:\-]/i);
   if (t) { const n = cleanCollab(t[1]); if (n) return n; }
   return null;

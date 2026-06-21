@@ -346,8 +346,9 @@ export default function ProductPerformancePage() {
     if (!isPreorderView) return [] as { drop: string; items: ProductRow[]; total: number }[];
     const map = new Map<string, ProductRow[]>();
     for (const p of catFiltered) {
-      const key = p.drop || 'Sem drop';
-      const arr = map.get(key) || []; arr.push(p); map.set(key, arr);
+      // Só drops com DATA no nome (ex.: DROP_13.05.26) — ignora os nomeados (URBANSTRAP26, RESORT26…).
+      if (!p.drop || !/\d{1,2}[.\/-]\d{1,2}/.test(p.drop)) continue;
+      const arr = map.get(p.drop) || []; arr.push(p); map.set(p.drop, arr);
     }
     return Array.from(map.entries())
       .map(([drop, items]) => ({ drop, items, total: items.reduce((s, p) => s + (sortBy === 'units' ? p.units : p.revenue), 0) }))
