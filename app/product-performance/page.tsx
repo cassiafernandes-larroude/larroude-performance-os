@@ -346,6 +346,16 @@ export default function ProductPerformancePage() {
         <button onClick={applyDates} className={PILL_ACTIVE_DARK} title="Aplicar intervalo">Aplicar</button>
         <span className="ml-auto text-[13px] italic px-2" style={{ color: '#9ca3af' }}>{activeLabel}</span>
       </div>
+      {/* Filtro de origem: In Stock / On-Demand / Pre-Order (Pre-Order = coleção de pré-venda) */}
+      <div className="flex items-center gap-2 flex-wrap mb-5">
+        <span className="text-[11px] font-semibold uppercase mr-1" style={{ color: '#9ca3af', letterSpacing: '0.06em' }}>ORIGEM</span>
+        <button onClick={() => setFulCats([])} className={pillBtn(fulCats.length === 0)}>Todas</button>
+        {FULFILLMENT_CATEGORY_GROUPS.map((g) => {
+          const active = g.cats.every((c) => fulCats.includes(c as FulfillmentCategory));
+          return <button key={g.key} onClick={() => toggleFulGroup(g.cats)} className={pillBtn(active)}>{g.label}</button>;
+        })}
+        {fulCats.length > 0 && <span className="text-[11px] italic" style={{ color: '#9ca3af' }}>ranking, KPIs do período e gráficos · "hoje" mostra todas as origens</span>}
+      </div>
       {/* Mais vendidos — cards com imagem (logo abaixo do filtro de período) */}
       <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
         <span className="text-sm font-semibold uppercase tracking-wide" style={{ color: '#6b7280' }}>🏆 Mais vendidos · com imagem (clique pra selecionar)</span>
@@ -456,16 +466,6 @@ export default function ProductPerformancePage() {
         </div>
       )}
 
-      {/* Filtro de origem: In Stock / On-Demand / Pre-Order (Pre-Order = coleção de pré-venda) */}
-      <div className="flex items-center gap-2 flex-wrap mb-5">
-        <span className="text-[11px] font-semibold uppercase mr-1" style={{ color: '#9ca3af', letterSpacing: '0.06em' }}>ORIGEM</span>
-        <button onClick={() => setFulCats([])} className={pillBtn(fulCats.length === 0)}>Todas</button>
-        {FULFILLMENT_CATEGORY_GROUPS.map((g) => {
-          const active = g.cats.every((c) => fulCats.includes(c as FulfillmentCategory));
-          return <button key={g.key} onClick={() => toggleFulGroup(g.cats)} className={pillBtn(active)}>{g.label}</button>;
-        })}
-        {fulCats.length > 0 && <span className="text-[11px] italic" style={{ color: '#9ca3af' }}>ranking, KPIs do período e gráficos · "hoje" mostra todas as origens</span>}
-      </div>
 
       {/* KPIs DA SELEÇÃO (ao vivo de hoje + período) */}
       <div className="mb-2 flex items-center gap-2 flex-wrap">
