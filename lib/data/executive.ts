@@ -6,6 +6,7 @@ import { cached } from "@/lib/cache";
 import { queryChannelMix } from "@/lib/main-dashboard/queries";
 import { getDashboardPayload } from "@/lib/main-dashboard/dashboard-service";
 import { computeTotalSpend } from "@/lib/channel-costs-bq";
+import { getPreorderMotherSkus } from "@/lib/shared/preorder-skus";
 import type { DailyPoint } from "@/lib/main-dashboard/types";
 
 const TZ: Record<Market, string> = { US: "America/New_York", BR: "America/Sao_Paulo" };
@@ -301,6 +302,7 @@ export async function getExecutiveConsolidated(
   customRange?: { from: string; to: string },
   fulCats?: import("@/lib/shared/fulfillment-category").FulfillmentCategory[] | null,
 ): Promise<ExecutiveConsolidated> {
+  await Promise.all([getPreorderMotherSkus('US'), getPreorderMotherSkus('BR')]); // warm cache
   const range = rangeForPeriod(period, customRange);
   const fulKey = fulCats && fulCats.length ? fulCats.slice().sort().join('+') : 'all';
   const cacheKey = (customRange

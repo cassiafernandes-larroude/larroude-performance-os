@@ -4,6 +4,7 @@ import { formatCurrency, formatMultiplier, formatNumber, formatPercent } from "@
 import { hasBigQueryCredentials, runQuery } from "@/lib/bigquery/client";
 import { aggregatedKpisSQL } from "@/lib/bigquery/queries/metrics";
 import { type FulfillmentCategory } from "@/lib/shared/fulfillment-category";
+import { getPreorderMotherSkus } from "@/lib/shared/preorder-skus";
 import { getMetaSpendApi, hasMetaCredentials } from "@/lib/meta-api";
 import { cached } from "@/lib/cache";
 import { getFixedToolsCostInRange, getAgentShopCost, CHANNEL_COSTS } from "@/lib/channel-costs";
@@ -102,6 +103,7 @@ export async function getMetricBundle(
   customRange?: { from: string; to: string },
   fulCats?: FulfillmentCategory[] | null
 ): Promise<MetricBundle> {
+  await getPreorderMotherSkus(market); // warm cache p/ exclusão pre-order
   const fulKey = fulCats && fulCats.length ? fulCats.slice().sort().join('+') : 'all';
   const cacheKey = customRange
     ? `metrics-v13-meta-sm-fallback:${market}:custom:${customRange.from}:${customRange.to}:ful=${fulKey}`

@@ -41,6 +41,7 @@ import { calcPeriod, fmtCurrency, fmtMultiple, fmtNumber, fmtPercent, granularit
 import { getMetaSpendAdjustment, getMetaSpendAdjustmentByDay } from '@/lib/shared/meta-adjustments';
 import { getFixedToolsCostInRange, getAgentShopCost, getPercentRevenueCosts, CHANNEL_COSTS } from '@/lib/channel-costs';
 import { type FulfillmentCategory, isPreorderCampaign } from '@/lib/shared/fulfillment-category';
+import { getPreorderMotherSkus } from '@/lib/shared/preorder-skus';
 import type {
   CampaignRow,
   ChannelRevenue,
@@ -104,6 +105,7 @@ export async function getDashboardPayload(
   customStart?: string,
   fulCats?: FulfillmentCategory[] | null,
 ): Promise<DashboardPayload> {
+  await getPreorderMotherSkus(market); // esquenta cache p/ exclusão pre-order no filtro de origem
   // Build period (com possivel override de start customizado)
   const basePeriod = calcPeriod(periodKey, endDate, market);
   // Aceita start == end (single day) — usa <= em vez de <

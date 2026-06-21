@@ -13,7 +13,9 @@
 // permite subquery correlacionada com JOIN na tabela locations; por isso mapeamos por
 // ID (estaveis no Shopify). IDs globalmente unicos por loja -> a mesma lista serve US e BR.
 
-export type FulfillmentCategory = 'in-stock' | 'on-demand' | 'from-batch' | 'pending' | 'other';
+import { getPreorderMotherSkusCached } from './preorder-skus';
+
+export type FulfillmentCategory = 'in-stock' | 'on-demand' | 'from-batch' | 'pre-order' | 'pending' | 'other';
 
 // location_id (Shopify) -> categoria. Atualizar aqui se uma location for recriada/adicionada.
 export const FULFILLMENT_LOCATION_IDS = {
@@ -28,16 +30,18 @@ export const FULFILLMENT_LOCATION_IDS = {
   ],
 };
 
-// Grupos para o filtro de UI. Cassia 2026-06-17: on-demand + from-batch consolidados
-// em "Pre-order" (produzido). Cada pill controla 1+ categorias internas.
+// Grupos para o filtro de UI. Cassia 2026-06-20: 3 origens —
+//   In Stock = estoque; On-Demand = produzido por esgotar (on-demand + from-batch);
+//   Pre-Order = pré-lançamento (atributo de PRODUTO, via coleção de pré-venda).
+// Pre-order é EXCLUSIVO: removido de In Stock e On-Demand (ver fulfillmentCategoryFilterSQL).
 export const FULFILLMENT_CATEGORY_GROUPS: { key: string; label: string; cats: FulfillmentCategory[] }[] = [
-  { key: "in-stock", label: "Em estoque", cats: ["in-stock"] },
-  { key: "pre-order", label: "On-demand", cats: ["on-demand", "from-batch"] },
-  // Cassia 2026-06-17: "Pendente" removido do filtro (residual — quase tudo ja' e' roteado).
-  // A categoria 'pending' ainda existe no enum/SQL, so' nao aparece como pill.
+  { key: "in-stock", label: "In Stock", cats: ["in-stock"] },
+  { key: "on-demand", label: "On-Demand", cats: ["on-demand", "from-batch"] },
+  { key: "pre-order", label: "Pre-Order", cats: ["pre-order"] },
+  // 'pending'/'other' continuam no enum/SQL, só não aparecem como pill.
 ];
 
-const ALL_CATEGORIES: FulfillmentCategory[] = ['in-stock', 'on-demand', 'from-batch', 'pending', 'other'];
+const ALL_CATEGORIES: FulfillmentCategory[] = ['in-stock', 'on-demand', 'from-batch', 'pre-order', 'pending', 'other'];
 
 // Cassia 2026-06-17: spend e' atribuido por NOME de campanha. Campanhas COM
 // pre-order/preorder/pre-venda/pre venda = produzido (on-demand + from-batch);
@@ -72,10 +76,29 @@ export function parseFulfillmentCategories(raw: string | null | undefined): Fulf
  * (a producao leva semanas; usar o fulfillment concluido jogava pre-orders em "pending").
  * Semi-join (IN) — suportado pelo BQ. `dataset` = 'stg_shopify' | 'stg_shopify_br'.
  */
+// Expressão SQL: mother SKU (estilo+cor, sem tamanho) a partir de uma expr de variant sku.
+// Replica motherSkuOf do catálogo. Usada pra casar line items com a lista pre-order.
+function motherSkuSql(skuExpr: string): string {
+  const s = skuExpr;
+  return `CASE
+    WHEN ${s} IS NULL OR ARRAY_LENGTH(SPLIT(${s}, '-')) < 3 THEN NULL
+    WHEN ARRAY_LENGTH(SPLIT(${s}, '-')) >= 4 AND REGEXP_CONTAINS(SPLIT(${s}, '-')[SAFE_OFFSET(2)], r'^\\d+(\\.\\d+)?$')
+      THEN CASE
+        WHEN ARRAY_LENGTH(SPLIT(${s}, '-')) >= 5 AND IFNULL(SPLIT(${s}, '-')[SAFE_OFFSET(4)], '') != ''
+          THEN CONCAT(SPLIT(${s}, '-')[SAFE_OFFSET(0)], '-', SPLIT(${s}, '-')[SAFE_OFFSET(1)], '-', SPLIT(${s}, '-')[SAFE_OFFSET(3)], '-', SPLIT(${s}, '-')[SAFE_OFFSET(4)])
+        ELSE CONCAT(SPLIT(${s}, '-')[SAFE_OFFSET(0)], '-', SPLIT(${s}, '-')[SAFE_OFFSET(1)], '-', SPLIT(${s}, '-')[SAFE_OFFSET(3)])
+      END
+    WHEN ARRAY_LENGTH(SPLIT(${s}, '-')) >= 4 AND IFNULL(SPLIT(${s}, '-')[SAFE_OFFSET(3)], '') != ''
+      THEN CONCAT(SPLIT(${s}, '-')[SAFE_OFFSET(0)], '-', SPLIT(${s}, '-')[SAFE_OFFSET(1)], '-', SPLIT(${s}, '-')[SAFE_OFFSET(2)], '-', SPLIT(${s}, '-')[SAFE_OFFSET(3)])
+    ELSE CONCAT(SPLIT(${s}, '-')[SAFE_OFFSET(0)], '-', SPLIT(${s}, '-')[SAFE_OFFSET(1)], '-', SPLIT(${s}, '-')[SAFE_OFFSET(2)])
+  END`;
+}
+
 export function fulfillmentCategoryFilterSQL(
   categories: FulfillmentCategory[] | null | undefined,
   ordersAlias: string,
-  dataset: string
+  dataset: string,
+  preorderSkus?: string[] | null
 ): string {
   if (!categories || categories.length === 0) return '';
   const valid = categories.filter((c) => ALL_CATEGORIES.includes(c));
@@ -85,16 +108,23 @@ export function fulfillmentCategoryFilterSQL(
   const inSub = (idsX: string[]) =>
     `${a}id IN (SELECT order_id FROM ${foTable} WHERE CAST(assigned_location_id AS STRING) IN (${idIn(idsX)}))`;
   const preIds = [...FULFILLMENT_LOCATION_IDS.fromBatch, ...FULFILLMENT_LOCATION_IDS.onDemand];
-  const wantPre = valid.includes('on-demand') || valid.includes('from-batch');
+
+  // Predicado PRE-ORDER por produto: pedido tem ≥1 line item cujo mother SKU está na
+  // coleção de pré-venda. Lista vem do param ou do cache (mercado derivado do dataset).
+  // Sem lista → FALSE (sem exclusão; comportamento antigo / degradação graciosa).
+  const skus = preorderSkus ?? getPreorderMotherSkusCached(dataset.includes('_br') ? 'BR' : 'US');
+  const preorderPred = skus && skus.length
+    ? `EXISTS (SELECT 1 FROM UNNEST(JSON_QUERY_ARRAY(${a}line_items)) AS _pli WHERE ${motherSkuSql("JSON_VALUE(_pli, '$.sku')")} IN (${idIn(skus)}))`
+    : 'FALSE';
+
+  const wantOnDemand = valid.includes('on-demand') || valid.includes('from-batch');
   const wantIn = valid.includes('in-stock');
+  const wantPreorder = valid.includes('pre-order');
   const conds: string[] = [];
-  // Categorias EXCLUSIVAS com precedencia pre-order: pedido com QUALQUER item de producao
-  // (Senda/Possibility) = pre-order; senao, se tem item de estoque = in-stock. Pedidos "split"
-  // (estoque + producao) contam so como pre-order -> Estoque + Pre-order = Total (sem dupla contagem).
-  if (wantPre) conds.push(inSub(preIds));
-  if (wantIn) {
-    conds.push(wantPre ? inSub(FULFILLMENT_LOCATION_IDS.inStock) : `(${inSub(FULFILLMENT_LOCATION_IDS.inStock)} AND NOT (${inSub(preIds)}))`);
-  }
+  // EXCLUSIVO, precedência: Pre-Order (produto) > On-Demand (local Senda/Possibility) > In Stock.
+  if (wantPreorder) conds.push(preorderPred);
+  if (wantOnDemand) conds.push(`(${inSub(preIds)} AND NOT (${preorderPred}))`);
+  if (wantIn) conds.push(`(${inSub(FULFILLMENT_LOCATION_IDS.inStock)} AND NOT (${inSub(preIds)}) AND NOT (${preorderPred}))`);
   if (valid.includes('pending')) {
     conds.push(`${a}id NOT IN (SELECT order_id FROM ${foTable} WHERE order_id IS NOT NULL)`);
   }

@@ -2,6 +2,7 @@ import type { Market } from "@/types/metric";
 import { runQuery, hasBigQueryCredentials } from "@/lib/bigquery/client";
 import { cached } from "@/lib/cache";
 import { fulfillmentCategoryFilterSQL, type FulfillmentCategory } from "@/lib/shared/fulfillment-category";
+import { getPreorderMotherSkus } from "@/lib/shared/preorder-skus";
 
 const TZ: Record<Market, string> = { US: "America/New_York", BR: "America/Sao_Paulo" };
 const DATASET: Record<Market, string> = { US: "stg_shopify", BR: "stg_shopify_br" };
@@ -190,6 +191,7 @@ export async function getShopifyBundle(
   period: { from: string; to: string },
   fulCats?: FulfillmentCategory[] | null,
 ): Promise<ShopifyBundle> {
+  await getPreorderMotherSkus(market); // warm cache p/ exclusão pre-order
   const fulKey = fulCats && fulCats.length ? fulCats.slice().sort().join('+') : 'all';
   return cached(`shopify-v2:${market}:${period.from}:${period.to}:ful=${fulKey}`, 1800, async () => {
     const range = period;
