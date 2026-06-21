@@ -46,6 +46,8 @@ export default function CampaignGenerator({ initialMarket = "US" }: { initialMar
 
   const [templateLoading, setTemplateLoading] = useState(false);
   const [templateError, setTemplateError] = useState<string | null>(null);
+  // Cassia 2026-06-21: guarda o payload da geração p/ permitir re-tentar só a etapa 2 (template).
+  const [lastPayload, setLastPayload] = useState<ReturnType<typeof genPayload> | null>(null);
 
   function genPayload() {
     return {
@@ -116,6 +118,7 @@ export default function CampaignGenerator({ initialMarket = "US" }: { initialMar
     setLoading(true);
     try {
       const payload = genPayload();
+      setLastPayload(payload);
       const res = await fetch("/api/klaviyo/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -519,9 +522,20 @@ export default function CampaignGenerator({ initialMarket = "US" }: { initialMar
                     style={{ height: 480, border: "1px solid var(--border, #eee)", background: "#fff" }}
                   />
                 ) : templateError ? (
-                  <p className="text-xs flex items-start gap-1.5" style={{ color: "#d33" }}>
-                    <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" /> {templateError}
-                  </p>
+                  <div className="flex flex-col items-start gap-2">
+                    <p className="text-xs flex items-start gap-1.5" style={{ color: "#d33" }}>
+                      <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" /> {templateError}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => lastPayload && fetchTemplate(lastPayload)}
+                      disabled={templateLoading || !lastPayload}
+                      className="text-xs px-3 py-1.5 rounded-md border"
+                      style={{ borderColor: "var(--border, #ddd)" }}
+                    >
+                      {templateLoading ? "Gerando…" : "Tentar gerar o template de novo"}
+                    </button>
+                  </div>
                 ) : (
                   <div
                     className="flex items-center justify-center gap-2 text-sm rounded-lg"

@@ -40,7 +40,25 @@ export async function generateStructured<T = any>(opts: {
     },
   });
 
-  const result = await model.generateContent(opts.user);
+  // Cassia 2026-06-21: o AI Studio devolve 503/429 transitório sob carga ("high demand").
+  // Retry com backoff exponencial (até 4 tentativas) p/ não falhar a geração por instabilidade da API.
+  let result;
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      result = await model.generateContent(opts.user);
+      break;
+    } catch (e) {
+      lastErr = e;
+      const msg = String((e as Error)?.message || e);
+      const transient = /\b(503|429|500)\b/.test(msg) || /high demand|overloaded|unavailable|rate.?limit/i.test(msg);
+      if (!transient || attempt === 3) throw e;
+      const waitMs = 1500 * Math.pow(2, attempt); // 1.5s, 3s, 6s
+      await new Promise((r) => setTimeout(r, waitMs));
+    }
+  }
+  if (!result) throw lastErr instanceof Error ? lastErr : new Error('Gemini falhou após múltiplas tentativas.');
+
   const text = result.response.text();
   if (!text) throw new Error('Gemini retornou resposta vazia.');
 
