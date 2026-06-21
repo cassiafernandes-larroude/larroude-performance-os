@@ -6,6 +6,7 @@
 
 import { runShopifyQL } from '@/lib/main-dashboard/shopify-admin';
 import { runQuery } from '@/lib/ltv-dashboard/bigquery';
+import { klaviyoFetch } from '@/lib/klaviyo/klaviyo';
 
 export type Market = 'US' | 'BR';
 export type Granularity = 'day' | 'week' | 'month';
@@ -141,4 +142,58 @@ export async function getPaymentBreakdown(market: Market, since: string, until: 
     pixPaid, pixPending, other,
     hasPix: market === 'BR',
   };
+}
+
+export interface SpendPoint { date: string; spend: number; }
+export interface CrmPoint { date: string; sends: number; }
+
+function dayAfter(iso: string): string {
+  const d = new Date(iso + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Investimento de mídia (Meta + Google) por dia — gold.all_channels_daily (fresco). */
+export async function getSpendDaily(market: Market, since: string, until: string): Promise<SpendPoint[]> {
+  const tableRef = '`' + 'larroude-data-prod.gold.all_channels_daily' + '`';
+  const sql = `
+    SELECT FORMAT_DATE('%Y-%m-%d', date) AS d, SUM(CAST(spend AS FLOAT64)) AS spend
+    FROM ${tableRef}
+    WHERE LOWER(market) = @m
+      AND LOWER(channel) IN ('meta_ads', 'google_ads')
+      AND date BETWEEN @since AND @until
+    GROUP BY d
+    ORDER BY d
+  `;
+  const rows = await runQuery<any>(sql, { m: market.toLowerCase(), since, until });
+  return rows.map((r) => ({ date: String(r.d), spend: Number(r.spend) || 0 }));
+}
+
+/** Envios de CRM (Klaviyo "Received Email" + "Received SMS") por dia — API ao vivo. */
+export async function getCrmSendsDaily(market: Market, since: string, until: string): Promise<CrmPoint[]> {
+  const metrics = await klaviyoFetch<any>({ market: market as any, path: '/metrics/' });
+  const ids: string[] = (metrics?.data || [])
+    .filter((d: any) => /received email|received sms/i.test(d?.attributes?.name || ''))
+    .map((d: any) => d.id);
+  if (!ids.length) return [];
+  const endExcl = dayAfter(until);
+  const tz = TZ[market];
+  const map = new Map<string, number>();
+  for (const id of ids) {
+    const body = { data: { type: 'metric-aggregate', attributes: {
+      metric_id: id,
+      measurements: ['count'],
+      interval: 'day',
+      filter: [`greater-or-equal(datetime,${since}T00:00:00)`, `less-than(datetime,${endExcl}T00:00:00)`],
+      timezone: tz,
+    } } };
+    const res = await klaviyoFetch<any>({ market: market as any, path: '/metric-aggregates/', method: 'POST', body });
+    const dates: any[] = res?.data?.attributes?.dates || [];
+    const counts: any[] = res?.data?.attributes?.data?.[0]?.measurements?.count || [];
+    dates.forEach((d, i) => {
+      const day = String(d).slice(0, 10);
+      map.set(day, (map.get(day) || 0) + (Number(counts[i]) || 0));
+    });
+  }
+  return Array.from(map.entries()).map(([date, sends]) => ({ date, sends })).sort((a, b) => a.date.localeCompare(b.date));
 }

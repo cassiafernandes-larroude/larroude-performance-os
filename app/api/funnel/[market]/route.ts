@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  getFunnelSeries, getFunnelTotals, getPaymentBreakdown,
+  getFunnelSeries, getFunnelTotals, getPaymentBreakdown, getSpendDaily, getCrmSendsDaily,
   type Market, type Granularity,
 } from '@/lib/funnel/queries';
 import { memo } from '@/lib/ltv-dashboard/memo-cache';
@@ -38,12 +38,38 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
       // Cassia 2026-06-21: funil (ShopifyQL) é o core; pagamento (BQ) é não-fatal — se o BQ falhar,
       // o funil ainda aparece com o bloco de pagamento vazio.
       const emptyPay = { cards: [], cardTotal: 0, pixPaid: 0, pixPending: 0, other: 0, hasPix: market === 'BR' };
-      const [series, totals, payment, today] = await Promise.all([
+      const [series, totals, payment, today, spendDaily, crmDaily] = await Promise.all([
         getFunnelSeries(market, since, until, gran),
         getFunnelTotals(market, since, until),
         getPaymentBreakdown(market, since, until).catch((e) => { console.warn('[funnel] payment failed:', e?.message); return emptyPay; }),
         getFunnelTotals(market, 'today', 'today').catch(() => null),
+        getSpendDaily(market, since, until).catch((e) => { console.warn('[funnel] spend failed:', e?.message); return []; }),
+        getCrmSendsDaily(market, since, until).catch((e) => { console.warn('[funnel] crm failed:', e?.message); return []; }),
       ]);
+
+      // #1: share de cada etapa por ponto da série (overtime, em %).
+      const shareSeries = series.map((p) => ({
+        date: p.date,
+        cart: share(p.addToCart, p.sessions),
+        checkout: share(p.reachedCheckout, p.addToCart),
+        pedido: share(p.completed, p.reachedCheckout),
+        cvr: share(p.completed, p.sessions),
+      }));
+
+      // #2: sessões × investimento de mídia × envios CRM, bucketizados aos mesmos períodos do funil.
+      const sumRange = (arr: any[], key: string, from: string, toExcl: string | null) =>
+        arr.filter((x) => x.date >= from && (toExcl == null || x.date < toExcl)).reduce((s, x) => s + (Number(x[key]) || 0), 0);
+      const context = series.map((p, i) => {
+        const toExcl = i + 1 < series.length ? series[i + 1].date : null;
+        return {
+          date: p.date,
+          sessions: p.sessions,
+          spend: sumRange(spendDaily, 'spend', p.date, toExcl),
+          crmSends: sumRange(crmDaily, 'sends', p.date, toExcl),
+        };
+      });
+      const spendTotal = spendDaily.reduce((s, x) => s + x.spend, 0);
+      const crmTotal = crmDaily.reduce((s, x) => s + x.sends, 0);
 
       const shares = {
         cartFromSessions: share(totals.addToCart, totals.sessions),
@@ -68,7 +94,7 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
         }
       }
 
-      return { available: true, market, since, until, gran, series, totals, shares, payment, today, alerts };
+      return { available: true, market, since, until, gran, series, totals, shares, payment, today, alerts, shareSeries, context, spendTotal, crmTotal };
     });
     return NextResponse.json(result, {
       headers: { 'Cache-Control': 'public, max-age=300, s-maxage=600, stale-while-revalidate=3600' },
@@ -80,6 +106,7 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
       available: false, market, since, until, gran, error: msg,
       series: [], totals: null, shares: null,
       payment: { cards: [], cardTotal: 0, pixPaid: 0, pixPending: 0, other: 0, hasPix: market === 'BR' }, today: null, alerts: [],
+      shareSeries: [], context: [], spendTotal: 0, crmTotal: 0,
     });
   }
 }

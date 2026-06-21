@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { FiltersBar } from '@/components/filters/FiltersBar';
 import BarLineChart, { type BarPoint } from '@/components/shared/BarLineChart';
+import MultiLineChart, { type Series } from '@/components/klaviyo/MultiLineChart';
 
 type Market = 'US' | 'BR';
 type PeriodKey = 'today' | '7d' | '14d' | '28d' | '3M' | '6M' | '12M';
@@ -21,6 +22,10 @@ interface Bundle {
   payment: { cards: Array<{ brand: string; orders: number }>; cardTotal: number; pixPaid: number; pixPending: number; other: number; hasPix: boolean };
   today: { sessions: number; addToCart: number; reachedCheckout: number; completed: number } | null;
   alerts: Array<{ step: string; todayRate: number; periodRate: number; dropPct: number }>;
+  shareSeries: Array<{ date: string; cart: number; checkout: number; pedido: number; cvr: number }>;
+  context: Array<{ date: string; sessions: number; spend: number; crmSends: number }>;
+  spendTotal: number;
+  crmTotal: number;
   error?: string;
 }
 
@@ -79,6 +84,30 @@ export default function FunnelDashboard() {
     (data?.series ?? []).map((p) => ({ date: p.date, value: Number(p[key]) || 0 }));
   const cvrSeries: BarPoint[] = (data?.series ?? []).map((p) => ({ date: p.date, value: p.sessions > 0 ? (p.completed / p.sessions) * 100 : 0 }));
 
+  // #1: share de cada etapa (overtime, linhas %).
+  const shareDates = (data?.shareSeries ?? []).map((p) => p.date);
+  const shareLines: Series[] = [
+    { label: 'Carrinho / Sessões', values: (data?.shareSeries ?? []).map((p) => p.cart), color: '#0ea5e9' },
+    { label: 'Checkout / Carrinho', values: (data?.shareSeries ?? []).map((p) => p.checkout), color: '#f59e0b' },
+    { label: 'Pedido / Checkout', values: (data?.shareSeries ?? []).map((p) => p.pedido), color: '#10b981' },
+    { label: 'CVR geral', values: (data?.shareSeries ?? []).map((p) => p.cvr), color: '#5d4ec5' },
+  ];
+
+  // #2: sessões × investimento × CRM — índice base 100 (relaciona tendências de unidades diferentes).
+  const ctx = data?.context ?? [];
+  const ctxDates = ctx.map((p) => p.date);
+  const idx = (vals: number[]): number[] => {
+    const base = vals.find((v) => v > 0) ?? 0;
+    return base > 0 ? vals.map((v) => (v / base) * 100) : vals.map(() => 0);
+  };
+  const crmHas = ctx.some((p) => p.crmSends > 0);
+  const spendHas = ctx.some((p) => p.spend > 0);
+  const relLines: Series[] = [
+    { label: 'Sessões', values: idx(ctx.map((p) => p.sessions)), color: '#5d4ec5' },
+    ...(spendHas ? [{ label: 'Investimento mídia', values: idx(ctx.map((p) => p.spend)), color: '#e11d48' }] : []),
+    ...(crmHas ? [{ label: 'Envios CRM', values: idx(ctx.map((p) => p.crmSends)), color: '#0ea5e9' }] : []),
+  ];
+
   const pay = data?.payment;
 
   return (
@@ -127,12 +156,22 @@ export default function FunnelDashboard() {
                 <h3 className="text-[14px] font-semibold" style={{ color: 'var(--ink)' }}>Hoje · tempo real</h3>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {STAGES.map((s) => (
-                  <div key={s.key} className="rounded-lg p-3" style={{ background: 'var(--paper)' }}>
-                    <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--ink-muted)' }}>{s.label}</div>
-                    <div className="font-num font-bold text-[20px]" style={{ color: s.color }}>{fmtN((data.today as any)[s.key])}</div>
-                  </div>
-                ))}
+                {STAGES.map((s, i) => {
+                  const td = data.today as any;
+                  const val = Number(td[s.key]) || 0;
+                  const prev = i === 0 ? val : Number(td[STAGES[i - 1].key]) || 0;
+                  const sh = i === 0 ? null : prev > 0 ? (val / prev) * 100 : 0;
+                  const ofSess = data.today!.sessions > 0 ? (val / data.today!.sessions) * 100 : 0;
+                  return (
+                    <div key={s.key} className="rounded-lg p-3" style={{ background: 'var(--paper)' }}>
+                      <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--ink-muted)' }}>{s.label}</div>
+                      <div className="font-num font-bold text-[20px]" style={{ color: s.color }}>{fmtN(val)}</div>
+                      <div className="text-[10px] mt-0.5" style={{ color: 'var(--ink-muted)' }}>
+                        {i === 0 ? '100% das sessões' : `${fmtP(sh as number)} da etapa ant. · ${fmtP(ofSess)} das sessões`}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -177,6 +216,34 @@ export default function FunnelDashboard() {
             <div className="card"><BarLineChart title="Add ao carrinho" data={seriesFor('addToCart')} color="#0ea5e9" unit="number" market={market} height={200} /></div>
             <div className="card"><BarLineChart title="Checkout (info de pagamento)" data={seriesFor('reachedCheckout')} color="#f59e0b" unit="number" market={market} height={200} /></div>
             <div className="card"><BarLineChart title="Pedidos concluídos" data={seriesFor('completed')} color="#10b981" unit="number" market={market} height={200} /></div>
+          </div>
+
+          {/* #1 — Share de cada etapa overtime (linhas) */}
+          {shareDates.length > 1 && (
+            <div className="card">
+              <h3 className="text-[14px] font-semibold mb-1" style={{ color: 'var(--ink)' }}>Share de cada etapa · ao longo do tempo</h3>
+              <p className="text-[11px] mb-3" style={{ color: 'var(--ink-soft)' }}>Conversão entre etapas (%) por período — quanto cada passo converte.</p>
+              <MultiLineChart title="" dates={shareDates} series={shareLines} unit="percent" market={market} height={260} />
+            </div>
+          )}
+
+          {/* #2 — Sessões × Investimento de mídia × Envios CRM */}
+          <div className="card">
+            <h3 className="text-[14px] font-semibold mb-1" style={{ color: 'var(--ink)' }}>Sessões × Investimento de mídia × Envios CRM</h3>
+            <p className="text-[11px] mb-3" style={{ color: 'var(--ink-soft)' }}>
+              Índice base 100 (1º ponto = 100) — relaciona a tendência das sessões com o gasto em mídia (Meta+Google) e os envios de CRM (Klaviyo).
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+              <Stat label="Sessões (período)" value={fmtN((data.totals!).sessions)} color="#5d4ec5" />
+              <Stat label="Investimento mídia" value={spendHas ? new Intl.NumberFormat(market === 'BR' ? 'pt-BR' : 'en-US', { style: 'currency', currency: market === 'BR' ? 'BRL' : 'USD', notation: 'compact', maximumFractionDigits: 1 }).format(data.spendTotal) : '—'} color="#e11d48" />
+              <Stat label="Envios CRM" value={crmHas ? fmtN(data.crmTotal) : '—'} color="#0ea5e9" />
+              <Stat label="Sessões / R$ mídia" value={data.spendTotal > 0 ? fmtN((data.totals!).sessions / data.spendTotal) : '—'} />
+            </div>
+            {ctxDates.length > 1 && relLines.length > 1 ? (
+              <MultiLineChart title="" dates={ctxDates} series={relLines} unit="number" market={market} height={260} />
+            ) : (
+              <p className="text-[12px]" style={{ color: 'var(--ink-muted)' }}>Sem dados de mídia/CRM no período para correlacionar.</p>
+            )}
           </div>
 
           {/* PAGAMENTO */}
