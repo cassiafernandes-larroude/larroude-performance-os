@@ -47,12 +47,11 @@ interface ProductRow {
   motherSku: string; name: string; image: string | null; category: string;
   units: number; revenue: number; prevUnits: number; prevRevenue: number;
   group: ProductGroup; isB2B: boolean; isCollab: boolean; isNew: boolean;
-  materials: string[]; colors: string[]; collab: string | null;
+  materials: string[]; colors: string[]; collab: string | null; drop: string | null;
 }
-type CatKey = 'all' | 'novos' | 'collab' | 'b2b' | 'tenis' | 'bolsas' | 'vestuario' | 'material' | 'cor';
+type CatKey = 'all' | 'collab' | 'b2b' | 'tenis' | 'bolsas' | 'vestuario' | 'material' | 'cor';
 const CAT_TABS: { key: CatKey; label: string }[] = [
   { key: 'all', label: 'Todos' },
-  { key: 'novos', label: 'Lançamentos' },
   { key: 'collab', label: 'Collabs' },
   { key: 'b2b', label: 'B2B' },
   { key: 'tenis', label: 'Tênis' },
@@ -279,7 +278,6 @@ export default function ProductPerformancePage() {
   // Filtro de categoria (abas do carrossel).
   function matchesCat(p: ProductRow): boolean {
     switch (cat) {
-      case 'novos': return p.isNew;
       case 'collab': return p.isCollab;
       case 'b2b': return p.isB2B;
       case 'tenis': return p.group === 'tenis';
@@ -302,7 +300,7 @@ export default function ProductPerformancePage() {
   const matBucketCount = (bucket: string): number => carRanked.filter((p) => materialBucketsOf(p).includes(bucket)).length;
   const catCount = (k: CatKey): number => {
     if (k === 'all' || k === 'material' || k === 'cor') return carRanked.length;
-    return carRanked.filter((p) => k === 'novos' ? p.isNew : k === 'collab' ? p.isCollab : k === 'b2b' ? p.isB2B : p.group === k).length;
+    return carRanked.filter((p) => k === 'collab' ? p.isCollab : k === 'b2b' ? p.isB2B : p.group === k).length;
   };
   // Render incremental pra não pesar: mostra INITIAL_CARDS e expande sob demanda.
   const INITIAL_CARDS = 60;
@@ -321,6 +319,20 @@ export default function ProductPerformancePage() {
       .map(([collab, items]) => ({ collab, items, total: items.reduce((s, p) => s + (sortBy === 'units' ? p.units : p.revenue), 0) }))
       .sort((a, b) => b.total - a.total);
   }, [cat, carRanked, sortBy]);
+
+  // Filtro de origem Pre-Order: um carrossel POR drop (onda de lançamento).
+  const isPreorderView = fulCats.includes('pre-order' as FulfillmentCategory);
+  const dropGroups = useMemo(() => {
+    if (!isPreorderView) return [] as { drop: string; items: ProductRow[]; total: number }[];
+    const map = new Map<string, ProductRow[]>();
+    for (const p of catFiltered) {
+      const key = p.drop || 'Sem drop';
+      const arr = map.get(key) || []; arr.push(p); map.set(key, arr);
+    }
+    return Array.from(map.entries())
+      .map(([drop, items]) => ({ drop, items, total: items.reduce((s, p) => s + (sortBy === 'units' ? p.units : p.revenue), 0) }))
+      .sort((a, b) => b.total - a.total);
+  }, [isPreorderView, catFiltered, sortBy]);
 
   // Card do carrossel (reutilizado pelo carrossel único e pelos carrosséis por collab).
   const renderCard = (p: ProductRow, rank: number) => {
@@ -498,8 +510,26 @@ export default function ProductPerformancePage() {
       )}
 
       {(loadingPerf || loadingCar) && <div className="card p-8 text-center text-sm mb-6" style={{ color: '#6b7280' }}>Carregando…</div>}
+      {/* Filtro de origem Pre-Order: um carrossel por DROP (onda de lançamento) */}
+      {!loadingPerf && !loadingCar && isPreorderView && (
+        <div className="mb-8 flex flex-col gap-5">
+          {dropGroups.map((g) => (
+            <div key={g.drop}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[13px] font-bold" style={{ color: '#1A1A1A' }}>🗓️ {g.drop}</span>
+                <span className="text-[11px]" style={{ color: '#9ca3af' }}>{g.items.length} produto{g.items.length === 1 ? '' : 's'} · {sortBy === 'units' ? `${fmtNum(g.total)} un` : fmtMoney(g.total)}</span>
+              </div>
+              <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollSnapType: 'x proximity', scrollbarWidth: 'thin' }}>
+                {g.items.map((p, i) => renderCard(p, i + 1))}
+              </div>
+            </div>
+          ))}
+          {dropGroups.length === 0 && <div className="card p-8 text-center text-sm" style={{ color: '#6b7280' }}>Nenhum produto pré-lançamento no período.</div>}
+        </div>
+      )}
+
       {/* Aba Collabs: um carrossel por collab (designer) */}
-      {!loadingPerf && !loadingCar && cat === 'collab' && (
+      {!loadingPerf && !loadingCar && !isPreorderView && cat === 'collab' && (
         <div className="mb-8 flex flex-col gap-5">
           {collabGroups.map((g) => (
             <div key={g.collab}>
@@ -517,7 +547,7 @@ export default function ProductPerformancePage() {
       )}
 
       {/* Demais abas: carrossel único */}
-      {!loadingPerf && !loadingCar && cat !== 'collab' && (
+      {!loadingPerf && !loadingCar && !isPreorderView && cat !== 'collab' && (
         <div className="relative mb-4">
           <button onClick={() => scrollCarousel(-1)} aria-label="Anterior"
             className="hidden sm:flex absolute left-[-6px] top-[90px] z-20 items-center justify-center"
@@ -531,14 +561,14 @@ export default function ProductPerformancePage() {
           </div>
         </div>
       )}
-      {!loadingPerf && !loadingCar && cat !== 'collab' && !search.trim() && catFiltered.length > visible.length && (
+      {!loadingPerf && !loadingCar && !isPreorderView && cat !== 'collab' && !search.trim() && catFiltered.length > visible.length && (
         <div className="text-center mb-8">
           <button onClick={() => setShowAll(true)} className={PILL_INACTIVE} style={{ cursor: 'pointer' }}>
             Mostrar todos os {catFiltered.length} produtos
           </button>
         </div>
       )}
-      {!loadingPerf && !loadingCar && cat !== 'collab' && showAll && !search.trim() && catFiltered.length > INITIAL_CARDS && (
+      {!loadingPerf && !loadingCar && !isPreorderView && cat !== 'collab' && showAll && !search.trim() && catFiltered.length > INITIAL_CARDS && (
         <div className="text-center mb-8">
           <button onClick={() => setShowAll(false)} className="text-[12px] underline" style={{ color: '#9ca3af' }}>mostrar menos</button>
         </div>

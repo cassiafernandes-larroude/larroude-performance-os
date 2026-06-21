@@ -70,6 +70,12 @@ function collabFromCollections(titles: string[]): string | null {
   return names.sort((a, b) => a.length - b.length)[0];
 }
 
+// Drop (onda de lançamento) a partir das tags do produto (ex.: "DROP4_FALL25").
+function dropFromTags(tags: string[]): string | null {
+  const t = tags.find((x) => /drop/i.test(x));
+  return t ? t.trim() : null;
+}
+
 export type ProductGroup = 'tenis' | 'bolsas' | 'vestuario' | 'calcados' | 'outros';
 
 function groupOf(productType: string): ProductGroup {
@@ -100,6 +106,7 @@ export interface ProductMeta {
   materials: string[];
   colors: string[];
   collab: string | null;
+  drop: string | null;
 }
 
 export async function getProductImages(market: Market, timeoutMs = 45_000): Promise<Record<string, ProductMeta>> {
@@ -140,6 +147,7 @@ export async function getProductImages(market: Market, timeoutMs = 45_000): Prom
         isB2B: tags.includes('Catalog_B2B'),
         isCollab: !!collab || tags.some((t) => /collab/i.test(t)),
         collab,
+        drop: dropFromTags(tags),
         isNew: typeof p.createdAt === 'string' && p.createdAt >= cutoff,
         materials: Array.from(new Set([
           ...tags.filter((t) => t.startsWith('Shop By Material - ')).map((t) => t.replace('Shop By Material - ', '').trim()),
