@@ -37,6 +37,7 @@ export default function GoogleAdsDashboard() {
   const [data, setData] = useState<GoogleAdsBundle | null>(null);
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState<'spend' | 'roas'>('spend');
+  const [onlyActive, setOnlyActive] = useState(true);
 
   const rangeQS = isCustom ? `start=${cStart}&end=${cEnd}`
     : period === '1d' ? (() => { const y = yesterday(market); return `start=${y}&end=${y}`; })()
@@ -63,10 +64,12 @@ export default function GoogleAdsDashboard() {
   const activeLabel = isCustom ? `${cStart} → ${cEnd}` : ptLabel(period);
 
   const mkt = market;
+  const allCampaigns = data?.campaigns || [];
+  const activeCount = allCampaigns.filter((c) => c.active).length;
   const campaigns = useMemo(() => {
-    const c = [...(data?.campaigns || [])];
+    const c = (data?.campaigns || []).filter((x) => (onlyActive ? x.active : true));
     return sortBy === 'roas' ? c.sort((a, b) => b.roas - a.roas) : c.sort((a, b) => b.spend - a.spend);
-  }, [data, sortBy]);
+  }, [data, sortBy, onlyActive]);
   const fmtMoney = (v: number) => `${market === 'US' ? '$' : 'R$'}${Math.round(v).toLocaleString(market === 'US' ? 'en-US' : 'pt-BR')}`;
   const fmtNum = (v: number) => Math.round(v).toLocaleString(market === 'US' ? 'en-US' : 'pt-BR');
 
@@ -112,13 +115,18 @@ export default function GoogleAdsDashboard() {
       {data && (
         <>
           {/* KPIs */}
-          <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+          <section className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
             <KpiCard kpi={data.kpis.spend} currency={data.currency} />
             <KpiCard kpi={data.kpis.value} currency={data.currency} hint="Valor de conversão (Google)" />
             <KpiCard kpi={data.kpis.roas} currency={data.currency} hint="Valor / Investimento" />
             <KpiCard kpi={data.kpis.conversions} currency={data.currency} />
-            <KpiCard kpi={data.kpis.cpc} currency={data.currency} hint="Investimento / Cliques" />
+            <KpiCard kpi={data.kpis.convRate} currency={data.currency} hint="Conversões / Cliques" />
             <KpiCard kpi={data.kpis.cpa} currency={data.currency} hint="Investimento / Conversões" />
+            <KpiCard kpi={data.kpis.cpc} currency={data.currency} hint="Investimento / Cliques" />
+            <KpiCard kpi={data.kpis.clicks} currency={data.currency} />
+            <KpiCard kpi={data.kpis.impressions} currency={data.currency} />
+            <KpiCard kpi={data.kpis.ctr} currency={data.currency} hint="Cliques / Impressões" />
+            <KpiCard kpi={data.kpis.cpm} currency={data.currency} hint="Custo por mil impressões" />
           </section>
 
           {/* Por tipo de campanha */}
@@ -146,10 +154,16 @@ export default function GoogleAdsDashboard() {
 
           {/* Tabela de campanhas */}
           <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-            <span className="card-title" style={{ marginBottom: 0 }}>CAMPANHAS ({data.campaigns.length})</span>
-            <div className="flex items-center rounded-full overflow-hidden" style={{ border: '1px solid #e5e3de' }}>
-              <button onClick={() => setSortBy('spend')} className="px-3 py-1.5 text-[12px] font-semibold" style={{ background: sortBy === 'spend' ? '#1a1a1a' : '#fff', color: sortBy === 'spend' ? '#fff' : '#1a1a1a' }}>Investimento</button>
-              <button onClick={() => setSortBy('roas')} className="px-3 py-1.5 text-[12px] font-semibold" style={{ background: sortBy === 'roas' ? '#1a1a1a' : '#fff', color: sortBy === 'roas' ? '#fff' : '#1a1a1a' }}>ROAS</button>
+            <span className="card-title" style={{ marginBottom: 0 }}>CAMPANHAS · {onlyActive ? `${activeCount} ativas` : `${allCampaigns.length} no total`}</span>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center rounded-full overflow-hidden" style={{ border: '1px solid #e5e3de' }}>
+                <button onClick={() => setOnlyActive(true)} className="px-3 py-1.5 text-[12px] font-semibold" style={{ background: onlyActive ? '#1a1a1a' : '#fff', color: onlyActive ? '#fff' : '#1a1a1a' }}>Ativas</button>
+                <button onClick={() => setOnlyActive(false)} className="px-3 py-1.5 text-[12px] font-semibold" style={{ background: !onlyActive ? '#1a1a1a' : '#fff', color: !onlyActive ? '#fff' : '#1a1a1a' }}>Todas</button>
+              </div>
+              <div className="flex items-center rounded-full overflow-hidden" style={{ border: '1px solid #e5e3de' }}>
+                <button onClick={() => setSortBy('spend')} className="px-3 py-1.5 text-[12px] font-semibold" style={{ background: sortBy === 'spend' ? '#1a1a1a' : '#fff', color: sortBy === 'spend' ? '#fff' : '#1a1a1a' }}>Investimento</button>
+                <button onClick={() => setSortBy('roas')} className="px-3 py-1.5 text-[12px] font-semibold" style={{ background: sortBy === 'roas' ? '#1a1a1a' : '#fff', color: sortBy === 'roas' ? '#fff' : '#1a1a1a' }}>ROAS</button>
+              </div>
             </div>
           </div>
           <div className="card p-2 overflow-x-auto mb-8">

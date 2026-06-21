@@ -15,10 +15,11 @@ export interface DayPoint { date: string; value: number; }
 export interface GCampaignRow {
   name: string; type: string; spend: number; clicks: number; impressions: number;
   conversions: number; value: number; roas: number; cpa: number; ctr: number; cpc: number;
+  lastDate: string; active: boolean;
 }
 export interface GoogleAdsBundle {
   market: Market; currency: 'USD' | 'BRL'; start: string; end: string; generatedAt: string;
-  kpis: { spend: Kpi; value: Kpi; roas: Kpi; conversions: Kpi; cpc: Kpi; cpa: Kpi };
+  kpis: { spend: Kpi; value: Kpi; roas: Kpi; conversions: Kpi; convRate: Kpi; cpa: Kpi; cpc: Kpi; clicks: Kpi; impressions: Kpi; ctr: Kpi; cpm: Kpi };
   series: { spend: DayPoint[]; value: DayPoint[]; roas: DayPoint[]; conversions: DayPoint[]; clicks: DayPoint[]; ctr: DayPoint[]; cpc: DayPoint[] };
   campaigns: GCampaignRow[];
   byType: GCampaignRow[];
@@ -66,7 +67,12 @@ export async function getGoogleAdsBundle(market: Market, start: string, end: str
   const tot = (a: Raw[]) => {
     const spend = sum(a, 'spend'), value = sum(a, 'value'), clicks = sum(a, 'clicks'),
       impressions = sum(a, 'impressions'), conversions = sum(a, 'conversions');
-    return { spend, value, clicks, impressions, conversions, roas: roasOf(value, spend), cpc: clicks > 0 ? spend / clicks : 0, cpa: conversions > 0 ? spend / conversions : 0, ctr: impressions > 0 ? (clicks / impressions) * 100 : 0 };
+    return {
+      spend, value, clicks, impressions, conversions, roas: roasOf(value, spend),
+      cpc: clicks > 0 ? spend / clicks : 0, cpa: conversions > 0 ? spend / conversions : 0,
+      ctr: impressions > 0 ? (clicks / impressions) * 100 : 0, cpm: impressions > 0 ? (spend / impressions) * 1000 : 0,
+      convRate: clicks > 0 ? (conversions / clicks) * 100 : 0,
+    };
   };
   const c = tot(rows), p = tot(prevRows);
 
@@ -75,8 +81,13 @@ export async function getGoogleAdsBundle(market: Market, start: string, end: str
     value: { label: 'VALOR DE CONVERSÃO', value: c.value, delta: pct(c.value, p.value), format: 'currency' as const },
     roas: { label: 'ROAS', value: c.roas, delta: pct(c.roas, p.roas), format: 'decimal' as const },
     conversions: { label: 'CONVERSÕES', value: c.conversions, delta: pct(c.conversions, p.conversions), format: 'integer' as const },
-    cpc: { label: 'CPC', value: c.cpc, delta: pct(c.cpc, p.cpc), format: 'currency' as const },
+    convRate: { label: 'TAXA DE CONVERSÃO', value: c.convRate, delta: pct(c.convRate, p.convRate), format: 'percent' as const },
     cpa: { label: 'CPA', value: c.cpa, delta: pct(c.cpa, p.cpa), format: 'currency' as const },
+    cpc: { label: 'CPC', value: c.cpc, delta: pct(c.cpc, p.cpc), format: 'currency' as const },
+    clicks: { label: 'CLIQUES', value: c.clicks, delta: pct(c.clicks, p.clicks), format: 'integer' as const },
+    impressions: { label: 'IMPRESSÕES', value: c.impressions, delta: pct(c.impressions, p.impressions), format: 'integer' as const },
+    ctr: { label: 'CTR', value: c.ctr, delta: pct(c.ctr, p.ctr), format: 'percent' as const },
+    cpm: { label: 'CPM', value: c.cpm, delta: pct(c.cpm, p.cpm), format: 'currency' as const },
   };
 
   // Séries diárias (bucketizadas por granularidade da janela).
@@ -112,13 +123,18 @@ export async function getGoogleAdsBundle(market: Market, start: string, end: str
     cpc: dates.map((d) => ({ date: d, value: bg(d).clicks > 0 ? Math.round((bg(d).spend / bg(d).clicks) * 100) / 100 : 0 })),
   };
 
+  // "Ativa" = investiu nos últimos 3 dias do dado disponível (gold não tem status de campanha).
+  const maxDataDate = rows.reduce((mx, r) => (r.date > mx ? r.date : mx), '');
+  const activeCutoff = maxDataDate ? new Date(new Date(maxDataDate + 'T00:00:00Z').getTime() - 3 * 86400000).toISOString().slice(0, 10) : '';
+
   // Agregação por campanha e por tipo.
   const aggBy = (keyFn: (r: Raw) => string, typeFn: (k: string) => string): GCampaignRow[] => {
     const m = new Map<string, Raw[]>();
     for (const r of rows) { const k = keyFn(r); const arr = m.get(k) || []; arr.push(r); m.set(k, arr); }
     return Array.from(m.entries()).map(([name, a]) => {
       const t = tot(a);
-      return { name, type: typeFn(name), spend: t.spend, clicks: t.clicks, impressions: t.impressions, conversions: t.conversions, value: t.value, roas: t.roas, cpa: t.cpa, ctr: t.ctr, cpc: t.cpc };
+      const lastDate = a.reduce((mx, r) => ((Number(r.spend) || 0) > 0 && r.date > mx ? r.date : mx), '');
+      return { name, type: typeFn(name), spend: t.spend, clicks: t.clicks, impressions: t.impressions, conversions: t.conversions, value: t.value, roas: t.roas, cpa: t.cpa, ctr: t.ctr, cpc: t.cpc, lastDate, active: !!lastDate && lastDate >= activeCutoff };
     }).sort((x, y) => y.spend - x.spend);
   };
   const campaigns = aggBy((r) => r.campaign_name, campaignType);

@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const data = await memo(`gads:${market}:${start}:${end}:v2`, TTL_30M, () => getGoogleAdsBundle(market, start, end));
+    const data = await memo(`gads:${market}:${start}:${end}:v3`, TTL_30M, () => getGoogleAdsBundle(market, start, end));
     return NextResponse.json(data, { headers: { 'Cache-Control': 'public, max-age=0, s-maxage=300, stale-while-revalidate=1800' } });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'unknown';
