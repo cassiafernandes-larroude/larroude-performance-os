@@ -277,8 +277,15 @@ export async function getMetricBundle(
           metaSource = "supermetrics";
         }
         const googC: any[] = await queryGoogleCampaignsViaSupermetrics(market as any, range.from, range.to).catch(() => []);
-        const metaTot = metaC.reduce((s: number, x: any) => s + (Number(x.spend) || 0), 0);
-        const metaPre = metaC.filter((x: any) => isPreorderCampaign(x.campaign_name)).reduce((s: number, x: any) => s + (Number(x.spend) || 0), 0);
+        // Meta ad-level: pré-lançamento = campanha pre-order/PreOrder/pré-venda OU SKU do anúncio na coleção.
+        const { getMetaPreorderSpend } = await import("@/lib/shared/preorder-spend");
+        const { getPreorderMotherSkusCached } = await import("@/lib/shared/preorder-skus");
+        const metaAd = await getMetaPreorderSpend(market as any, range.from, range.to, getPreorderMotherSkusCached(market as any)).catch(() => ({ total: 0, preorder: 0 }));
+        let metaTot = metaAd.total, metaPre = metaAd.preorder;
+        if (metaTot === 0) {
+          metaTot = metaC.reduce((s: number, x: any) => s + (Number(x.spend) || 0), 0);
+          metaPre = metaC.filter((x: any) => isPreorderCampaign(x.campaign_name)).reduce((s: number, x: any) => s + (Number(x.spend) || 0), 0);
+        }
         const googTot = googC.reduce((s: number, x: any) => s + (Number(x.spend) || 0), 0);
         const googPre = googC.filter((x: any) => isPreorderCampaign(x.campaign)).reduce((s: number, x: any) => s + (Number(x.spend) || 0), 0);
         const chanTot = metaTot + googTot;

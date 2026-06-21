@@ -43,16 +43,17 @@ export const FULFILLMENT_CATEGORY_GROUPS: { key: string; label: string; cats: Fu
 
 const ALL_CATEGORIES: FulfillmentCategory[] = ['in-stock', 'on-demand', 'from-batch', 'pre-order', 'pending', 'other'];
 
-// Cassia 2026-06-17: spend e' atribuido por NOME de campanha. Campanhas COM
-// pre-order/preorder/pre-venda/pre venda = produzido (on-demand + from-batch);
-// SEM = produto com estoque (in-stock). Regex unica p/ todos os dashboards baterem.
-// (Estende o pre[\s_-]?order|preorder ja usado em main-dashboard com as variantes PT.)
-export const PREORDER_CAMPAIGN_REGEX = String.raw`pre[\s_-]?order|preorder|pre[\s_-]?venda`;
+// Cassia 2026-06-20: nome de campanha de pré-lançamento. Variantes: pre-order, pre order,
+// preorder, PreOrder (case-insensitive), e pré-venda/pre-venda/pre venda (com OU sem acento).
+// pr[eé] cobre o acento PT ("Pré-venda"). Regex única p/ todos os dashboards baterem.
+export const PREORDER_CAMPAIGN_REGEX = String.raw`pr[eé][\s_-]?order|pr[eé]order|pr[eé][\s_-]?venda`;
 
-/** true se o nome da campanha indica pre-order/pre-venda (produzido), no client/TS. */
+/** true se o nome da campanha indica pré-lançamento (pre-order / pré-venda), no client/TS.
+ *  Remove acentos (NFD) antes de testar — "Pré-venda"/"PreOrder"/"pre order" todos batem. */
 export function isPreorderCampaign(name: string | null | undefined): boolean {
   if (!name) return false;
-  return /pre[\s_-]?order|preorder|pre[\s_-]?venda/i.test(name);
+  const n = name.toLowerCase().replace(/é/g, 'e'); // tira o acento de "pré"
+  return /pre[\s_-]?order|preorder|pre[\s_-]?venda/.test(n);
 }
 
 function idIn(ids: string[]): string {

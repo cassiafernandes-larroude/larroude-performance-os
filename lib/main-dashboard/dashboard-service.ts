@@ -41,7 +41,7 @@ import { calcPeriod, fmtCurrency, fmtMultiple, fmtNumber, fmtPercent, granularit
 import { getMetaSpendAdjustment, getMetaSpendAdjustmentByDay } from '@/lib/shared/meta-adjustments';
 import { getFixedToolsCostInRange, getAgentShopCost, getPercentRevenueCosts, CHANNEL_COSTS } from '@/lib/channel-costs';
 import { type FulfillmentCategory, isPreorderCampaign } from '@/lib/shared/fulfillment-category';
-import { getPreorderMotherSkus } from '@/lib/shared/preorder-skus';
+import { getPreorderMotherSkus, getPreorderMotherSkusCached } from '@/lib/shared/preorder-skus';
 import type {
   CampaignRow,
   ChannelRevenue,
@@ -252,7 +252,12 @@ export async function getDashboardPayload(
       if (!metaCs.length) metaCs = await queryMetaCampaignsViaSupermetrics(market, period.start, period.end).catch(() => []);
       const googCs: any[] = Array.isArray(googleCampaigns) ? (googleCampaigns as any[]) : [];
       const sumIf = (arr: any[], f: (x: any) => boolean) => arr.filter(f).reduce((s, x) => s + (Number(x.spend) || 0), 0);
-      const metaTot = sumIf(metaCs, () => true), metaPre = sumIf(metaCs, (x) => isPreorderCampaign(x.campaign_name));
+      // Meta: ad-level — pré-lançamento = campanha com pre-order/PreOrder/pré-venda OU SKU do anúncio na coleção de pré-venda.
+      const { getMetaPreorderSpend } = await import('@/lib/shared/preorder-spend');
+      const preSkus = getPreorderMotherSkusCached(market);
+      const metaAd = await getMetaPreorderSpend(market, period.start, period.end, preSkus).catch(() => ({ total: 0, preorder: 0 }));
+      let metaTot = metaAd.total, metaPre = metaAd.preorder;
+      if (metaTot === 0) { metaTot = sumIf(metaCs, () => true); metaPre = sumIf(metaCs, (x) => isPreorderCampaign(x.campaign_name)); } // fallback campaign-level
       const googTot = sumIf(googCs, () => true), googPre = sumIf(googCs, (x) => isPreorderCampaign(x.campaign));
       const chanTot = metaTot + googTot;
       const sharePreorder = chanTot > 0 ? (metaPre + googPre) / chanTot : 0; // pool campanhas pre-order
