@@ -12,7 +12,7 @@ interface AdDetail {
 }
 interface CollectionRow {
   id: string; name: string | null; image: string | null; productCount: number;
-  spend: number; purchases: number; revenue: number; roas: number;
+  spend: number; purchases: number; revenue: number; roas: number; sessions: number; convRate: number;
   activeAdsCount: number; totalAdsCount: number; ads: AdDetail[];
 }
 interface Props { region: Region; since: string; until: string; currency: string; }
@@ -37,9 +37,9 @@ export default function CollectionsTab({ region, since, until, currency }: Props
   }, [region, since, until]);
 
   const totals = useMemo(() => {
-    let spend = 0, revenue = 0, purchases = 0;
-    for (const r of rows) { spend += r.spend; revenue += r.revenue; purchases += r.purchases; }
-    return { spend, revenue, purchases, roas: spend > 0 ? revenue / spend : 0 };
+    let spend = 0, revenue = 0, purchases = 0, sessions = 0;
+    for (const r of rows) { spend += r.spend; revenue += r.revenue; purchases += r.purchases; sessions += r.sessions; }
+    return { spend, revenue, purchases, sessions, roas: spend > 0 ? revenue / spend : 0, convRate: sessions > 0 ? (purchases / sessions) * 100 : 0 };
   }, [rows]);
 
   return (
@@ -57,6 +57,8 @@ export default function CollectionsTab({ region, since, until, currency }: Props
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:flex lg:items-center gap-2 lg:gap-3 text-[11px] w-full lg:w-auto">
               <Stat label="Coleções" value={formatNumber(rows.length)} color="#5d4ec5" />
               <Stat label="Investimento" value={formatCurrency(totals.spend, currency, true)} color="var(--ink)" />
+              <Stat label="Sessões" value={formatNumber(totals.sessions)} color="var(--ink)" />
+              <Stat label="Conv. %" value={totals.convRate > 0 ? `${formatDecimal(totals.convRate)}%` : '—'} color="#5d4ec5" />
               <Stat label="Valor (Meta)" value={formatCurrency(totals.revenue, currency, true)} color="#10b981" />
               <Stat label="ROAS" value={totals.roas > 0 ? `${formatDecimal(totals.roas)}×` : '—'} color={totals.roas >= 1 ? '#10b981' : totals.roas > 0 ? '#f59e0b' : 'var(--ink-muted)'} />
             </div>
@@ -70,13 +72,15 @@ export default function CollectionsTab({ region, since, until, currency }: Props
                   <th className="text-left px-2 py-1.5">Ads</th>
                   <th className="text-left px-2 py-1.5">Criativos</th>
                   <th className="text-right px-2 py-1.5">Investimento</th>
+                  <th className="text-right px-2 py-1.5">Sessões</th>
+                  <th className="text-right px-2 py-1.5">Conv. %</th>
                   <th className="text-right px-2 py-1.5">Valor (Meta)</th>
                   <th className="text-right px-2 py-1.5">ROAS</th>
                   <th className="text-right px-2 py-1.5">Compras</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.length === 0 && <tr><td colSpan={8} className="px-2 py-6 text-center" style={{ color: 'var(--ink-muted)' }}>Nenhum anúncio de coleção no período.</td></tr>}
+                {rows.length === 0 && <tr><td colSpan={10} className="px-2 py-6 text-center" style={{ color: 'var(--ink-muted)' }}>Nenhum anúncio de coleção no período.</td></tr>}
                 {rows.map((r, idx) => {
                   const isOpen = expanded === r.id;
                   return (
@@ -117,13 +121,15 @@ export default function CollectionsTab({ region, since, until, currency }: Props
                           ) : <span className="text-[10px] italic" style={{ color: 'var(--ink-muted)' }}>—</span>}
                         </td>
                         <td className="px-2 py-1.5 text-right tabular-nums">{r.spend > 0 ? formatCurrency(r.spend, currency, true) : '—'}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">{r.sessions > 0 ? formatNumber(r.sessions) : '—'}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">{r.sessions > 0 ? `${formatDecimal(r.convRate)}%` : '—'}</td>
                         <td className="px-2 py-1.5 text-right tabular-nums">{formatCurrency(r.revenue, currency, true)}</td>
                         <td className="px-2 py-1.5 text-right tabular-nums font-semibold" style={{ color: r.roas >= 1 ? '#10b981' : r.roas > 0 ? '#f59e0b' : 'var(--ink-muted)' }}>{r.roas > 0 ? `${formatDecimal(r.roas)}×` : '—'}</td>
                         <td className="px-2 py-1.5 text-right tabular-nums">{formatNumber(r.purchases)}</td>
                       </tr>
                       {isOpen && r.ads.length > 0 && (
                         <tr key={`${r.id}-detail`} style={{ background: 'var(--paper)' }}>
-                          <td colSpan={8} className="px-3 py-2">
+                          <td colSpan={10} className="px-3 py-2">
                             <div className="text-[10px] uppercase tracking-wider font-semibold mb-2" style={{ color: 'var(--ink-muted)' }}>Criativos desta coleção</div>
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
                               {r.ads.map((ad) => {

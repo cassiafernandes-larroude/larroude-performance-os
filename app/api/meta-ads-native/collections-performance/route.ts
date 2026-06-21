@@ -21,7 +21,7 @@ interface AdDetail {
 }
 interface CollectionRow {
   id: string; name: string | null; image: string | null; productCount: number;
-  spend: number; purchases: number; revenue: number; roas: number;
+  spend: number; purchases: number; revenue: number; roas: number; sessions: number; convRate: number;
   activeAdsCount: number; totalAdsCount: number; ads: AdDetail[];
 }
 
@@ -62,10 +62,12 @@ export async function GET(req: NextRequest) {
       const spend = Number(r.spend) || 0;
       const purchases = findAction(r.actions, ACTION_TYPES.purchase);
       const revenue = findActionValue(r.action_values, ACTION_TYPES.purchase);
+      // Sessões = landing page views (sessões que os ads levaram à coleção); fallback link clicks.
+      const sessions = findAction(r.actions, ACTION_TYPES.landingPageView) || findAction(r.actions, ACTION_TYPES.linkClick);
       const eff = (meta?.effectiveStatus || meta?.status || '').toUpperCase();
       const isActive = eff === 'ACTIVE';
-      const g = groups.get(id) || { id, name: null, image: null, productCount: 0, spend: 0, purchases: 0, revenue: 0, roas: 0, activeAdsCount: 0, totalAdsCount: 0, ads: [] };
-      g.spend += spend; g.purchases += purchases; g.revenue += revenue; g.totalAdsCount += 1; if (isActive) g.activeAdsCount += 1;
+      const g = groups.get(id) || { id, name: null, image: null, productCount: 0, spend: 0, purchases: 0, revenue: 0, roas: 0, sessions: 0, convRate: 0, activeAdsCount: 0, totalAdsCount: 0, ads: [] };
+      g.spend += spend; g.purchases += purchases; g.revenue += revenue; g.sessions += sessions; g.totalAdsCount += 1; if (isActive) g.activeAdsCount += 1;
       g.ads.push({
         id: String(r.ad_id), name: String(r.ad_name || ''), account: r._account,
         campaignName: r.campaign_name ?? null, adsetName: r.adset_name ?? null,
@@ -94,8 +96,11 @@ export async function GET(req: NextRequest) {
       } catch (e) { console.warn('[collections-performance] name resolve falhou', (e as Error)?.message); }
     }
 
+    // Só mantém quem resolveu como COLEÇÃO (name != null). IDs de PRODUTO (catálogo/DPA) e
+    // não resolvidos saem — assim toda linha tem nome de coleção. Cassia 2026-06-21.
     const collections = Array.from(groups.values())
-      .map((g) => ({ ...g, roas: g.spend > 0 ? g.revenue / g.spend : 0, ads: g.ads.sort((a, b) => b.spend - a.spend) }))
+      .filter((g) => !!g.name)
+      .map((g) => ({ ...g, roas: g.spend > 0 ? g.revenue / g.spend : 0, convRate: g.sessions > 0 ? (g.purchases / g.sessions) * 100 : 0, ads: g.ads.sort((a, b) => b.spend - a.spend) }))
       .sort((a, b) => b.spend - a.spend);
 
     return NextResponse.json({ collections }, { headers: { 'Cache-Control': 's-maxage=600, stale-while-revalidate=3600, public' } });
