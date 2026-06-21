@@ -1146,6 +1146,17 @@ main h1,
   background: #f0ece5;
 }
 
+/* Cassia 2026-06-21: aba Clientes (sub-abas) — evita scroll vertical redundante no topo.
+   O .page do LTV força min-height:100vh; somado à barra de sub-abas, ultrapassava a área de
+   scroll do Shell. Aqui o .page deixa de forçar 100vh e o shell preenche o fundo peach. */
+.clientes-shell {
+  min-height: 100%;
+  background: #f5f3ee;
+}
+.clientes-shell .page {
+  min-height: 0;
+}
+
 /* ==================== MOBILE RESPONSIVO GERAL ==================== */
 /* Garante que nenhuma pagina cause overflow horizontal no mobile */
 @media (max-width: 767px) {
