@@ -50,7 +50,7 @@ export async function GET(
 
   const startedAt = Date.now();
   try {
-    const cacheKey = `ltv:summary:${market}:${start}:${end}`;
+    const cacheKey = `ltv:summary:v2-noexch:${market}:${start}:${end}`;
     const result = await memo(cacheKey, TTL_6H, async () => {
       const [summary, daily, monthly, retention] = await Promise.all([
         getLtvKpiSummary(market, start, end),

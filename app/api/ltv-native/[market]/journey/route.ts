@@ -26,7 +26,7 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
   const startedAt = Date.now();
   try {
     // journey é lifetime (sem janela), TTL 24h é seguro
-    const journey = await memo(`ltv:journey:${market}`, TTL_24H, () => getCustomerJourney(market));
+    const journey = await memo(`ltv:journey:v2-noexch:${market}`, TTL_24H, () => getCustomerJourney(market));
     return NextResponse.json(
       { journey, meta: { generatedAt: new Date().toISOString(), durationMs: Date.now() - startedAt } },
       {

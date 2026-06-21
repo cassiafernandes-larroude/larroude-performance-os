@@ -45,7 +45,7 @@ export async function GET(
 
   const startedAt = Date.now();
   try {
-    const cacheKey = `ltv:products:${market}:${start}:${end}`;
+    const cacheKey = `ltv:products:v2-noexch:${market}:${start}:${end}`;
     const result = await memo(cacheKey, TTL_6H, () => getProductLtv(market, start, end, 200));
 
     return NextResponse.json(
