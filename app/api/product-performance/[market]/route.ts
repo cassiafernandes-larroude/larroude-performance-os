@@ -4,6 +4,8 @@ import { getProductImages, type ProductGroup } from '@/lib/unit-economics/produc
 import { runQuery } from '@/lib/bigquery/client';
 import { memo, TTL_30M } from '@/lib/ltv-dashboard/memo-cache';
 import { dateRangeForPeriod, dateRangeCompleted, previousRangeOf } from '@/lib/utils/periods';
+import { parseFulfillmentCategories, type FulfillmentCategory } from '@/lib/shared/fulfillment-category';
+import { getPreorderMotherSkus } from '@/lib/shared/preorder-skus';
 import type { Period } from '@/types/metric';
 
 export const dynamic = 'force-dynamic';
@@ -53,13 +55,14 @@ async function fxBrlPerUsd(yyyymm: string): Promise<number> {
   return FX_FALLBACK;
 }
 
-// Ranking de UMA praça, com imagem + período anterior. Memoizado por praça+janela.
-async function rankingForMarket(market: Market, start: string, end: string): Promise<PerfRow[]> {
-  return memo(`pp-rank:${market}:${start}:${end}:v2`, TTL_30M, async () => {
+// Ranking de UMA praça, com imagem + período anterior. Memoizado por praça+janela+origem.
+async function rankingForMarket(market: Market, start: string, end: string, fulCats?: FulfillmentCategory[] | null): Promise<PerfRow[]> {
+  const fulKey = fulCats && fulCats.length ? fulCats.slice().sort().join('+') : 'all';
+  return memo(`pp-rank:${market}:${start}:${end}:${fulKey}:v3`, TTL_30M, async () => {
     const { from: pStart, to: pEnd } = previousRangeOf(start, end);
     const [cur, prev, imgs] = await Promise.all([
-      getProductPerformance(market, start, end),
-      getProductPerformance(market, pStart, pEnd),
+      getProductPerformance(market, start, end, fulCats),
+      getProductPerformance(market, pStart, pEnd, fulCats),
       memo(`pp-img:${market}:v1`, TTL_6H, () => getProductImages(market)),
     ]);
     const prevMap = new Map(prev.map((r) => [r.motherSku, r]));
@@ -91,8 +94,12 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
   if (m !== 'US' && m !== 'BR' && m !== 'ALL') return NextResponse.json({ error: 'Invalid market' }, { status: 400 });
 
   const { start, end } = resolveRange(req.nextUrl.searchParams);
+  const fulCats = parseFulfillmentCategories(req.nextUrl.searchParams.get('fulCats'));
 
   try {
+    // Esquenta o cache de SKUs pre-order p/ o filtro de origem (exclusão pre-order).
+    if (fulCats?.length) await Promise.all(m === 'ALL' ? [getPreorderMotherSkus('US'), getPreorderMotherSkus('BR')] : [getPreorderMotherSkus(m as Market)]);
+
     let products: PerfRow[];
     let currency: 'USD' | 'BRL';
     let fx: number | null = null;
@@ -100,7 +107,7 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
     if (m === 'ALL') {
       currency = 'USD';
       fx = await fxBrlPerUsd(start.slice(0, 7)); // BRL por USD
-      const [us, br] = await Promise.all([rankingForMarket('US', start, end), rankingForMarket('BR', start, end)]);
+      const [us, br] = await Promise.all([rankingForMarket('US', start, end, fulCats), rankingForMarket('BR', start, end, fulCats)]);
       const merged = new Map<string, PerfRow>();
       const add = (rows: PerfRow[], toUsd: number) => {
         for (const r of rows) {
@@ -124,7 +131,7 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
       products = Array.from(merged.values());
     } else {
       currency = m === 'US' ? 'USD' : 'BRL';
-      products = await rankingForMarket(m, start, end);
+      products = await rankingForMarket(m, start, end, fulCats);
     }
 
     products.sort((a, b) => b.revenue - a.revenue);

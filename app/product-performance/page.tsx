@@ -8,6 +8,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import BarLineChart, { type BarPoint } from '@/components/shared/BarLineChart';
+import { FULFILLMENT_CATEGORY_GROUPS, type FulfillmentCategory } from '@/lib/shared/fulfillment-category';
 
 type MarketSel = 'US' | 'BR' | 'ALL';
 type RealMarket = 'US' | 'BR';
@@ -102,6 +103,7 @@ export default function ProductPerformancePage() {
   const [cat, setCat] = useState<CatKey>('all');
   const [matSel, setMatSel] = useState<string | null>(null);
   const [colorSel, setColorSel] = useState<string | null>(null);
+  const [fulCats, setFulCats] = useState<FulfillmentCategory[]>([]); // origem: vazio = todas
   const [perf, setPerf] = useState<PerfResp | null>(null);
   const [loadingPerf, setLoadingPerf] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -122,6 +124,7 @@ export default function ProductPerformancePage() {
     : period === '1d'
       ? (() => { const y = yesterdayInMarket(market === 'BR' ? 'BR' : 'US'); return `start=${y}&end=${y}`; })()
       : `period=${period}`;
+  const originQS = fulCats.length ? `&fulCats=${fulCats.join(',')}` : '';
 
   function handlePeriodChange(p: PeriodKey) { setIsCustom(false); setPeriod(p); }
   function applyDates() {
@@ -137,7 +140,7 @@ export default function ProductPerformancePage() {
   useEffect(() => {
     let cancelled = false;
     setLoadingPerf(true);
-    fetch(`/api/product-performance/${market}?${rangeQS}`, { cache: 'no-store' })
+    fetch(`/api/product-performance/${market}?${rangeQS}${originQS}`, { cache: 'no-store' })
       .then((r) => r.json())
       .then((j: PerfResp & { error?: string }) => {
         if (cancelled || j.error) { setLoadingPerf(false); return; }
@@ -149,7 +152,7 @@ export default function ProductPerformancePage() {
       .catch(() => setLoadingPerf(false));
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [market, rangeQS]);
+  }, [market, rangeQS, originQS]);
 
   useEffect(() => {
     if (!isCustom && perf?.start && perf?.end) { setDraftStart(perf.start); setDraftEnd(perf.end); }
@@ -201,7 +204,7 @@ export default function ProductPerformancePage() {
     setLoadingSeries(true);
     const fx = perf?.fx || 5.45;
     const fetchTs = (mk: RealMarket, sku: string) =>
-      fetch(`/api/unit-economics/${mk}/timeseries?sku=${encodeURIComponent(sku)}&${rangeQS}`, { cache: 'no-store' })
+      fetch(`/api/unit-economics/${mk}/timeseries?sku=${encodeURIComponent(sku)}&${rangeQS}${originQS}`, { cache: 'no-store' })
         .then((r) => r.json()).then((j: { buckets: RawBucket[] }) => j.buckets || []).catch(() => [] as RawBucket[]);
     const one = async (sku: string): Promise<readonly [string, SeriesPoint[]]> => {
       if (market !== 'ALL') return [sku, normSeries(await fetchTs(market, sku), 1)] as const;
@@ -215,7 +218,7 @@ export default function ProductPerformancePage() {
     });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [market, rangeQS, selKey, perf?.fx]);
+  }, [market, rangeQS, originQS, selKey, perf?.fx]);
 
   const products = perf?.products || [];
   // Lista COMPLETA (todos os produtos do período) filtrada+ordenada — sem corte.
@@ -297,6 +300,12 @@ export default function ProductPerformancePage() {
     return n;
   });
   const pillBtn = (active: boolean) => `pill ${active ? 'pill-active' : 'pill-inactive'} px-3 py-1.5 text-[12px] ${active ? 'font-medium' : ''}`;
+  const toggleFulGroup = (cats: FulfillmentCategory[]) => setFulCats((prev) => {
+    const set = new Set(prev);
+    if (cats.every((c) => set.has(c))) cats.forEach((c) => set.delete(c));
+    else cats.forEach((c) => set.add(c));
+    return [...set];
+  });
   const selCount = selected.size;
   const totalMetric = sortBy === 'units' ? (perf?.totalUnits || 0) : (perf?.totalRevenue || 0);
 
@@ -336,6 +345,17 @@ export default function ProductPerformancePage() {
           className="rounded-full px-4 py-2 text-[13px] bg-white font-medium" style={{ border: `1px solid ${isCustom ? '#ec4899' : '#e5e3de'}`, boxShadow: isCustom ? '0 0 0 1px rgba(236,72,153,0.30)' : 'none' }} />
         <button onClick={applyDates} className={PILL_ACTIVE_DARK} title="Aplicar intervalo">Aplicar</button>
         <span className="ml-auto text-[13px] italic px-2" style={{ color: '#9ca3af' }}>{activeLabel}</span>
+      </div>
+
+      {/* Filtro de origem: In Stock / On-Demand / Pre-Order (Pre-Order = coleção de pré-venda) */}
+      <div className="flex items-center gap-2 flex-wrap mb-5">
+        <span className="text-[11px] font-semibold uppercase mr-1" style={{ color: '#9ca3af', letterSpacing: '0.06em' }}>ORIGEM</span>
+        <button onClick={() => setFulCats([])} className={pillBtn(fulCats.length === 0)}>Todas</button>
+        {FULFILLMENT_CATEGORY_GROUPS.map((g) => {
+          const active = g.cats.every((c) => fulCats.includes(c as FulfillmentCategory));
+          return <button key={g.key} onClick={() => toggleFulGroup(g.cats)} className={pillBtn(active)}>{g.label}</button>;
+        })}
+        {fulCats.length > 0 && <span className="text-[11px] italic" style={{ color: '#9ca3af' }}>ranking, KPIs do período e gráficos · "hoje" mostra todas as origens</span>}
       </div>
 
       {/* KPIs DA SELEÇÃO (ao vivo de hoje + período) */}

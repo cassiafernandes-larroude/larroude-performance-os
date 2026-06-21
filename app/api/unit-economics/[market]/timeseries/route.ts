@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getProductUeTimeseries, type Market, type UeBucketGranularity } from '@/lib/unit-economics/queries';
 import { memo, TTL_30M } from '@/lib/ltv-dashboard/memo-cache';
 import { dateRangeForPeriod, dateRangeCompleted, granularityForDays, daysBetween } from '@/lib/utils/periods';
+import { parseFulfillmentCategories } from '@/lib/shared/fulfillment-category';
+import { getPreorderMotherSkus } from '@/lib/shared/preorder-skus';
 import type { Period } from '@/types/metric';
 
 export const dynamic = 'force-dynamic';
@@ -28,6 +30,7 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
   const customStart = sp.get('start');
   const customEnd = sp.get('end');
   const periodParam = sp.get('period') as Period | null;
+  const fulCats = parseFulfillmentCategories(sp.get('fulCats'));
 
   let start: string;
   let end: string;
@@ -53,9 +56,11 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
   }
 
   try {
-    const cacheKey = `ue-ts:${market}:${sku}:${start}:${end}:${granularity}:v1`;
+    if (fulCats?.length) await getPreorderMotherSkus(market); // warm cache p/ exclusão pre-order
+    const fulKey = fulCats && fulCats.length ? fulCats.slice().sort().join('+') : 'all';
+    const cacheKey = `ue-ts:${market}:${sku}:${start}:${end}:${granularity}:${fulKey}:v2`;
     const buckets = await memo(cacheKey, TTL_30M, () =>
-      getProductUeTimeseries(market, sku, start, end, granularity)
+      getProductUeTimeseries(market, sku, start, end, granularity, fulCats)
     );
     return NextResponse.json(
       { market, sku, start, end, granularity, buckets },

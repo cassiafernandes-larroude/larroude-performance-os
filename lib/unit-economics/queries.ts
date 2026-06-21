@@ -20,6 +20,7 @@
  */
 
 import { runQuery } from './bigquery';
+import { fulfillmentCategoryFilterSQL, type FulfillmentCategory } from '@/lib/shared/fulfillment-category';
 
 export type Market = 'US' | 'BR';
 
@@ -356,11 +357,13 @@ export async function getProductUeTimeseries(
   motherSku: string,
   startDate: string,
   endDate: string,
-  granularity: UeBucketGranularity
+  granularity: UeBucketGranularity,
+  fulCats?: FulfillmentCategory[] | null
 ): Promise<UeTimeseriesBucket[]> {
   const dataset = ordersDataset(market);
   const cap = MAX_ORDER_VALUE[market];
   const bucketExpr = bucketDateExpr(granularity);
+  const fulFilter = fulfillmentCategoryFilterSQL(fulCats, 'o', dataset);
 
   const sql = `
     WITH
@@ -378,6 +381,7 @@ export async function getProductUeTimeseries(
         AND (JSON_VALUE(o.customer, '$.tags') IS NULL OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(o.customer, '$.tags')), r'${EXCLUDED_TAGS_REGEX}'))
         AND CAST(o.total_price AS NUMERIC) < ${cap}
         AND (o.source_name IS NULL OR LOWER(o.source_name) NOT IN ('amazon_marketplace_web', 'mercado_livre', 'mercado_libre'))
+        ${fulFilter}
     ),
     items_raw AS (
       SELECT
@@ -446,13 +450,14 @@ export interface ProductPerfRow {
   revenue: number;
 }
 
-export async function getProductPerformance(market: Market, startDate: string, endDate: string): Promise<ProductPerfRow[]> {
+export async function getProductPerformance(market: Market, startDate: string, endDate: string, fulCats?: FulfillmentCategory[] | null): Promise<ProductPerfRow[]> {
   const dataset = ordersDataset(market);
   const cap = MAX_ORDER_VALUE[market];
   const tz = market === 'US' ? 'America/New_York' : 'America/Sao_Paulo';
   const pix = market === 'BR'
     ? `AND financial_status NOT IN ('voided','refunded','pending','expired','authorized')`
     : `AND financial_status NOT IN ('voided','refunded')`;
+  const fulFilter = fulfillmentCategoryFilterSQL(fulCats, '', dataset); // filtro de origem (In Stock/On-Demand/Pre-Order)
   const sql = `
     WITH valid_orders AS (
       SELECT line_items
@@ -464,6 +469,7 @@ export async function getProductPerformance(market: Market, startDate: string, e
         AND (JSON_VALUE(customer, '$.tags') IS NULL OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(customer, '$.tags')), r'${EXCLUDED_TAGS_REGEX}'))
         AND CAST(total_price AS NUMERIC) < ${cap}
         AND (source_name IS NULL OR LOWER(source_name) NOT IN ('amazon_marketplace_web', 'mercado_livre', 'mercado_libre'))
+        ${fulFilter}
     ),
     items_raw AS (
       SELECT
