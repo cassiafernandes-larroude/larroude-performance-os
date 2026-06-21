@@ -170,7 +170,7 @@ export default async function ExecutivePage({
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-6">
           <div className="card p-4">
-            <div className="text-[12px] font-semibold mb-2" style={{ color: "var(--ink)" }}>Total Revenue / day</div>
+            <div className="text-[12px] font-semibold mb-2" style={{ color: "var(--ink)" }}>Total Revenue</div>
             <DailyBarChart
               title=""
               data={c.daily.total_sales}
@@ -182,7 +182,7 @@ export default async function ExecutivePage({
             />
           </div>
           <div className="card p-4">
-            <div className="text-[12px] font-semibold mb-2" style={{ color: "var(--ink)" }}>Ad Investment / day</div>
+            <div className="text-[12px] font-semibold mb-2" style={{ color: "var(--ink)" }}>Ad Investment</div>
             <DailyBarChart
               title=""
               data={c.daily.spend}
@@ -194,7 +194,7 @@ export default async function ExecutivePage({
             />
           </div>
           <div className="card p-4">
-            <div className="text-[12px] font-semibold mb-2" style={{ color: "var(--ink)" }}>ROAS / day</div>
+            <div className="text-[12px] font-semibold mb-2" style={{ color: "var(--ink)" }}>ROAS</div>
             <DailyBarChart
               title=""
               data={c.daily.roas_total}
@@ -206,7 +206,7 @@ export default async function ExecutivePage({
             />
           </div>
           <div className="card p-4">
-            <div className="text-[12px] font-semibold mb-2" style={{ color: "var(--ink)" }}>Revenue − Investment / day</div>
+            <div className="text-[12px] font-semibold mb-2" style={{ color: "var(--ink)" }}>Revenue − Investment</div>
             <DailyBarChart
               title=""
               data={c.daily.margin_total_sales}

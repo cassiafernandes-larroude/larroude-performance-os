@@ -346,6 +346,115 @@ export default function ProductPerformancePage() {
         <button onClick={applyDates} className={PILL_ACTIVE_DARK} title="Aplicar intervalo">Aplicar</button>
         <span className="ml-auto text-[13px] italic px-2" style={{ color: '#9ca3af' }}>{activeLabel}</span>
       </div>
+      {/* Mais vendidos — cards com imagem (logo abaixo do filtro de período) */}
+      <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
+        <span className="text-sm font-semibold uppercase tracking-wide" style={{ color: '#6b7280' }}>🏆 Mais vendidos · com imagem (clique pra selecionar)</span>
+        <div className="flex items-center rounded-full overflow-hidden" style={{ border: '1px solid #e5e3de' }}>
+          <button onClick={() => setSortBy('units')} className="px-3 py-1.5 text-[12px] font-semibold" style={{ background: sortBy === 'units' ? '#1a1a1a' : '#fff', color: sortBy === 'units' ? '#fff' : '#1a1a1a' }}>Qtd</button>
+          <button onClick={() => setSortBy('revenue')} className="px-3 py-1.5 text-[12px] font-semibold" style={{ background: sortBy === 'revenue' ? '#1a1a1a' : '#fff', color: sortBy === 'revenue' ? '#fff' : '#1a1a1a' }}>Receita</button>
+        </div>
+      </div>
+
+      {/* Abas de categoria do carrossel */}
+      <div className="flex items-center gap-2 flex-wrap mb-2">
+        {CAT_TABS.map((tabItem) => {
+          const active = cat === tabItem.key;
+          return (
+            <button key={tabItem.key} onClick={() => { setCat(tabItem.key); if (tabItem.key !== 'material') { setMatSel(null); setColorSel(null); } }}
+              className={active ? PILL_ACTIVE_DARK : PILL_INACTIVE} style={{ fontSize: 12 }}>
+              {tabItem.label}{tabItem.key !== 'material' && <span style={{ opacity: 0.6, marginLeft: 6 }}>{catCount(tabItem.key)}</span>}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Sub-chips de material/cor */}
+      {cat === 'material' && (
+        <div className="mb-3 flex flex-col gap-2">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[10px] font-bold uppercase mr-1" style={{ color: '#9ca3af' }}>Material</span>
+            <button onClick={() => setMatSel(null)} className="px-2.5 py-1 rounded-full text-[11px]" style={{ background: !matSel ? '#1a1a1a' : '#ebe9e3', color: !matSel ? '#fff' : '#1a1a1a' }}>Todos</button>
+            {materials.map((mt) => (
+              <button key={mt} onClick={() => setMatSel(matSel === mt ? null : mt)} className="px-2.5 py-1 rounded-full text-[11px]" style={{ background: matSel === mt ? '#1a1a1a' : '#ebe9e3', color: matSel === mt ? '#fff' : '#1a1a1a' }}>{mt}</button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[10px] font-bold uppercase mr-1" style={{ color: '#9ca3af' }}>Cor</span>
+            <button onClick={() => setColorSel(null)} className="px-2.5 py-1 rounded-full text-[11px]" style={{ background: !colorSel ? '#1a1a1a' : '#ebe9e3', color: !colorSel ? '#fff' : '#1a1a1a' }}>Todas</button>
+            {colors.map((cl) => (
+              <button key={cl} onClick={() => setColorSel(colorSel === cl ? null : cl)} className="px-2.5 py-1 rounded-full text-[11px]" style={{ background: colorSel === cl ? '#1a1a1a' : '#ebe9e3', color: colorSel === cl ? '#fff' : '#1a1a1a' }}>{cl}</button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {loadingPerf && <div className="card p-8 text-center text-sm mb-6" style={{ color: '#6b7280' }}>Carregando…</div>}
+      {!loadingPerf && (
+        <div className="relative mb-4">
+          <button onClick={() => scrollCarousel(-1)} aria-label="Anterior"
+            className="hidden sm:flex absolute left-[-6px] top-[90px] z-20 items-center justify-center"
+            style={{ width: 38, height: 38, borderRadius: '50%', background: '#fff', border: '1px solid #e5e3de', boxShadow: '0 2px 8px rgba(0,0,0,0.10)', cursor: 'pointer', fontSize: 20, color: '#1a1a1a' }}>‹</button>
+          <button onClick={() => scrollCarousel(1)} aria-label="Próximo"
+            className="hidden sm:flex absolute right-[-6px] top-[90px] z-20 items-center justify-center"
+            style={{ width: 38, height: 38, borderRadius: '50%', background: '#fff', border: '1px solid #e5e3de', boxShadow: '0 2px 8px rgba(0,0,0,0.10)', cursor: 'pointer', fontSize: 20, color: '#1a1a1a' }}>›</button>
+          <div ref={carouselRef} className="flex gap-3 overflow-x-auto pb-2" style={{ scrollSnapType: 'x proximity', scrollbarWidth: 'thin' }}>
+          {visible.map((p, i) => {
+            const isSel = selected.has(p.motherSku);
+            const hasAds = today ? adKeysForMother(p.motherSku, today.adSpendBySku).length > 0 : false;
+            const metric = sortBy === 'units' ? p.units : p.revenue;
+            const prevMetric = sortBy === 'units' ? p.prevUnits : p.prevRevenue;
+            const up = metric >= prevMetric;
+            const deltaPct = prevMetric > 0 ? Math.min(999, Math.round(Math.abs(metric - prevMetric) / prevMetric * 100)) : (metric > 0 ? 100 : 0);
+            const shareTotal = totalMetric > 0 ? (metric / totalMetric * 100) : 0;
+            const avgPrice = p.units > 0 ? p.revenue / p.units : 0;
+            const rank = i + 1;
+            const gold = rank <= 3;
+            return (
+              <div key={p.motherSku} onClick={() => toggle(p.motherSku)}
+                className="relative rounded-2xl overflow-hidden cursor-pointer transition-all"
+                style={{ flex: '0 0 auto', width: 188, scrollSnapAlign: 'start', background: '#fff', border: isSel ? '2px solid #ec4899' : '1px solid #ece9e2', boxShadow: isSel ? '0 0 0 2px rgba(236,72,153,0.18)' : '0 1px 2px rgba(0,0,0,0.03)' }}>
+                <div className="absolute top-2 left-2 z-10 flex items-center justify-center" style={{ width: 24, height: 24, borderRadius: '50%', fontSize: 12, fontWeight: 700, color: '#fff', background: gold ? '#b89b3e' : '#9ca3af' }}>{rank}</div>
+                {isSel && <div className="absolute top-2 right-2 z-10" style={{ width: 22, height: 22, borderRadius: '50%', background: '#ec4899', color: '#fff', fontSize: 13, lineHeight: '22px', textAlign: 'center', fontWeight: 700 }}>✓</div>}
+                <div style={{ aspectRatio: '1 / 1', background: '#f6f4ef', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {p.image
+                    ? <img src={p.image} alt={p.name} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : <span style={{ fontSize: 34 }}>👠</span>}
+                </div>
+                <div className="p-3">
+                  <div className="font-semibold leading-tight" style={{ fontSize: 12.5, color: '#1A1A1A', minHeight: 32, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                    {p.name} {hasAds && <span title="Tem anúncio rodando hoje">📣</span>}
+                  </div>
+                  <div className="font-mono mb-1" style={{ fontSize: 9.5, color: '#9ca3af' }}>{p.motherSku}</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: '#111827' }}>
+                    {sortBy === 'units' ? `${fmtNum(p.units)} un` : fmtMoney(p.revenue)}
+                  </div>
+                  <div style={{ fontSize: 10.5, color: '#9ca3af' }}>
+                    {sortBy === 'units' ? `${fmtMoney(avgPrice)} preço médio` : `${fmtNum(p.units)} un · ${fmtMoney(avgPrice)} médio`}
+                  </div>
+                  <div className="mt-1" style={{ fontSize: 10.5, fontWeight: 600, color: up ? '#16A34A' : '#dc2626' }}>
+                    {up ? '↑' : '↓'} {deltaPct}% vs período ant.
+                  </div>
+                  <div className="mt-1 inline-block px-1.5 py-0.5 rounded" style={{ fontSize: 9.5, color: '#7c3aed', background: '#f3effc' }}>{shareTotal.toFixed(1)}% do total</div>
+                </div>
+              </div>
+            );
+          })}
+          {catFiltered.length === 0 && <div className="card p-8 text-center text-sm w-full" style={{ color: '#6b7280' }}>Nenhum produto nesta categoria no período/busca.</div>}
+          </div>
+        </div>
+      )}
+      {!loadingPerf && !search.trim() && catFiltered.length > visible.length && (
+        <div className="text-center mb-8">
+          <button onClick={() => setShowAll(true)} className={PILL_INACTIVE} style={{ cursor: 'pointer' }}>
+            Mostrar todos os {catFiltered.length} produtos
+          </button>
+        </div>
+      )}
+      {!loadingPerf && showAll && !search.trim() && catFiltered.length > INITIAL_CARDS && (
+        <div className="text-center mb-8">
+          <button onClick={() => setShowAll(false)} className="text-[12px] underline" style={{ color: '#9ca3af' }}>mostrar menos</button>
+        </div>
+      )}
 
       {/* Filtro de origem: In Stock / On-Demand / Pre-Order (Pre-Order = coleção de pré-venda) */}
       <div className="flex items-center gap-2 flex-wrap mb-5">
@@ -463,115 +572,6 @@ export default function ProductPerformancePage() {
         </div>
       </div>
 
-      {/* Mais vendidos — cards com imagem (abaixo da visão original) */}
-      <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
-        <span className="text-sm font-semibold uppercase tracking-wide" style={{ color: '#6b7280' }}>🏆 Mais vendidos · com imagem (clique pra selecionar)</span>
-        <div className="flex items-center rounded-full overflow-hidden" style={{ border: '1px solid #e5e3de' }}>
-          <button onClick={() => setSortBy('units')} className="px-3 py-1.5 text-[12px] font-semibold" style={{ background: sortBy === 'units' ? '#1a1a1a' : '#fff', color: sortBy === 'units' ? '#fff' : '#1a1a1a' }}>Qtd</button>
-          <button onClick={() => setSortBy('revenue')} className="px-3 py-1.5 text-[12px] font-semibold" style={{ background: sortBy === 'revenue' ? '#1a1a1a' : '#fff', color: sortBy === 'revenue' ? '#fff' : '#1a1a1a' }}>Receita</button>
-        </div>
-      </div>
-
-      {/* Abas de categoria do carrossel */}
-      <div className="flex items-center gap-2 flex-wrap mb-2">
-        {CAT_TABS.map((tabItem) => {
-          const active = cat === tabItem.key;
-          return (
-            <button key={tabItem.key} onClick={() => { setCat(tabItem.key); if (tabItem.key !== 'material') { setMatSel(null); setColorSel(null); } }}
-              className={active ? PILL_ACTIVE_DARK : PILL_INACTIVE} style={{ fontSize: 12 }}>
-              {tabItem.label}{tabItem.key !== 'material' && <span style={{ opacity: 0.6, marginLeft: 6 }}>{catCount(tabItem.key)}</span>}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Sub-chips de material/cor */}
-      {cat === 'material' && (
-        <div className="mb-3 flex flex-col gap-2">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-[10px] font-bold uppercase mr-1" style={{ color: '#9ca3af' }}>Material</span>
-            <button onClick={() => setMatSel(null)} className="px-2.5 py-1 rounded-full text-[11px]" style={{ background: !matSel ? '#1a1a1a' : '#ebe9e3', color: !matSel ? '#fff' : '#1a1a1a' }}>Todos</button>
-            {materials.map((mt) => (
-              <button key={mt} onClick={() => setMatSel(matSel === mt ? null : mt)} className="px-2.5 py-1 rounded-full text-[11px]" style={{ background: matSel === mt ? '#1a1a1a' : '#ebe9e3', color: matSel === mt ? '#fff' : '#1a1a1a' }}>{mt}</button>
-            ))}
-          </div>
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-[10px] font-bold uppercase mr-1" style={{ color: '#9ca3af' }}>Cor</span>
-            <button onClick={() => setColorSel(null)} className="px-2.5 py-1 rounded-full text-[11px]" style={{ background: !colorSel ? '#1a1a1a' : '#ebe9e3', color: !colorSel ? '#fff' : '#1a1a1a' }}>Todas</button>
-            {colors.map((cl) => (
-              <button key={cl} onClick={() => setColorSel(colorSel === cl ? null : cl)} className="px-2.5 py-1 rounded-full text-[11px]" style={{ background: colorSel === cl ? '#1a1a1a' : '#ebe9e3', color: colorSel === cl ? '#fff' : '#1a1a1a' }}>{cl}</button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {loadingPerf && <div className="card p-8 text-center text-sm mb-6" style={{ color: '#6b7280' }}>Carregando…</div>}
-      {!loadingPerf && (
-        <div className="relative mb-4">
-          <button onClick={() => scrollCarousel(-1)} aria-label="Anterior"
-            className="hidden sm:flex absolute left-[-6px] top-[90px] z-20 items-center justify-center"
-            style={{ width: 38, height: 38, borderRadius: '50%', background: '#fff', border: '1px solid #e5e3de', boxShadow: '0 2px 8px rgba(0,0,0,0.10)', cursor: 'pointer', fontSize: 20, color: '#1a1a1a' }}>‹</button>
-          <button onClick={() => scrollCarousel(1)} aria-label="Próximo"
-            className="hidden sm:flex absolute right-[-6px] top-[90px] z-20 items-center justify-center"
-            style={{ width: 38, height: 38, borderRadius: '50%', background: '#fff', border: '1px solid #e5e3de', boxShadow: '0 2px 8px rgba(0,0,0,0.10)', cursor: 'pointer', fontSize: 20, color: '#1a1a1a' }}>›</button>
-          <div ref={carouselRef} className="flex gap-3 overflow-x-auto pb-2" style={{ scrollSnapType: 'x proximity', scrollbarWidth: 'thin' }}>
-          {visible.map((p, i) => {
-            const isSel = selected.has(p.motherSku);
-            const hasAds = today ? adKeysForMother(p.motherSku, today.adSpendBySku).length > 0 : false;
-            const metric = sortBy === 'units' ? p.units : p.revenue;
-            const prevMetric = sortBy === 'units' ? p.prevUnits : p.prevRevenue;
-            const up = metric >= prevMetric;
-            const deltaPct = prevMetric > 0 ? Math.min(999, Math.round(Math.abs(metric - prevMetric) / prevMetric * 100)) : (metric > 0 ? 100 : 0);
-            const shareTotal = totalMetric > 0 ? (metric / totalMetric * 100) : 0;
-            const avgPrice = p.units > 0 ? p.revenue / p.units : 0;
-            const rank = i + 1;
-            const gold = rank <= 3;
-            return (
-              <div key={p.motherSku} onClick={() => toggle(p.motherSku)}
-                className="relative rounded-2xl overflow-hidden cursor-pointer transition-all"
-                style={{ flex: '0 0 auto', width: 188, scrollSnapAlign: 'start', background: '#fff', border: isSel ? '2px solid #ec4899' : '1px solid #ece9e2', boxShadow: isSel ? '0 0 0 2px rgba(236,72,153,0.18)' : '0 1px 2px rgba(0,0,0,0.03)' }}>
-                <div className="absolute top-2 left-2 z-10 flex items-center justify-center" style={{ width: 24, height: 24, borderRadius: '50%', fontSize: 12, fontWeight: 700, color: '#fff', background: gold ? '#b89b3e' : '#9ca3af' }}>{rank}</div>
-                {isSel && <div className="absolute top-2 right-2 z-10" style={{ width: 22, height: 22, borderRadius: '50%', background: '#ec4899', color: '#fff', fontSize: 13, lineHeight: '22px', textAlign: 'center', fontWeight: 700 }}>✓</div>}
-                <div style={{ aspectRatio: '1 / 1', background: '#f6f4ef', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  {p.image
-                    ? <img src={p.image} alt={p.name} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    : <span style={{ fontSize: 34 }}>👠</span>}
-                </div>
-                <div className="p-3">
-                  <div className="font-semibold leading-tight" style={{ fontSize: 12.5, color: '#1A1A1A', minHeight: 32, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                    {p.name} {hasAds && <span title="Tem anúncio rodando hoje">📣</span>}
-                  </div>
-                  <div className="font-mono mb-1" style={{ fontSize: 9.5, color: '#9ca3af' }}>{p.motherSku}</div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: '#111827' }}>
-                    {sortBy === 'units' ? `${fmtNum(p.units)} un` : fmtMoney(p.revenue)}
-                  </div>
-                  <div style={{ fontSize: 10.5, color: '#9ca3af' }}>
-                    {sortBy === 'units' ? `${fmtMoney(avgPrice)} preço médio` : `${fmtNum(p.units)} un · ${fmtMoney(avgPrice)} médio`}
-                  </div>
-                  <div className="mt-1" style={{ fontSize: 10.5, fontWeight: 600, color: up ? '#16A34A' : '#dc2626' }}>
-                    {up ? '↑' : '↓'} {deltaPct}% vs período ant.
-                  </div>
-                  <div className="mt-1 inline-block px-1.5 py-0.5 rounded" style={{ fontSize: 9.5, color: '#7c3aed', background: '#f3effc' }}>{shareTotal.toFixed(1)}% do total</div>
-                </div>
-              </div>
-            );
-          })}
-          {catFiltered.length === 0 && <div className="card p-8 text-center text-sm w-full" style={{ color: '#6b7280' }}>Nenhum produto nesta categoria no período/busca.</div>}
-          </div>
-        </div>
-      )}
-      {!loadingPerf && !search.trim() && catFiltered.length > visible.length && (
-        <div className="text-center mb-8">
-          <button onClick={() => setShowAll(true)} className={PILL_INACTIVE} style={{ cursor: 'pointer' }}>
-            Mostrar todos os {catFiltered.length} produtos
-          </button>
-        </div>
-      )}
-      {!loadingPerf && showAll && !search.trim() && catFiltered.length > INITIAL_CARDS && (
-        <div className="text-center mb-8">
-          <button onClick={() => setShowAll(false)} className="text-[12px] underline" style={{ color: '#9ca3af' }}>mostrar menos</button>
-        </div>
-      )}
     </main>
   );
 }
