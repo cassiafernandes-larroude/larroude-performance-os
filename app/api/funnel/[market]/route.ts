@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  getFunnelSeries, getFunnelTotals, getPaymentSeries,
+  getFunnelSeries, getFunnelTotals, getPaymentBreakdown,
   type Market, type Granularity,
 } from '@/lib/funnel/queries';
 import { memo } from '@/lib/ltv-dashboard/memo-cache';
@@ -37,11 +37,11 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
     const result = await memo(`funnel:v1:${market}:${since}:${until}:${gran}`, TTL_10M, async () => {
       // Cassia 2026-06-21: funil (ShopifyQL) é o core; pagamento (BQ) é não-fatal — se o BQ falhar,
       // o funil ainda aparece com o bloco de pagamento vazio.
-      const emptyPay = { series: [], totals: { pixPaid: 0, cardPaid: 0, pixPending: 0, otherPaid: 0 } };
+      const emptyPay = { cards: [], cardTotal: 0, pixPaid: 0, pixPending: 0, other: 0, hasPix: market === 'BR' };
       const [series, totals, payment, today] = await Promise.all([
         getFunnelSeries(market, since, until, gran),
         getFunnelTotals(market, since, until),
-        getPaymentSeries(market, since, until).catch((e) => { console.warn('[funnel] payment failed:', e?.message); return emptyPay; }),
+        getPaymentBreakdown(market, since, until).catch((e) => { console.warn('[funnel] payment failed:', e?.message); return emptyPay; }),
         getFunnelTotals(market, 'today', 'today').catch(() => null),
       ]);
 
@@ -79,7 +79,7 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
     return NextResponse.json({
       available: false, market, since, until, gran, error: msg,
       series: [], totals: null, shares: null,
-      payment: { series: [], totals: null }, today: null, alerts: [],
+      payment: { cards: [], cardTotal: 0, pixPaid: 0, pixPending: 0, other: 0, hasPix: market === 'BR' }, today: null, alerts: [],
     });
   }
 }

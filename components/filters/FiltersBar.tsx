@@ -6,7 +6,15 @@ import { SlidersHorizontal, RefreshCw, FileDown, Calendar } from "lucide-react";
 import type { Market, Period } from "@/types/metric";
 import { FULFILLMENT_CATEGORY_GROUPS, type FulfillmentCategory } from "@/lib/shared/fulfillment-category";
 
-const periods: Period[] = ["7d", "14d", "28d", "3M", "6M", "12M"];
+// Cassia 2026-06-21: inclui D-1 (ontem, 1 dia) como 1º preset — padroniza com o Dashboard Principal.
+const periods: Period[] = ["today", "7d", "14d", "28d", "3M", "6M", "12M"];
+const PERIOD_LABEL: Record<string, string> = {
+  today: "D-1", "7d": "7D", "14d": "14D", "28d": "28D", "3M": "3M", "6M": "6M", "12M": "12M",
+};
+const periodHint = (p: Period): string => {
+  const days = { today: 1, "7d": 7, "14d": 14, "28d": 28, "3M": 90, "6M": 180, "12M": 365 } as Record<string, number>;
+  return p === "today" ? "Ontem (D-1)" : `Últimos ${days[p] ?? 28} dias`;
+};
 
 // Calcula valor default De/Ate baseado no preset
 function presetRange(period: Period): { from: string; to: string } {
@@ -118,7 +126,7 @@ export function FiltersBar({ hidePeriod = false, hideDateRange = false, showFulf
         <CountryPill market="US" active={market === "US"} onClick={() => setMarket("US")} />
         <CountryPill market="BR" active={market === "BR"} onClick={() => setMarket("BR")} />
         <button className="pill pill-active px-3 py-2 text-[12px] font-medium flex-shrink-0">
-          {isCustom ? "Custom" : period}
+          {isCustom ? "Custom" : (PERIOD_LABEL[period] ?? period)}
         </button>
         <button
           onClick={() => router.refresh()}
@@ -147,7 +155,7 @@ export function FiltersBar({ hidePeriod = false, hideDateRange = false, showFulf
               onClick={() => setPreset(p)}
               className={`pill ${!isCustom && period === p ? "pill-active" : "pill-inactive"} px-3 py-1 text-[12px] ${!isCustom && period === p ? "font-medium" : ""}`}
             >
-              {p}
+              {PERIOD_LABEL[p] ?? p}
             </button>
           ))}
         </div>
@@ -200,6 +208,9 @@ export function FiltersBar({ hidePeriod = false, hideDateRange = false, showFulf
           >
             Aplicar
           </button>
+          <span className="text-[12px] italic ml-1" style={{ color: "var(--ink-muted)" }}>
+            {isCustom ? `${from} a ${to}` : periodHint(period)}
+          </span>
         </div>
 
         <button className="pill pill-ghost px-3 py-1.5 text-[12px] flex items-center gap-1.5 ml-auto">
@@ -220,7 +231,7 @@ export function FiltersBar({ hidePeriod = false, hideDateRange = false, showFulf
       <div className="hidden lg:flex items-center gap-2 text-[11px] mb-7" style={{ color: "var(--ink-muted)" }}>
         <Calendar className="w-3 h-3" />
         <span>
-          {isCustom ? "Custom" : period} - <strong style={{ color: "var(--ink-soft)" }}>{from} a {to}</strong> - {dayCount} dias - bars <strong style={{ color: "var(--ink-soft)" }}>{gran}</strong>
+          {isCustom ? "Custom" : (PERIOD_LABEL[period] ?? period)} - <strong style={{ color: "var(--ink-soft)" }}>{from} a {to}</strong> - {dayCount} dias - bars <strong style={{ color: "var(--ink-soft)" }}>{gran}</strong>
         </span>
       </div>
 

@@ -18,7 +18,7 @@ interface Bundle {
   series: FunnelPoint[];
   totals: { sessions: number; addToCart: number; reachedCheckout: number; completed: number } | null;
   shares: { cartFromSessions: number; checkoutFromCart: number; completedFromCheckout: number; overallCvr: number } | null;
-  payment: { series: Array<{ date: string; pixPaid: number; cardPaid: number; pixPending: number; otherPaid: number }>; totals: { pixPaid: number; cardPaid: number; pixPending: number; otherPaid: number } | null };
+  payment: { cards: Array<{ brand: string; orders: number }>; cardTotal: number; pixPaid: number; pixPending: number; other: number; hasPix: boolean };
   today: { sessions: number; addToCart: number; reachedCheckout: number; completed: number } | null;
   alerts: Array<{ step: string; todayRate: number; periodRate: number; dropPct: number }>;
   error?: string;
@@ -35,6 +35,11 @@ function presetRange(key: PeriodKey): { since: string; until: string } {
 
 const fmtN = (v: number) => new Intl.NumberFormat('pt-BR').format(Math.round(v || 0));
 const fmtP = (v: number, d = 1) => `${(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d })}%`;
+
+const BRAND_COLORS: Record<string, string> = {
+  Visa: '#1a1f71', Mastercard: '#eb001b', 'American Express': '#2e77bc', Elo: '#00a4e0',
+  Discover: '#f76600', Hipercard: '#b3131b', 'Diners Club': '#0079be', JCB: '#0b4ea2', UnionPay: '#e21836',
+};
 
 const STAGES = [
   { key: 'sessions', label: 'Sessões', color: '#5d4ec5' },
@@ -73,9 +78,8 @@ export default function FunnelDashboard() {
   const seriesFor = (key: keyof FunnelPoint): BarPoint[] =>
     (data?.series ?? []).map((p) => ({ date: p.date, value: Number(p[key]) || 0 }));
   const cvrSeries: BarPoint[] = (data?.series ?? []).map((p) => ({ date: p.date, value: p.sessions > 0 ? (p.completed / p.sessions) * 100 : 0 }));
-  const pixPendingSeries: BarPoint[] = (data?.payment?.series ?? []).map((p) => ({ date: p.date, value: p.pixPending }));
 
-  const pay = data?.payment?.totals;
+  const pay = data?.payment;
 
   return (
     <div className="px-4 lg:px-8 py-5 lg:py-8 max-w-[1500px] mx-auto">
@@ -178,15 +182,41 @@ export default function FunnelDashboard() {
           {/* PAGAMENTO */}
           {pay && (
             <div className="card">
-              <h3 className="text-[14px] font-semibold mb-3" style={{ color: 'var(--ink)' }}>Pagamento · pedidos no período</h3>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-                <Stat label="PIX pago" value={fmtN(pay.pixPaid)} color="#10b981" />
-                <Stat label="Cartão" value={fmtN(pay.cardPaid)} color="#0ea5e9" />
-                <Stat label="PIX pendente" value={fmtN(pay.pixPending)} color="#f59e0b" />
-                <Stat label="Outros" value={fmtN(pay.otherPaid)} />
-              </div>
-              {pixPendingSeries.some((p) => p.value > 0) && (
-                <BarLineChart title="PIX pendente (não pago) por período" data={pixPendingSeries} color="#f59e0b" unit="number" market={market} height={180} />
+              <h3 className="text-[14px] font-semibold mb-1" style={{ color: 'var(--ink)' }}>Pagamento · pedidos no período</h3>
+              <p className="text-[11px] mb-3" style={{ color: 'var(--ink-soft)' }}>Cartão por bandeira{pay.hasPix ? ' · PIX (Brasil)' : ''} · fonte: transações Shopify</p>
+
+              {/* Cartão por bandeira */}
+              <div className="text-[10px] uppercase tracking-wider mb-2" style={{ color: 'var(--ink-muted)' }}>💳 Cartão · {fmtN(pay.cardTotal)} pedidos</div>
+              {pay.cards.length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
+                  {pay.cards.map((c) => {
+                    const total = pay.cardTotal || 1;
+                    return (
+                      <div key={c.brand} className="rounded-lg p-2.5" style={{ background: 'var(--paper)', borderLeft: `3px solid ${BRAND_COLORS[c.brand] ?? '#9ca3af'}` }}>
+                        <div className="text-[11px] font-semibold" style={{ color: 'var(--ink)' }} data-no-translate="true">{c.brand}</div>
+                        <div className="font-num font-bold text-[16px]" style={{ color: 'var(--ink)' }}>{fmtN(c.orders)}</div>
+                        <div className="text-[10px]" style={{ color: 'var(--ink-muted)' }}>{fmtP((c.orders / total) * 100, 0)}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : <p className="text-[12px] mb-4" style={{ color: 'var(--ink-muted)' }}>Sem dados de cartão no período.</p>}
+
+              {/* PIX — só Brasil */}
+              {pay.hasPix && (
+                <>
+                  <div className="text-[10px] uppercase tracking-wider mb-2" style={{ color: 'var(--ink-muted)' }}>⚡ PIX (Brasil)</div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    <Stat label="PIX pago" value={fmtN(pay.pixPaid)} color="#10b981" />
+                    <Stat label="PIX pendente (não pago)" value={fmtN(pay.pixPending)} color="#f59e0b" />
+                    {pay.other > 0 && <Stat label="Outros" value={fmtN(pay.other)} />}
+                  </div>
+                </>
+              )}
+              {!pay.hasPix && pay.other > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  <Stat label="Outros" value={fmtN(pay.other)} />
+                </div>
               )}
             </div>
           )}
