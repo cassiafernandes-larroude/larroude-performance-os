@@ -183,34 +183,27 @@ export async function buildPerformanceContext(
     }),
   };
 
-  // Campanhas do tipo escolhido (prioridade) + top geral.
+  // Campanhas do tipo escolhido (prioridade) + top geral. Cassia 2026-06-21: reduzido (4+6) p/ velocidade.
   const typeRows = rows.filter((r) => classifyCampaign(r.name) === focusType);
-  const ofType = typeRows.slice(0, 6);
-  const topOverall = rows.slice(0, 12);
+  const ofType = typeRows.slice(0, 4);
+  const topOverall = rows.slice(0, 6);
 
   // Base a duplicar = último e-mail ENVIADO do tipo (mais recente por data de envio).
   const baseCampaign = [...typeRows]
     .filter((r) => r.sendDate)
     .sort((a, b) => new Date(b.sendDate).getTime() - new Date(a.sendDate).getTime())[0];
-  let baseTemplate: BaseTemplate | null = null;
-  if (baseCampaign) {
-    const html = await fetchTemplateHtml(market, baseCampaign.id);
-    if (html) {
-      baseTemplate = {
-        campaignId: baseCampaign.id,
-        campaignName: baseCampaign.name,
-        sendDate: baseCampaign.sendDate?.slice(0, 10) || '',
-        html,
-      };
-    }
-  }
 
-  // Busca assuntos reais (dedupe por id) para as do tipo + top geral.
+  // Cassia 2026-06-21: HTML da base + assuntos reais em PARALELO (antes era serial).
   const subjectTargets = Array.from(new Map([...ofType, ...topOverall].map((c) => [c.id, c])).values());
   const subjMap = new Map<string, { subject?: string; previewText?: string }>();
-  await Promise.all(
-    subjectTargets.map(async (c) => subjMap.set(c.id, await fetchSubject(market, c.id)))
-  );
+  const [baseHtml] = await Promise.all([
+    baseCampaign ? fetchTemplateHtml(market, baseCampaign.id) : Promise.resolve(null),
+    ...subjectTargets.map(async (c) => subjMap.set(c.id, await fetchSubject(market, c.id))),
+  ]);
+  const baseTemplate: BaseTemplate | null =
+    baseCampaign && baseHtml
+      ? { campaignId: baseCampaign.id, campaignName: baseCampaign.name, sendDate: baseCampaign.sendDate?.slice(0, 10) || '', html: baseHtml }
+      : null;
 
   const accAvg = (key: 'openRate' | 'clickRate') =>
     rows.length ? round(rows.reduce((x, r) => x + r[key], 0) / rows.length) : 0;

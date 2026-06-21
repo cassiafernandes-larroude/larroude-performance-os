@@ -1,4 +1,5 @@
 // Cassia 2026-06-21: gera a campanha estruturada via Gemini (Vertex AI), reaproveitando as credenciais GCP.
+import { unstable_cache } from 'next/cache';
 import { generateStructured } from '@/lib/gemini/client';
 import { CAMPAIGN_TYPE_CODE } from '@/lib/klaviyo/classify';
 import { buildPerformanceContext } from './context';
@@ -35,8 +36,14 @@ function sanitizeSlug(slug: string): string {
 export async function generateCampaign(
   input: GeneratorInput
 ): Promise<{ campaign: GeneratedCampaign; context: PerformanceContext }> {
-  // Janela 3M: contexto mais leve = mais rápido (cabe no limite de 60s do Hobby); a voz já está em brand-voice.ts.
-  const context = await buildPerformanceContext(input.market, input.type, input.period || '3M');
+  // Janela 3M + cache 12h: o contexto histórico (Klaviyo) é reaproveitado entre gerações do mesmo dia
+  // (mesmo market/type/period), então só o Gemini roda nas repetições. A voz já está em brand-voice.ts.
+  const period = input.period || '3M';
+  const context = await unstable_cache(
+    () => buildPerformanceContext(input.market, input.type, period),
+    ['klaviyo-gen-context', input.market, input.type, period],
+    { revalidate: 43200, tags: [`klaviyo-gen-${input.market}`] }
+  )();
 
   // Plano de segmentação pela meta de faturamento (determinístico, em código).
   let goalPlan: GoalPlan | null = null;
