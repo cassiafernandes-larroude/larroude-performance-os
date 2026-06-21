@@ -48,6 +48,26 @@ export default function CampaignGenerator({ initialMarket = "US" }: { initialMar
     setCreatives((cs) => cs.map((c, idx) => (idx === i ? { ...c, ...patch } : c)));
   }
 
+  const [uploadingIdx, setUploadingIdx] = useState<number | null>(null);
+  async function handleFile(i: number, file?: File) {
+    if (!file) return;
+    setUploadingIdx(i);
+    setError(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("market", market);
+      const res = await fetch("/api/klaviyo/upload-image", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Falha no upload da imagem.");
+      updateCreative(i, { imageUrl: data.url, altText: file.name });
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setUploadingIdx(null);
+    }
+  }
+
   async function handleGenerate() {
     setError(null);
     setCampaign(null);
@@ -250,11 +270,36 @@ export default function CampaignGenerator({ initialMarket = "US" }: { initialMar
             </Field>
           </div>
 
-          <Field label="Criativos (URLs de imagem)">
-            <div className="space-y-2">
+          <Field label="Criativos (carregue a imagem ou cole a URL)">
+            <div className="space-y-3">
               {creatives.map((c, i) => (
                 <div key={i} className="flex gap-2 items-start">
-                  <div className="flex-1 space-y-1">
+                  <div className="flex-1 space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      {c.imageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={c.imageUrl}
+                          alt=""
+                          className="w-12 h-12 rounded object-cover flex-shrink-0"
+                          style={{ border: "1px solid var(--border, #eee)" }}
+                        />
+                      ) : null}
+                      <label
+                        className="cursor-pointer text-xs font-medium px-3 py-2 rounded-lg whitespace-nowrap"
+                        style={{ border: "1px solid var(--border, #ddd)", color: "var(--ink, #1a1a1a)", opacity: uploadingIdx === i ? 0.6 : 1 }}
+                      >
+                        {uploadingIdx === i ? "Enviando…" : c.imageUrl ? "Trocar imagem" : "Carregar imagem"}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          disabled={uploadingIdx === i}
+                          onChange={(e) => handleFile(i, e.target.files?.[0])}
+                        />
+                      </label>
+                      <span className="text-[11px]" style={{ color: "var(--ink-muted, #999)" }}>ou cole a URL ↓</span>
+                    </div>
                     <input
                       value={c.imageUrl}
                       onChange={(e) => updateCreative(i, { imageUrl: e.target.value })}
