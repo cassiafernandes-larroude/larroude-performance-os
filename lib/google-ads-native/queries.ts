@@ -37,6 +37,24 @@ export function campaignType(name: string): string {
   return 'Outros';
 }
 
+// Gasto Google (BQ gold) p/ um intervalo + último dia disponível ≤ end (fallback p/ o lag de
+// ~2 dias do gold no Overview D-1). Cassia 2026-06-21.
+export async function getGoogleSpendBQ(market: Market, from: string, to: string): Promise<{ inRange: number; latestSpend: number; latestDate: string | null }> {
+  const sql = `
+    SELECT
+      SUM(IF(date BETWEEN @from AND @to, sp, 0)) AS in_range,
+      ARRAY_AGG(STRUCT(FORMAT_DATE('%Y-%m-%d', date) AS d, sp) ORDER BY date DESC LIMIT 1)[SAFE_OFFSET(0)] AS latest
+    FROM (
+      SELECT date, SUM(CAST(spend AS FLOAT64)) AS sp
+      FROM \`larroude-data-prod.gold.all_channels_daily\`
+      WHERE channel = 'google_ads' AND market = @mkt AND date <= @to
+      GROUP BY date
+    )`;
+  const rows = await runQuery<{ in_range: number; latest: { d: string; sp: number } | null }>(sql, { mkt: market.toLowerCase(), from, to });
+  const r = rows?.[0];
+  return { inRange: Number(r?.in_range) || 0, latestSpend: Number(r?.latest?.sp) || 0, latestDate: r?.latest?.d ?? null };
+}
+
 async function fetchRows(market: Market, start: string, end: string): Promise<Raw[]> {
   const sql = `
     SELECT FORMAT_DATE('%Y-%m-%d', date) AS date, IFNULL(campaign_name, '(sem nome)') AS campaign_name,
