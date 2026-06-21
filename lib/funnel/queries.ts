@@ -97,8 +97,10 @@ function ordersWhere(market: Market): string {
 
 /** Split de pagamento por dia (orders mirror Shopify). PIX pago / cartão / PIX pendente / outros. */
 export async function getPaymentSeries(market: Market, since: string, until: string): Promise<{ series: PaymentPoint[]; totals: PaymentTotals }> {
-  const table = ORDERS_TABLE[market];
   const tz = TZ[market];
+  // Cassia 2026-06-21: monta a referência de tabela com backticks FORA do template (o SWC do Next
+  // re-emitia `\`${table}\`` sem escapar, quebrando o bundle: "FROM `${s}`"). Concatenar evita isso.
+  const tableRef = '`' + ORDERS_TABLE[market] + '`';
   const sql = `
     SELECT
       FORMAT_DATE('%Y-%m-%d', DATE(created_at, '${tz}')) AS date,
@@ -106,7 +108,7 @@ export async function getPaymentSeries(market: Market, since: string, until: str
       COUNTIF(financial_status = 'paid' AND ${CARD}) AS card_paid,
       COUNTIF(financial_status IN ('pending','authorized')) AS pix_pending,
       COUNTIF(financial_status = 'paid' AND NOT (${PIX}) AND NOT (${CARD})) AS other_paid
-    FROM \`${table}\`
+    FROM ${tableRef}
     WHERE ${ordersWhere(market)}
       AND DATE(created_at, '${tz}') BETWEEN @since AND @until
     GROUP BY date
