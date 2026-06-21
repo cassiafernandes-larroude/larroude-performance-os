@@ -1,7 +1,7 @@
-// Cassia 2026-06-20: gera o preview da campanha (histórico + Claude). Não escreve nada no Klaviyo.
+// Cassia 2026-06-21: gera o preview da campanha (histórico + Gemini). Não escreve nada no Klaviyo.
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { hasAnthropicCredentials } from '@/lib/anthropic/client';
+import { hasGeminiCredentials } from '@/lib/gemini/client';
 import { generateCampaign } from '@/lib/klaviyo/generator/generate';
 import type { GeneratorInput } from '@/types/klaviyo/generator';
 
@@ -29,8 +29,8 @@ const schema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  if (!hasAnthropicCredentials()) {
-    return NextResponse.json({ error: 'ANTHROPIC_API_KEY não configurada.' }, { status: 503 });
+  if (!hasGeminiCredentials()) {
+    return NextResponse.json({ error: 'Vertex AI (Gemini) não configurado: defina GCP_SA_KEY_BASE64.' }, { status: 503 });
   }
   const json = await req.json().catch(() => null);
   const parsed = schema.safeParse(json);

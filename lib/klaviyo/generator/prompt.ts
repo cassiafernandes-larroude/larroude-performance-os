@@ -1,6 +1,4 @@
-// Cassia 2026-06-20: system prompt + tool schema do gerador de campanhas Klaviyo.
-// Tipo segue a convenção real do Klaviyo (FP/MD/PO/CS).
-import type Anthropic from '@anthropic-ai/sdk';
+// Cassia 2026-06-21: system prompt + response schema do gerador de campanhas Klaviyo (Gemini/Vertex AI).
 import { LARROUDE_VOICE } from './brand-voice';
 import type { GeneratorInput, PerformanceContext } from '@/types/klaviyo/generator';
 
@@ -42,7 +40,7 @@ Princípios:
 - Não invente preços, cupons ou claims não fornecidos. Use só a oferta informada (se houver).
 - Seja específico da Larroudé, sem texto genérico.
 
-Responda SOMENTE chamando a tool emit_campaign.`;
+Responda SOMENTE com um objeto JSON válido seguindo o schema fornecido (campos: subjects, segment, recommendedSendDay, html, nameSlug, rationale). Sem texto fora do JSON.`;
 }
 
 export function userPrompt(
@@ -98,43 +96,40 @@ ${
     : 'BASE_HTML: (não há e-mail anterior desse tipo — crie o template do zero conforme as regras).'
 }
 
-Gere a campanha chamando emit_campaign.`;
+Gere a campanha agora, retornando o JSON no schema.`;
 }
 
-export const EMIT_CAMPAIGN_TOOL: Anthropic.Tool = {
-  name: 'emit_campaign',
-  description: 'Emite a campanha de e-mail gerada (assuntos, segmento, horário e HTML do template).',
-  input_schema: {
-    type: 'object',
-    properties: {
-      subjects: {
-        type: 'array',
-        description: '3 opções de assunto',
-        items: {
-          type: 'object',
-          properties: {
-            subject: { type: 'string' },
-            previewText: { type: 'string' },
-            rationale: { type: 'string', description: 'Por que esse assunto, ancorado no histórico do tipo' },
-          },
-          required: ['subject', 'previewText', 'rationale'],
-        },
-      },
-      segment: {
-        type: 'object',
+// Schema de saída estruturada para o Gemini (Vertex AI). Tipos em UPPERCASE (formato do Vertex).
+export const CAMPAIGN_RESPONSE_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    subjects: {
+      type: 'ARRAY',
+      description: '3 opções de assunto',
+      items: {
+        type: 'OBJECT',
         properties: {
-          id: { type: 'string', description: 'id exato de uma audiência listada' },
-          name: { type: 'string' },
-          why: { type: 'string' },
-          estReach: { type: 'number', description: 'alcance estimado (se conhecido pelo histórico)' },
+          subject: { type: 'STRING' },
+          previewText: { type: 'STRING' },
+          rationale: { type: 'STRING', description: 'Por que esse assunto, ancorado no histórico do tipo' },
         },
-        required: ['id', 'name', 'why'],
+        required: ['subject', 'previewText', 'rationale'],
       },
-      recommendedSendDay: { type: 'string', description: 'Ex.: "Quinta-feira, ~10h"' },
-      html: { type: 'string', description: 'HTML completo do e-mail responsivo, com <html> e <body> e {% unsubscribe %}' },
-      nameSlug: { type: 'string', description: 'Descrição curta em PascalCase, sem espaços/data/prefixo (ex.: WinterBootsEarlyAccess)' },
-      rationale: { type: 'string', description: 'Resumo estratégico da decisão' },
     },
-    required: ['subjects', 'segment', 'recommendedSendDay', 'html', 'nameSlug', 'rationale'],
+    segment: {
+      type: 'OBJECT',
+      properties: {
+        id: { type: 'STRING', description: 'id exato de uma audiência listada' },
+        name: { type: 'STRING' },
+        why: { type: 'STRING' },
+        estReach: { type: 'NUMBER', description: 'alcance estimado (se conhecido pelo histórico)' },
+      },
+      required: ['id', 'name', 'why'],
+    },
+    recommendedSendDay: { type: 'STRING', description: 'Ex.: "Quinta-feira, ~10h"' },
+    html: { type: 'STRING', description: 'HTML completo do e-mail responsivo, com <html> e <body> e {% unsubscribe %}' },
+    nameSlug: { type: 'STRING', description: 'Descrição curta em PascalCase, sem espaços/data/prefixo (ex.: WinterBootsEarlyAccess)' },
+    rationale: { type: 'STRING', description: 'Resumo estratégico da decisão' },
   },
+  required: ['subjects', 'segment', 'recommendedSendDay', 'html', 'nameSlug', 'rationale'],
 };
