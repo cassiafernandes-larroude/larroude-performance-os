@@ -49,16 +49,26 @@ export default function CampaignGenerator({ initialMarket = "US" }: { initialMar
   // Cassia 2026-06-21: guarda o payload da geração p/ permitir re-tentar só a etapa 2 (template).
   const [lastPayload, setLastPayload] = useState<ReturnType<typeof genPayload> | null>(null);
 
+  // Cassia 2026-06-21: aceita link sem protocolo (ex.: "www.larroude.com") — a validacao .url() do backend
+  // exige http(s). Prepende https:// quando falta, p/ nao dar "Input invalido".
+  function normalizeUrl(u: string): string {
+    const t = u.trim();
+    if (!t) return t;
+    return /^https?:\/\//i.test(t) ? t : `https://${t}`;
+  }
+
   function genPayload() {
     return {
       market,
       type,
       objective,
-      destinationUrl,
+      destinationUrl: normalizeUrl(destinationUrl),
       offer: offer || undefined,
       productName: productName || undefined,
       revenueGoal: revenueGoal ? Number(revenueGoal.replace(/[^\d]/g, "")) || undefined : undefined,
-      creatives: creatives.filter((c) => c.imageUrl.trim()),
+      creatives: creatives
+        .filter((c) => c.imageUrl.trim())
+        .map((c) => ({ ...c, imageUrl: normalizeUrl(c.imageUrl) })),
     };
   }
 
@@ -125,7 +135,16 @@ export default function CampaignGenerator({ initialMarket = "US" }: { initialMar
         body: JSON.stringify(payload),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Erro ao gerar campanha.");
+      if (!res.ok) {
+        // Detalha qual campo falhou na validacao, em vez do generico "Input invalido".
+        const fieldErrs = data?.details?.fieldErrors as Record<string, string[]> | undefined;
+        const detail = fieldErrs
+          ? Object.entries(fieldErrs)
+              .map(([k, v]) => `${k}: ${v.join(", ")}`)
+              .join(" · ")
+          : "";
+        throw new Error([data.error || "Erro ao gerar campanha.", detail].filter(Boolean).join(" — "));
+      }
       setCampaign(data.campaign);
       setContext(data.context);
       setSelectedSubject(0);
