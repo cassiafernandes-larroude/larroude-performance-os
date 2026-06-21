@@ -1,39 +1,21 @@
-// Cassia 2026-06-21: cliente Vertex AI (Gemini) reaproveitando as credenciais GCP do BigQuery.
-// Não precisa de chave nova — usa GCP_SA_KEY_BASE64 (mesma do lib/bigquery/client.ts).
-// Pré-requisito no GCP: API "Vertex AI" habilitada + a service account com role "Vertex AI User" (roles/aiplatform.user).
-import { VertexAI } from '@google-cloud/vertexai';
+// Cassia 2026-06-21: cliente Gemini via Google AI Studio (API generativelanguage) — só precisa de GEMINI_API_KEY.
+// NÃO usa Vertex AI / IAM / service account. Chave gratuita em https://aistudio.google.com/apikey
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
-let _vertex: VertexAI | null = null;
-let _initError: string | null = null;
+let _client: GoogleGenerativeAI | null = null;
 
 export const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
-const VERTEX_LOCATION = process.env.GCP_VERTEX_LOCATION || 'us-central1';
 
 export function hasGeminiCredentials(): boolean {
-  return !!process.env.GCP_SA_KEY_BASE64;
+  return !!(process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY);
 }
 
-function getVertex(): VertexAI | null {
-  if (_vertex) return _vertex;
-  if (_initError) return null;
-  try {
-    const keyBase64 = process.env.GCP_SA_KEY_BASE64;
-    if (!keyBase64) {
-      _initError = 'GCP_SA_KEY_BASE64 não configurada';
-      return null;
-    }
-    const credentials = JSON.parse(Buffer.from(keyBase64, 'base64').toString('utf-8'));
-    const project =
-      process.env.GCP_VERTEX_PROJECT_ID ||
-      process.env.GCP_PROJECT_ID ||
-      credentials.project_id ||
-      'larroude-data-platform';
-    _vertex = new VertexAI({ project, location: VERTEX_LOCATION, googleAuthOptions: { credentials } });
-    return _vertex;
-  } catch (err) {
-    _initError = String(err);
-    return null;
-  }
+function getClient(): GoogleGenerativeAI | null {
+  if (_client) return _client;
+  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY;
+  if (!apiKey) return null;
+  _client = new GoogleGenerativeAI(apiKey);
+  return _client;
 }
 
 // Gera saída estruturada (JSON) garantida via responseSchema do Gemini.
@@ -43,10 +25,10 @@ export async function generateStructured<T = any>(opts: {
   schema: unknown;
   maxOutputTokens?: number;
 }): Promise<T> {
-  const vertex = getVertex();
-  if (!vertex) throw new Error('Vertex AI não configurado: ' + (_initError || 'sem credenciais GCP'));
+  const client = getClient();
+  if (!client) throw new Error('GEMINI_API_KEY não configurada (gere uma em https://aistudio.google.com/apikey).');
 
-  const model = vertex.getGenerativeModel({
+  const model = client.getGenerativeModel({
     model: GEMINI_MODEL,
     systemInstruction: opts.system,
     generationConfig: {
@@ -58,18 +40,13 @@ export async function generateStructured<T = any>(opts: {
     },
   });
 
-  const resp = await model.generateContent({
-    contents: [{ role: 'user', parts: [{ text: opts.user }] }],
-  });
-
-  const text =
-    resp.response?.candidates?.[0]?.content?.parts?.map((p) => ('text' in p ? p.text : '')).join('') || '';
+  const result = await model.generateContent(opts.user);
+  const text = result.response.text();
   if (!text) throw new Error('Gemini retornou resposta vazia.');
 
   try {
     return JSON.parse(text) as T;
   } catch {
-    // Gemini às vezes embrulha em ```json … ``` — limpa e tenta de novo.
     const cleaned = text.replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim();
     return JSON.parse(cleaned) as T;
   }
