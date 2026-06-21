@@ -81,6 +81,8 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
         ltvMedian: summary.ltvMedian,
         ltvP75: summary.ltvP75,
         ltvP90: summary.ltvP90,
+        ltvCacRatio: summary.ltvCacRatio,
+        cac: summary.cac,
         medianDaysBetweenPurchases: summary.medianDaysBetweenPurchases,
         newCustomers: summary.newCustomers,
         totalOrders: summary.totalOrders,
@@ -114,7 +116,7 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
       return {
         available: true,
         market, start, end, currency,
-        kpis, retention, newVsReturning: nvr, monthly: monthlySeries,
+        kpis, retention, newVsReturning: nvr, monthly: monthlySeries, monthlyLtv: monthly,
         customers, openOrders, cohorts,
       };
     });
@@ -129,7 +131,7 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
     return NextResponse.json({
       available: false, market, start, end, currency,
       error: msg,
-      kpis: null, retention: null, newVsReturning: null, monthly: [], customers: [],
+      kpis: null, retention: null, newVsReturning: null, monthly: [], monthlyLtv: [], customers: [],
       openOrders: { totalOpenOrders: 0, totalOpenValue: 0, customersWithOpen: 0, currency, byCustomer: [] },
       cohorts: [],
     });

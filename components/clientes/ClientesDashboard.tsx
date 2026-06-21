@@ -7,7 +7,9 @@ import { useEffect, useMemo, useState } from 'react';
 import Header from '@/components/ltv-dashboard/Header';
 import PeriodFilter, { presetRange, type PeriodState } from '@/components/ltv-dashboard/PeriodFilter';
 import KpiCard from '@/components/ltv-dashboard/KpiCard';
-import type { Market } from '@/lib/ltv-dashboard/queries';
+import MonthlyChart from '@/components/ltv-dashboard/MonthlyChart';
+import LtvCacOverTimeChart from '@/components/ltv-dashboard/LtvCacOverTimeChart';
+import type { Market, MonthlyLtvPoint } from '@/lib/ltv-dashboard/queries';
 import { formatMoney, formatNumber, formatPercent } from '@/lib/ltv-dashboard/format';
 
 interface CustRow {
@@ -24,6 +26,7 @@ interface Bundle {
   available: boolean; market: Market; start: string; end: string; currency: string;
   kpis: any; retention: any; newVsReturning: any;
   monthly: Array<{ month: string; customers: number; newCustomers: number; returningCustomers: number }>;
+  monthlyLtv: MonthlyLtvPoint[];
   customers: CustRow[];
   openOrders: { totalOpenOrders: number; totalOpenValue: number; customersWithOpen: number; currency: string; byCustomer: OpenRow[] };
   cohorts: Array<{ cohort: string; size: number; offsets: number[] }>;
@@ -123,6 +126,33 @@ export default function ClientesDashboard({ freshness }: { freshness: string }) 
               <KpiCard label="Frequência anual" value={`${(r.purchaseFrequencyAnnual || 0).toFixed(2)}×`} />
               <KpiCard label="LTV mediano" value={formatMoney(k.ltvMedian, market)} />
             </div>
+
+            {/* LTV detalhado */}
+            <div className="section-label"><span>{'\u{1F4B0}'}</span><span>LTV detalhado · {market === 'US' ? 'United States' : 'Brazil'}</span></div>
+            <div className="kpi-grid">
+              <KpiCard label="Historical LTV" value={formatMoney(k.ltvHistorical, market, true)} sub="net_sales / clientes (incl. devoluções)" />
+              <KpiCard label="Customer Lifetime" value={k.customerLifetime > 0 ? `${k.customerLifetime.toFixed(2)} a` : '—'} sub="1 / (1 − % recorrentes) · em anos" />
+              <KpiCard label="LTV / CAC" value={k.ltvCacRatio > 0 ? k.ltvCacRatio.toFixed(2) : '—'} sub={k.cac > 0 ? `CAC ${formatMoney(k.cac, market, true)} · saudável ≥ 3` : 'spend Meta+Google indisponível'} highlight />
+              <KpiCard label="Median LTV (P50)" value={formatMoney(k.ltvMedian, market, true)} sub="mediana dos clientes" />
+              <KpiCard label="LTV P75" value={formatMoney(k.ltvP75, market, true)} sub="top 25% gastam acima" />
+              <KpiCard label="LTV P90" value={formatMoney(k.ltvP90, market, true)} sub="top 10% — alto valor" />
+            </div>
+
+            {/* Gráficos LTV (rolling 12M, via série mensal) */}
+            {data.monthlyLtv && data.monthlyLtv.length > 0 && (
+              <>
+                <div className="section-label"><span>{'\u{1F4C8}'}</span><span>Monthly LTV + Repeat Rate · rolling 12M</span></div>
+                <div className="chart-card">
+                  <div className="chart-title"><h3>Monthly LTV + Repeat Rate</h3><span className="meta">histórico via BigQuery</span></div>
+                  <div className="chart-area"><MonthlyChart data={data.monthlyLtv} market={market} /></div>
+                </div>
+                <div className="section-label"><span>{'\u{1F4C9}'}</span><span>LTV / CAC ao longo do tempo · últimos 12 meses</span></div>
+                <div className="chart-card">
+                  <div className="chart-title"><h3>LTV / CAC overtime</h3><span className="meta">🟢 ≥3x saudável · 🔴 ≤1x breakeven</span></div>
+                  <div className="chart-area" style={{ height: 300 }}><LtvCacOverTimeChart data={data.monthlyLtv} market={market} /></div>
+                </div>
+              </>
+            )}
 
             {/* Tendência mensal */}
             {data.monthly.length > 0 && (
