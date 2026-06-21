@@ -1,9 +1,9 @@
-// Cassia 2026-06-21: chama o Claude com tool forçada para gerar a campanha estruturada.
-import { getAnthropic, MODEL } from '@/lib/anthropic/client';
+// Cassia 2026-06-21: gera a campanha estruturada via Gemini (Vertex AI), reaproveitando as credenciais GCP.
+import { generateStructured } from '@/lib/gemini/client';
 import { CAMPAIGN_TYPE_CODE } from '@/lib/klaviyo/classify';
 import { buildPerformanceContext } from './context';
 import { planSegmentationForGoal, computeExclusions } from './goal';
-import { systemPrompt, userPrompt, EMIT_CAMPAIGN_TOOL } from './prompt';
+import { systemPrompt, userPrompt, CAMPAIGN_RESPONSE_SCHEMA } from './prompt';
 import type {
   GeneratorInput,
   GeneratedCampaign,
@@ -13,7 +13,7 @@ import type {
   GoalPlan,
 } from '@/types/klaviyo/generator';
 
-type RawTool = {
+type RawCampaign = {
   subjects: SubjectOption[];
   segment?: { id: string; name: string; why?: string; estReach?: number };
   recommendedSendDay: string;
@@ -35,9 +35,6 @@ function sanitizeSlug(slug: string): string {
 export async function generateCampaign(
   input: GeneratorInput
 ): Promise<{ campaign: GeneratedCampaign; context: PerformanceContext }> {
-  const client = getAnthropic();
-  if (!client) throw new Error('ANTHROPIC_API_KEY não configurada.');
-
   // Janela ampla (12M) para análise completa do histórico, não só campanhas recentes.
   const context = await buildPerformanceContext(input.market, input.type, input.period || '12M');
 
@@ -64,20 +61,12 @@ export async function generateCampaign(
       (plan.achievable ? 'meta atingível.' : `faltam ${plan.currency} ${plan.gap.toLocaleString()} (considere ampliar a audiência ou a oferta).`);
   }
 
-  const response = await client.messages.create({
-    model: MODEL,
-    max_tokens: 16000,
+  const raw = await generateStructured<RawCampaign>({
     system: systemPrompt(input.market),
-    tools: [EMIT_CAMPAIGN_TOOL],
-    tool_choice: { type: 'tool', name: 'emit_campaign' },
-    messages: [{ role: 'user', content: userPrompt(input, context, goalPlanText) }],
+    user: userPrompt(input, context, goalPlanText),
+    schema: CAMPAIGN_RESPONSE_SCHEMA,
+    maxOutputTokens: 16384,
   });
-
-  const block = response.content.find((b) => b.type === 'tool_use');
-  if (!block || block.type !== 'tool_use') {
-    throw new Error('Claude não retornou a campanha estruturada.');
-  }
-  const raw = block.input as RawTool;
 
   // Segmentação: meta (código) tem prioridade; senão, escolha do Claude validada.
   let segments: SegmentRec[];
