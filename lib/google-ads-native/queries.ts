@@ -89,15 +89,27 @@ export async function getGoogleAdsBundle(market: Market, start: string, end: str
     b.impressions += Number(r.impressions) || 0; b.conversions += Number(r.conversions) || 0;
     buckets.set(k, b);
   }
-  const dates = Array.from(buckets.keys()).sort();
+  // Cassia 2026-06-21: enumera TODOS os buckets da janela (US tem meses sem dados — fev→mai);
+  // dias/semanas/meses vazios entram como 0 pra a timeline não "pular".
+  const ZERO = { spend: 0, value: 0, clicks: 0, impressions: 0, conversions: 0 };
+  const stepBucket = (iso: string) => {
+    const d = new Date(iso + 'T00:00:00Z');
+    if (g === 'day') d.setUTCDate(d.getUTCDate() + 1);
+    else if (g === 'week') d.setUTCDate(d.getUTCDate() + 7);
+    else d.setUTCMonth(d.getUTCMonth() + 1);
+    return d.toISOString().slice(0, 10);
+  };
+  const dates: string[] = [];
+  for (let cur = bucketDate(start, g), last = bucketDate(end, g); cur <= last; cur = stepBucket(cur)) dates.push(cur);
+  const bg = (d: string) => buckets.get(d) || ZERO;
   const series = {
-    spend: dates.map((d) => ({ date: d, value: Math.round(buckets.get(d)!.spend) })),
-    value: dates.map((d) => ({ date: d, value: Math.round(buckets.get(d)!.value) })),
-    roas: dates.map((d) => ({ date: d, value: Math.round(roasOf(buckets.get(d)!.value, buckets.get(d)!.spend) * 100) / 100 })),
-    conversions: dates.map((d) => ({ date: d, value: Math.round(buckets.get(d)!.conversions) })),
-    clicks: dates.map((d) => ({ date: d, value: buckets.get(d)!.clicks })),
-    ctr: dates.map((d) => ({ date: d, value: buckets.get(d)!.impressions > 0 ? Math.round((buckets.get(d)!.clicks / buckets.get(d)!.impressions) * 1000) / 10 : 0 })),
-    cpc: dates.map((d) => ({ date: d, value: buckets.get(d)!.clicks > 0 ? Math.round((buckets.get(d)!.spend / buckets.get(d)!.clicks) * 100) / 100 : 0 })),
+    spend: dates.map((d) => ({ date: d, value: Math.round(bg(d).spend) })),
+    value: dates.map((d) => ({ date: d, value: Math.round(bg(d).value) })),
+    roas: dates.map((d) => ({ date: d, value: Math.round(roasOf(bg(d).value, bg(d).spend) * 100) / 100 })),
+    conversions: dates.map((d) => ({ date: d, value: Math.round(bg(d).conversions) })),
+    clicks: dates.map((d) => ({ date: d, value: bg(d).clicks })),
+    ctr: dates.map((d) => ({ date: d, value: bg(d).impressions > 0 ? Math.round((bg(d).clicks / bg(d).impressions) * 1000) / 10 : 0 })),
+    cpc: dates.map((d) => ({ date: d, value: bg(d).clicks > 0 ? Math.round((bg(d).spend / bg(d).clicks) * 100) / 100 : 0 })),
   };
 
   // Agregação por campanha e por tipo.

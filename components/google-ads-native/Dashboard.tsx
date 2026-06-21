@@ -127,7 +127,7 @@ export default function GoogleAdsDashboard() {
             {data.byType.map((t) => (
               <div key={t.name} className="card p-4" style={{ borderTop: `3px solid ${typeColor[t.name] || '#9ca3af'}` }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: '#1A1A1A' }}>{t.name}</div>
-                <div style={{ fontSize: 22, fontWeight: 700, color: '#111827', marginTop: 4 }}>{t.roas.toFixed(2)}x</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: '#111827', marginTop: 4 }}>{t.roas.toFixed(2)}x <span style={{ fontSize: 10, fontWeight: 600, color: '#9ca3af', letterSpacing: '0.04em' }}>ROAS</span></div>
                 <div style={{ fontSize: 10.5, color: '#9ca3af', marginTop: 2 }}>{fmtMoney(t.spend)} · {fmtNum(t.conversions)} conv · {fmtMoney(t.value)}</div>
               </div>
             ))}
