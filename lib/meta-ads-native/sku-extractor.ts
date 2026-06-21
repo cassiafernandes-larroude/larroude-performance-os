@@ -20,7 +20,9 @@
 // Usa lookbehind negativo: SKU deve estar precedido por algo que NÃO seja letra/dígito
 // (ou estar no início da string).
 const SKU_REGEX = /(?<![A-Z0-9])L\d{3,5}(?:-[A-Z0-9.]+)*/i;
-const COLLECTION_ID_REGEX = /\b\d{12,15}\b/;
+// Cassia 2026-06-21: usa lookaround de dígito (não \b) porque o ID vem seguido de "_"
+// no nome do ad (ex.: "683029528742_Static_Collection..."), e "_" não é word boundary.
+const COLLECTION_ID_REGEX = /(?<!\d)\d{12,15}(?!\d)/;
 
 export type AdRef =
   | { type: 'sku'; value: string }
