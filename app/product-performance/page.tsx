@@ -47,7 +47,7 @@ interface ProductRow {
   motherSku: string; name: string; image: string | null; category: string;
   units: number; revenue: number; prevUnits: number; prevRevenue: number;
   group: ProductGroup; isB2B: boolean; isCollab: boolean; isNew: boolean;
-  materials: string[]; colors: string[];
+  materials: string[]; colors: string[]; collab: string | null;
 }
 type CatKey = 'all' | 'novos' | 'collab' | 'b2b' | 'tenis' | 'bolsas' | 'vestuario' | 'material';
 const CAT_TABS: { key: CatKey; label: string }[] = [
@@ -288,6 +288,54 @@ export default function ProductPerformancePage() {
   const INITIAL_CARDS = 60;
   const visible = (showAll || search.trim()) ? catFiltered : catFiltered.slice(0, INITIAL_CARDS);
 
+  // Aba Collabs: um carrossel POR collab (designer). carRanked já vem ordenado por métrica.
+  const collabGroups = useMemo(() => {
+    if (cat !== 'collab') return [] as { collab: string; items: ProductRow[]; total: number }[];
+    const map = new Map<string, ProductRow[]>();
+    for (const p of carRanked) {
+      if (!p.isCollab) continue;
+      const key = p.collab || 'Outras collabs';
+      const arr = map.get(key) || []; arr.push(p); map.set(key, arr);
+    }
+    return Array.from(map.entries())
+      .map(([collab, items]) => ({ collab, items, total: items.reduce((s, p) => s + (sortBy === 'units' ? p.units : p.revenue), 0) }))
+      .sort((a, b) => b.total - a.total);
+  }, [cat, carRanked, sortBy]);
+
+  // Card do carrossel (reutilizado pelo carrossel único e pelos carrosséis por collab).
+  const renderCard = (p: ProductRow, rank: number) => {
+    const isSel = selected.has(p.motherSku);
+    const hasAds = today ? adKeysForMother(p.motherSku, today.adSpendBySku).length > 0 : false;
+    const metric = sortBy === 'units' ? p.units : p.revenue;
+    const prevMetric = sortBy === 'units' ? p.prevUnits : p.prevRevenue;
+    const up = metric >= prevMetric;
+    const deltaPct = prevMetric > 0 ? Math.min(999, Math.round(Math.abs(metric - prevMetric) / prevMetric * 100)) : (metric > 0 ? 100 : 0);
+    const shareTotal = totalMetric > 0 ? (metric / totalMetric * 100) : 0;
+    const avgPrice = p.units > 0 ? p.revenue / p.units : 0;
+    const gold = rank <= 3;
+    return (
+      <div key={p.motherSku} onClick={() => toggle(p.motherSku)}
+        className="relative rounded-2xl overflow-hidden cursor-pointer transition-all"
+        style={{ flex: '0 0 auto', width: 188, scrollSnapAlign: 'start', background: '#fff', border: isSel ? '2px solid #ec4899' : '1px solid #ece9e2', boxShadow: isSel ? '0 0 0 2px rgba(236,72,153,0.18)' : '0 1px 2px rgba(0,0,0,0.03)' }}>
+        <div className="absolute top-2 left-2 z-10 flex items-center justify-center" style={{ width: 24, height: 24, borderRadius: '50%', fontSize: 12, fontWeight: 700, color: '#fff', background: gold ? '#b89b3e' : '#9ca3af' }}>{rank}</div>
+        {isSel && <div className="absolute top-2 right-2 z-10" style={{ width: 22, height: 22, borderRadius: '50%', background: '#ec4899', color: '#fff', fontSize: 13, lineHeight: '22px', textAlign: 'center', fontWeight: 700 }}>✓</div>}
+        <div style={{ aspectRatio: '1 / 1', background: '#f6f4ef', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {p.image ? <img src={p.image} alt={p.name} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: 34 }}>👠</span>}
+        </div>
+        <div className="p-3">
+          <div className="font-semibold leading-tight" style={{ fontSize: 12.5, color: '#1A1A1A', minHeight: 32, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+            {p.name} {hasAds && <span title="Tem anúncio rodando hoje">📣</span>}
+          </div>
+          <div className="font-mono mb-1" style={{ fontSize: 9.5, color: '#9ca3af' }}>{p.motherSku}</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: '#111827' }}>{sortBy === 'units' ? `${fmtNum(p.units)} un` : fmtMoney(p.revenue)}</div>
+          <div style={{ fontSize: 10.5, color: '#9ca3af' }}>{sortBy === 'units' ? `${fmtMoney(avgPrice)} preço médio` : `${fmtNum(p.units)} un · ${fmtMoney(avgPrice)} médio`}</div>
+          <div className="mt-1" style={{ fontSize: 10.5, fontWeight: 600, color: up ? '#16A34A' : '#dc2626' }}>{up ? '↑' : '↓'} {deltaPct}% vs período ant.</div>
+          <div className="mt-1 inline-block px-1.5 py-0.5 rounded" style={{ fontSize: 9.5, color: '#7c3aed', background: '#f3effc' }}>{shareTotal.toFixed(1)}% do total</div>
+        </div>
+      </div>
+    );
+  };
+
   const { unitPoints, revPoints } = useMemo(() => {
     const acc = new Map<string, { units: number; rev: number }>();
     for (const sku of Object.keys(seriesBySku)) {
@@ -347,11 +395,10 @@ export default function ProductPerformancePage() {
         </p>
       </div>
 
-      {/* Market — inclui Consolidado (BR+US) */}
+      {/* Market */}
       <div className="flex items-center gap-2 flex-wrap mb-3">
         <button onClick={() => setMarket('US')} className={pillBtn(market === 'US')}>US</button>
         <button onClick={() => setMarket('BR')} className={pillBtn(market === 'BR')}>BR</button>
-        <button onClick={() => setMarket('ALL')} className={pillBtn(market === 'ALL')}>🌎 Consolidado (BR+US)</button>
       </div>
 
       {/* Filtro de período — idêntico ao Dashboard Principal */}
@@ -427,7 +474,26 @@ export default function ProductPerformancePage() {
       )}
 
       {(loadingPerf || loadingCar) && <div className="card p-8 text-center text-sm mb-6" style={{ color: '#6b7280' }}>Carregando…</div>}
-      {!loadingPerf && !loadingCar && (
+      {/* Aba Collabs: um carrossel por collab (designer) */}
+      {!loadingPerf && !loadingCar && cat === 'collab' && (
+        <div className="mb-8 flex flex-col gap-5">
+          {collabGroups.map((g) => (
+            <div key={g.collab}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[13px] font-bold" style={{ color: '#1A1A1A' }}>✦ {g.collab}</span>
+                <span className="text-[11px]" style={{ color: '#9ca3af' }}>{g.items.length} produto{g.items.length === 1 ? '' : 's'} · {sortBy === 'units' ? `${fmtNum(g.total)} un` : fmtMoney(g.total)}</span>
+              </div>
+              <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollSnapType: 'x proximity', scrollbarWidth: 'thin' }}>
+                {g.items.map((p, i) => renderCard(p, i + 1))}
+              </div>
+            </div>
+          ))}
+          {collabGroups.length === 0 && <div className="card p-8 text-center text-sm" style={{ color: '#6b7280' }}>Nenhuma collab com vendas no período.</div>}
+        </div>
+      )}
+
+      {/* Demais abas: carrossel único */}
+      {!loadingPerf && !loadingCar && cat !== 'collab' && (
         <div className="relative mb-4">
           <button onClick={() => scrollCarousel(-1)} aria-label="Anterior"
             className="hidden sm:flex absolute left-[-6px] top-[90px] z-20 items-center justify-center"
@@ -436,59 +502,19 @@ export default function ProductPerformancePage() {
             className="hidden sm:flex absolute right-[-6px] top-[90px] z-20 items-center justify-center"
             style={{ width: 38, height: 38, borderRadius: '50%', background: '#fff', border: '1px solid #e5e3de', boxShadow: '0 2px 8px rgba(0,0,0,0.10)', cursor: 'pointer', fontSize: 20, color: '#1a1a1a' }}>›</button>
           <div ref={carouselRef} className="flex gap-3 overflow-x-auto pb-2" style={{ scrollSnapType: 'x proximity', scrollbarWidth: 'thin' }}>
-          {visible.map((p, i) => {
-            const isSel = selected.has(p.motherSku);
-            const hasAds = today ? adKeysForMother(p.motherSku, today.adSpendBySku).length > 0 : false;
-            const metric = sortBy === 'units' ? p.units : p.revenue;
-            const prevMetric = sortBy === 'units' ? p.prevUnits : p.prevRevenue;
-            const up = metric >= prevMetric;
-            const deltaPct = prevMetric > 0 ? Math.min(999, Math.round(Math.abs(metric - prevMetric) / prevMetric * 100)) : (metric > 0 ? 100 : 0);
-            const shareTotal = totalMetric > 0 ? (metric / totalMetric * 100) : 0;
-            const avgPrice = p.units > 0 ? p.revenue / p.units : 0;
-            const rank = i + 1;
-            const gold = rank <= 3;
-            return (
-              <div key={p.motherSku} onClick={() => toggle(p.motherSku)}
-                className="relative rounded-2xl overflow-hidden cursor-pointer transition-all"
-                style={{ flex: '0 0 auto', width: 188, scrollSnapAlign: 'start', background: '#fff', border: isSel ? '2px solid #ec4899' : '1px solid #ece9e2', boxShadow: isSel ? '0 0 0 2px rgba(236,72,153,0.18)' : '0 1px 2px rgba(0,0,0,0.03)' }}>
-                <div className="absolute top-2 left-2 z-10 flex items-center justify-center" style={{ width: 24, height: 24, borderRadius: '50%', fontSize: 12, fontWeight: 700, color: '#fff', background: gold ? '#b89b3e' : '#9ca3af' }}>{rank}</div>
-                {isSel && <div className="absolute top-2 right-2 z-10" style={{ width: 22, height: 22, borderRadius: '50%', background: '#ec4899', color: '#fff', fontSize: 13, lineHeight: '22px', textAlign: 'center', fontWeight: 700 }}>✓</div>}
-                <div style={{ aspectRatio: '1 / 1', background: '#f6f4ef', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  {p.image
-                    ? <img src={p.image} alt={p.name} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    : <span style={{ fontSize: 34 }}>👠</span>}
-                </div>
-                <div className="p-3">
-                  <div className="font-semibold leading-tight" style={{ fontSize: 12.5, color: '#1A1A1A', minHeight: 32, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                    {p.name} {hasAds && <span title="Tem anúncio rodando hoje">📣</span>}
-                  </div>
-                  <div className="font-mono mb-1" style={{ fontSize: 9.5, color: '#9ca3af' }}>{p.motherSku}</div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: '#111827' }}>
-                    {sortBy === 'units' ? `${fmtNum(p.units)} un` : fmtMoney(p.revenue)}
-                  </div>
-                  <div style={{ fontSize: 10.5, color: '#9ca3af' }}>
-                    {sortBy === 'units' ? `${fmtMoney(avgPrice)} preço médio` : `${fmtNum(p.units)} un · ${fmtMoney(avgPrice)} médio`}
-                  </div>
-                  <div className="mt-1" style={{ fontSize: 10.5, fontWeight: 600, color: up ? '#16A34A' : '#dc2626' }}>
-                    {up ? '↑' : '↓'} {deltaPct}% vs período ant.
-                  </div>
-                  <div className="mt-1 inline-block px-1.5 py-0.5 rounded" style={{ fontSize: 9.5, color: '#7c3aed', background: '#f3effc' }}>{shareTotal.toFixed(1)}% do total</div>
-                </div>
-              </div>
-            );
-          })}
-          {catFiltered.length === 0 && <div className="card p-8 text-center text-sm w-full" style={{ color: '#6b7280' }}>Nenhum produto nesta categoria no período/busca.</div>}
+            {visible.map((p, i) => renderCard(p, i + 1))}
+            {catFiltered.length === 0 && <div className="card p-8 text-center text-sm w-full" style={{ color: '#6b7280' }}>Nenhum produto nesta categoria no período/busca.</div>}
           </div>
         </div>
       )}
-      {!loadingPerf && !loadingCar && !search.trim() && catFiltered.length > visible.length && (
+      {!loadingPerf && !loadingCar && cat !== 'collab' && !search.trim() && catFiltered.length > visible.length && (
         <div className="text-center mb-8">
           <button onClick={() => setShowAll(true)} className={PILL_INACTIVE} style={{ cursor: 'pointer' }}>
             Mostrar todos os {catFiltered.length} produtos
           </button>
         </div>
       )}
-      {!loadingPerf && !loadingCar && showAll && !search.trim() && catFiltered.length > INITIAL_CARDS && (
+      {!loadingPerf && !loadingCar && cat !== 'collab' && showAll && !search.trim() && catFiltered.length > INITIAL_CARDS && (
         <div className="text-center mb-8">
           <button onClick={() => setShowAll(false)} className="text-[12px] underline" style={{ color: '#9ca3af' }}>mostrar menos</button>
         </div>

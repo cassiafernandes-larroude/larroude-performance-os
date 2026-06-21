@@ -30,6 +30,7 @@ const META_QUERY = `
           tags
           createdAt
           featuredImage { url }
+          collections(first: 20) { edges { node { title } } }
           variants(first: 100) { edges { node { sku } } }
         }
       }
@@ -48,6 +49,25 @@ function motherSkuOf(sku: string | null): string | null {
   }
   if (parts.length >= 4 && parts[3]) return `${parts[0]}-${parts[1]}-${parts[2]}-${parts[3]}`;
   return `${parts[0]}-${parts[1]}-${parts[2]}`;
+}
+
+// Nome da COLLAB a partir das coleções "Larroudé x <Designer>" (ignora _swatch-family e o
+// guarda-chuva "Larroudé Collabs"). Tira o prefixo, corta após ":" e remove o tipo de produto
+// no fim (Pump/Boot/Sandal…) pra agrupar todos os cortes sob o mesmo designer.
+const COLLAB_TRAIL = /\s+(pumps?|boots?|sandals?|wedges?|mules?|sneakers?|flats?|loafers?|hi|lo|high heel|ballet|price|long caftan)$/i;
+function collabFromCollections(titles: string[]): string | null {
+  const names: string[] = [];
+  for (const raw of titles) {
+    if (/_swatch|swatch-family/i.test(raw)) continue;
+    const m = raw.match(/^\s*larroud[eé]\s*x\s+(.+)$/i);
+    if (!m) continue;
+    let name = m[1].replace(/:.*$/, '').trim();
+    while (COLLAB_TRAIL.test(name)) name = name.replace(COLLAB_TRAIL, '').trim();
+    if (name) names.push(name);
+  }
+  if (!names.length) return null;
+  // menor nome = base do designer (ex.: "Markarian" em vez de "Markarian Sandal")
+  return names.sort((a, b) => a.length - b.length)[0];
 }
 
 export type ProductGroup = 'tenis' | 'bolsas' | 'vestuario' | 'calcados' | 'outros';
@@ -79,6 +99,7 @@ export interface ProductMeta {
   isNew: boolean;
   materials: string[];
   colors: string[];
+  collab: string | null;
 }
 
 export async function getProductImages(market: Market, timeoutMs = 45_000): Promise<Record<string, ProductMeta>> {
@@ -110,12 +131,15 @@ export async function getProductImages(market: Market, timeoutMs = 45_000): Prom
     for (const edge of products.edges) {
       const p = edge.node;
       const tags: string[] = Array.isArray(p.tags) ? p.tags : [];
+      const collTitles: string[] = (p.collections?.edges || []).map((e: any) => e?.node?.title || '');
+      const collab = collabFromCollections(collTitles);
       const meta: ProductMeta = {
         name: p.title || '',
         image: p.featuredImage?.url ?? null,
         group: groupOf(p.productType || ''),
         isB2B: tags.includes('Catalog_B2B'),
-        isCollab: tags.some((t) => /collab/i.test(t)),
+        isCollab: !!collab || tags.some((t) => /collab/i.test(t)),
+        collab,
         isNew: typeof p.createdAt === 'string' && p.createdAt >= cutoff,
         materials: Array.from(new Set([
           ...tags.filter((t) => t.startsWith('Shop By Material - ')).map((t) => t.replace('Shop By Material - ', '').trim()),

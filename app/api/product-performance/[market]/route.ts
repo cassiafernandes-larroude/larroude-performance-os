@@ -31,6 +31,7 @@ interface PerfRow {
   isNew: boolean;
   materials: string[];
   colors: string[];
+  collab: string | null;
 }
 
 function resolveRange(sp: URLSearchParams): { start: string; end: string } {
@@ -58,12 +59,12 @@ async function fxBrlPerUsd(yyyymm: string): Promise<number> {
 // Ranking de UMA praça, com imagem + período anterior. Memoizado por praça+janela+origem.
 async function rankingForMarket(market: Market, start: string, end: string, fulCats?: FulfillmentCategory[] | null): Promise<PerfRow[]> {
   const fulKey = fulCats && fulCats.length ? fulCats.slice().sort().join('+') : 'all';
-  return memo(`pp-rank:${market}:${start}:${end}:${fulKey}:v3`, TTL_30M, async () => {
+  return memo(`pp-rank:${market}:${start}:${end}:${fulKey}:v4`, TTL_30M, async () => {
     const { from: pStart, to: pEnd } = previousRangeOf(start, end);
     const [cur, prev, imgs] = await Promise.all([
       getProductPerformance(market, start, end, fulCats),
       getProductPerformance(market, pStart, pEnd, fulCats),
-      memo(`pp-img:${market}:v1`, TTL_6H, () => getProductImages(market)),
+      memo(`pp-img:${market}:v2`, TTL_6H, () => getProductImages(market)),
     ]);
     const prevMap = new Map(prev.map((r) => [r.motherSku, r]));
     return cur.map((r) => {
@@ -84,6 +85,7 @@ async function rankingForMarket(market: Market, start: string, end: string, fulC
         isNew: m?.isNew ?? false,
         materials: m?.materials ?? [],
         colors: m?.colors ?? [],
+        collab: m?.collab ?? null,
       };
     });
   });
