@@ -51,18 +51,19 @@ function motherSkuOf(sku: string | null): string | null {
   return `${parts[0]}-${parts[1]}-${parts[2]}`;
 }
 
-// Nome da COLLAB a partir das coleções "Larroudé x <Designer>" (ignora _swatch-family e o
-// guarda-chuva "Larroudé Collabs"). Tira o prefixo, corta após ":" e remove o tipo de produto
-// no fim (Pump/Boot/Sandal…) pra agrupar todos os cortes sob o mesmo designer.
-const COLLAB_TRAIL = /\s+(pumps?|boots?|sandals?|wedges?|mules?|sneakers?|flats?|loafers?|hi|lo|high heel|ballet|price|long caftan)$/i;
+// Nome da COLLAB a partir das coleções "Larroudé x/×/by <Designer>" (ignora _swatch-family).
+// Conector pode ser "x" (letra), "×" (sinal) ou "by" (ex.: "Larroudé by Nicolò B."). Corta após
+// ":"/"—"/"–", remove o tipo de produto no fim (Pump/Boot/Sandal…) e inicial final ("Nicolò B." → "Nicolò").
+const COLLAB_TRAIL = /\s+(pumps?|boots?|sandals?|wedges?|mules?|sneakers?|flats?|loafers?|hi|lo|high heel|ballet|price|long caftan|clog)$/i;
 function collabFromCollections(titles: string[]): string | null {
   const names: string[] = [];
   for (const raw of titles) {
     if (/_swatch|swatch-family/i.test(raw)) continue;
-    const m = raw.match(/^\s*larroud[eé]\s*x\s+(.+)$/i);
+    const m = raw.match(/^\s*larroud[eé]\s*(?:x|×|by)\s+(.+)$/i);
     if (!m) continue;
-    let name = m[1].replace(/:.*$/, '').trim();
+    let name = m[1].replace(/\s*[—–:].*$/, '').trim();   // corta após em/en-dash ou ":"
     while (COLLAB_TRAIL.test(name)) name = name.replace(COLLAB_TRAIL, '').trim();
+    name = name.replace(/\s+[A-Z]\.?$/, '').trim();        // tira inicial final ("Nicolò B." → "Nicolò")
     if (name) names.push(name);
   }
   if (!names.length) return null;
