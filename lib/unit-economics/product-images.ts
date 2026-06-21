@@ -51,24 +51,28 @@ function motherSkuOf(sku: string | null): string | null {
   return `${parts[0]}-${parts[1]}-${parts[2]}`;
 }
 
-// Nome da COLLAB a partir das coleções "Larroudé x/×/by <Designer>" (ignora _swatch-family).
-// Conector pode ser "x" (letra), "×" (sinal) ou "by" (ex.: "Larroudé by Nicolò B."). Corta após
-// ":"/"—"/"–", remove o tipo de produto no fim (Pump/Boot/Sandal…) e inicial final ("Nicolò B." → "Nicolò").
+// Nome da COLLAB. Fontes (nessa ordem): coleções "Larroudé x/×/by/for <Designer>" e, como
+// fallback, o TÍTULO "<Designer> by L.: ..." (convenção das collabs, L = Larroudé) — muitos
+// produtos só têm a coleção genérica "Larroudé Collabs" + esse título. Corta após ":"/"—"/"–",
+// remove o tipo de produto no fim (Pump/Boot/Sandal…) e inicial final ("Nicolò B." → "Nicolò").
 const COLLAB_TRAIL = /\s+(pumps?|boots?|sandals?|wedges?|mules?|sneakers?|flats?|loafers?|hi|lo|high heel|ballet|price|long caftan|clog)$/i;
-function collabFromCollections(titles: string[]): string | null {
+function cleanCollab(s: string): string {
+  let name = s.replace(/\s*[—–:].*$/, '').trim();
+  while (COLLAB_TRAIL.test(name)) name = name.replace(COLLAB_TRAIL, '').trim();
+  return name.replace(/\s+[A-Z]\.?$/, '').trim();
+}
+function collabOf(title: string, titles: string[]): string | null {
   const names: string[] = [];
   for (const raw of titles) {
     if (/_swatch|swatch-family/i.test(raw)) continue;
-    const m = raw.match(/^\s*larroud[eé]\s*(?:x|×|by)\s+(.+)$/i);
-    if (!m) continue;
-    let name = m[1].replace(/\s*[—–:].*$/, '').trim();   // corta após em/en-dash ou ":"
-    while (COLLAB_TRAIL.test(name)) name = name.replace(COLLAB_TRAIL, '').trim();
-    name = name.replace(/\s+[A-Z]\.?$/, '').trim();        // tira inicial final ("Nicolò B." → "Nicolò")
-    if (name) names.push(name);
+    const m = raw.match(/^\s*larroud[eé]\s*(?:x|×|by|for)\s+(.+)$/i);
+    if (m) { const n = cleanCollab(m[1]); if (n) names.push(n); }
   }
-  if (!names.length) return null;
-  // menor nome = base do designer (ex.: "Markarian" em vez de "Markarian Sandal")
-  return names.sort((a, b) => a.length - b.length)[0];
+  if (names.length) return names.sort((a, b) => a.length - b.length)[0]; // base do designer
+  // fallback pelo título: "Jonathan Cohen by L.: ..."
+  const t = title.match(/^(.+?)\s+by\s+l\.?\s*[:\-]/i);
+  if (t) { const n = cleanCollab(t[1]); if (n) return n; }
+  return null;
 }
 
 // Drop (onda de lançamento) a partir das tags do produto (ex.: "DROP4_FALL25").
@@ -140,7 +144,7 @@ export async function getProductImages(market: Market, timeoutMs = 45_000): Prom
       const p = edge.node;
       const tags: string[] = Array.isArray(p.tags) ? p.tags : [];
       const collTitles: string[] = (p.collections?.edges || []).map((e: any) => e?.node?.title || '');
-      const collab = collabFromCollections(collTitles);
+      const collab = collabOf(p.title || '', collTitles);
       const meta: ProductMeta = {
         name: p.title || '',
         image: p.featuredImage?.url ?? null,
