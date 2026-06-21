@@ -241,8 +241,10 @@ export async function getDashboardPayload(
   // Prev: aproxima usando mesma soma (não temos channelMix do período anterior)
   const agentShopCostPrev = agentShopCost;
 
-  // Cassia 2026-06-17: filtro de origem -> escala o spend pelo split pre-order das campanhas
-  // (Meta API + Google Supermetrics, ao vivo). produzido = sob demanda + from-batch.
+  // Cassia 2026-06-20: filtro de origem (3 categorias) -> escala o spend por regra:
+  //   Pre-Order  <- investimento nas campanhas com pre-order/pré-venda no nome (regex).
+  //   In-Stock + On-Demand <- investimento nas DEMAIS campanhas, dividido proporcionalmente
+  //   entre as duas pela RECEITA de cada origem (queryOriginShare).
   let _fulFactor = 1;
   if (fulCats && fulCats.length) {
     try {
@@ -253,11 +255,19 @@ export async function getDashboardPayload(
       const metaTot = sumIf(metaCs, () => true), metaPre = sumIf(metaCs, (x) => isPreorderCampaign(x.campaign_name));
       const googTot = sumIf(googCs, () => true), googPre = sumIf(googCs, (x) => isPreorderCampaign(x.campaign));
       const chanTot = metaTot + googTot;
-      const shareProduced = chanTot > 0 ? (metaPre + googPre) / chanTot : 0;
-      const producedSel = fulCats.includes('on-demand') || fulCats.includes('from-batch');
+      const sharePreorder = chanTot > 0 ? (metaPre + googPre) / chanTot : 0; // pool campanhas pre-order
+      const shareNonPre = 1 - sharePreorder;                                 // pool demais campanhas
+      const osRev = (cat: string) => Number((Array.isArray(originShareRows) ? originShareRows : []).find((r: any) => r.category === cat)?.revenue) || 0;
+      const inRev = osRev('in-stock'), odRev = osRev('on-demand');
+      const baseRev = inRev + odRev;
+      const inShare = baseRev > 0 ? inRev / baseRev : 0.5;   // proporção da receita estoque
+      const odShare = baseRev > 0 ? odRev / baseRev : 0.5;   // proporção da receita sob demanda
+      const preorderSel = fulCats.includes('pre-order');
+      const onDemandSel = fulCats.includes('on-demand') || fulCats.includes('from-batch');
       const inStockSel = fulCats.includes('in-stock');
-      _fulFactor = (producedSel ? shareProduced : 0) + (inStockSel ? 1 - shareProduced : 0);
-      console.log(`[main ful ${market}]`, `shareProduced=${shareProduced.toFixed(3)} factor=${_fulFactor.toFixed(3)}`);
+      _fulFactor = (preorderSel ? sharePreorder : 0)
+                 + shareNonPre * ((inStockSel ? inShare : 0) + (onDemandSel ? odShare : 0));
+      console.log(`[main ful ${market}]`, `preOrder=${sharePreorder.toFixed(3)} nonPre=${shareNonPre.toFixed(3)} inShare=${inShare.toFixed(3)} odShare=${odShare.toFixed(3)} factor=${_fulFactor.toFixed(3)}`);
     } catch (e) { console.warn('[main ful spend]', e); }
   }
   let spend = finalMetaSpend + finalGoogleSpend + fixedToolsCost + agentShopCost;
@@ -967,16 +977,19 @@ export async function getDashboardPayload(
   // Ordena por custo desc
   channelCosts.sort((a, b) => b.cost - a.cost);
 
-  // Cassia 2026-06-17: share por origem (estoque vs pre-order) — sempre, independente do filtro.
+  // Cassia 2026-06-20: share por origem em 3 categorias (In Stock / On-Demand / Pre-Order),
+  // sempre, independente do filtro. Pre-Order = produto da coleção de pré-venda.
   const _osRow = (cat: string) => (Array.isArray(originShareRows) ? originShareRows : []).find((r: any) => r.category === cat) || { units: 0, revenue: 0, orders: 0 };
-  const _osIn = _osRow('in-stock'), _osPre = _osRow('pre-order'), _osOther = _osRow('other');
-  const _osTotalUnits = num(_osIn.units) + num(_osPre.units) + num(_osOther.units);
-  const _osTotalRev = num(_osIn.revenue) + num(_osPre.revenue) + num(_osOther.revenue);
+  const _osIn = _osRow('in-stock'), _osOd = _osRow('on-demand'), _osPre = _osRow('pre-order'), _osOther = _osRow('other');
+  const _osTotalUnits = num(_osIn.units) + num(_osOd.units) + num(_osPre.units) + num(_osOther.units);
+  const _osTotalRev = num(_osIn.revenue) + num(_osOd.revenue) + num(_osPre.revenue) + num(_osOther.revenue);
+  const _bucket = (r: any) => ({ units: num(r.units), revenue: num(r.revenue), orders: num(r.orders), unitsShare: _osTotalUnits > 0 ? num(r.units) / _osTotalUnits : 0, revenueShare: _osTotalRev > 0 ? num(r.revenue) / _osTotalRev : 0 });
   const originShare = {
     totalUnits: _osTotalUnits,
     totalRevenue: _osTotalRev,
-    inStock: { units: num(_osIn.units), revenue: num(_osIn.revenue), orders: num(_osIn.orders), unitsShare: _osTotalUnits > 0 ? num(_osIn.units) / _osTotalUnits : 0, revenueShare: _osTotalRev > 0 ? num(_osIn.revenue) / _osTotalRev : 0 },
-    preOrder: { units: num(_osPre.units), revenue: num(_osPre.revenue), orders: num(_osPre.orders), unitsShare: _osTotalUnits > 0 ? num(_osPre.units) / _osTotalUnits : 0, revenueShare: _osTotalRev > 0 ? num(_osPre.revenue) / _osTotalRev : 0 },
+    inStock: _bucket(_osIn),
+    onDemand: _bucket(_osOd),
+    preOrder: _bucket(_osPre),
   };
 
   return {

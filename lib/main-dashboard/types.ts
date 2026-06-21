@@ -111,11 +111,12 @@ export interface DashboardPayload {
   topCampaigns: TopCampaignRoas[];
   campaigns: CampaignRow[];
   alerts: DashboardAlert[];
-  // Cassia 2026-06-17: share por origem (estoque vs pre-order) — sempre, independente do filtro.
+  // Cassia 2026-06-20: share por origem em 3 categorias (In Stock / On-Demand / Pre-Order).
   originShare?: {
     totalUnits: number;
     totalRevenue: number;
     inStock: { units: number; revenue: number; orders: number; unitsShare: number; revenueShare: number };
+    onDemand: { units: number; revenue: number; orders: number; unitsShare: number; revenueShare: number };
     preOrder: { units: number; revenue: number; orders: number; unitsShare: number; revenueShare: number };
   };
 }

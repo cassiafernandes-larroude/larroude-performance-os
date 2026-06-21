@@ -15,7 +15,7 @@
 import { runQuery } from './bigquery';
 import type { Granularity, Market } from './types';
 import { dtcCoreFilters } from '@/lib/shared/dtc-filters';
-import { fulfillmentCategoryFilterSQL, FULFILLMENT_LOCATION_IDS, type FulfillmentCategory } from '@/lib/shared/fulfillment-category';
+import { fulfillmentCategoryFilterSQL, preorderOrderPredicateSQL, FULFILLMENT_LOCATION_IDS, type FulfillmentCategory } from '@/lib/shared/fulfillment-category';
 
 // Timezone Shopify (alinhado ao admin oficial)
 // US: America/New_York | BR: America/Sao_Paulo
@@ -217,7 +217,7 @@ export async function queryOriginShare(market: Market, start: string, end: strin
   const inIds = FULFILLMENT_LOCATION_IDS.inStock.map((x) => `'${x}'`).join(',');
   const sql = `
     WITH ord AS (
-      SELECT id,
+      SELECT id, line_items,
         (SELECT IFNULL(SUM(CAST(JSON_VALUE(li,'$.quantity') AS INT64)), 0)
          FROM UNNEST(JSON_QUERY_ARRAY(line_items)) li) AS units,
         CAST(total_price AS NUMERIC) AS revenue
@@ -228,7 +228,8 @@ export async function queryOriginShare(market: Market, start: string, end: strin
     cls AS (
       SELECT units, revenue,
         CASE
-          WHEN id IN (SELECT order_id FROM ${foTable} WHERE CAST(assigned_location_id AS STRING) IN (${preIds})) THEN 'pre-order'
+          WHEN ${preorderOrderPredicateSQL('', dataset)} THEN 'pre-order'
+          WHEN id IN (SELECT order_id FROM ${foTable} WHERE CAST(assigned_location_id AS STRING) IN (${preIds})) THEN 'on-demand'
           WHEN id IN (SELECT order_id FROM ${foTable} WHERE CAST(assigned_location_id AS STRING) IN (${inIds})) THEN 'in-stock'
           ELSE 'other' END AS category
       FROM ord

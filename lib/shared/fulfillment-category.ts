@@ -94,6 +94,15 @@ function motherSkuSql(skuExpr: string): string {
   END`;
 }
 
+// Predicado SQL booleano: pedido é PRE-ORDER (pré-lançamento) — tem ≥1 line item cujo
+// mother SKU está na coleção de pré-venda. Reutilizável em CASE/SELECT (ex.: queryOriginShare).
+export function preorderOrderPredicateSQL(ordersAlias: string, dataset: string, preorderSkus?: string[] | null): string {
+  const a = ordersAlias ? `${ordersAlias}.` : '';
+  const skus = preorderSkus ?? getPreorderMotherSkusCached(dataset.includes('_br') ? 'BR' : 'US');
+  if (!skus || !skus.length) return 'FALSE';
+  return `EXISTS (SELECT 1 FROM UNNEST(JSON_QUERY_ARRAY(${a}line_items)) AS _pli WHERE ${motherSkuSql("JSON_VALUE(_pli, '$.sku')")} IN (${idIn(skus)}))`;
+}
+
 export function fulfillmentCategoryFilterSQL(
   categories: FulfillmentCategory[] | null | undefined,
   ordersAlias: string,

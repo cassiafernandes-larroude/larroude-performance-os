@@ -282,10 +282,20 @@ export async function getMetricBundle(
         const googTot = googC.reduce((s: number, x: any) => s + (Number(x.spend) || 0), 0);
         const googPre = googC.filter((x: any) => isPreorderCampaign(x.campaign)).reduce((s: number, x: any) => s + (Number(x.spend) || 0), 0);
         const chanTot = metaTot + googTot;
-        const shareProduced = chanTot > 0 ? (metaPre + googPre) / chanTot : 0;
+        // Cassia 2026-06-20: Pre-Order <- campanhas pre-order; In-Stock + On-Demand <- demais,
+        // divididas proporcionalmente pela receita de cada origem (queryOriginShare).
+        const { queryOriginShare } = await import("@/lib/main-dashboard/queries");
+        const osRows: any[] = await queryOriginShare(market as any, range.from, range.to).catch(() => []);
+        const osRev = (cat: string) => Number((osRows || []).find((r: any) => r.category === cat)?.revenue) || 0;
+        const inRev = osRev("in-stock"), odRev = osRev("on-demand"); const baseRev = inRev + odRev;
+        const inShare = baseRev > 0 ? inRev / baseRev : 0.5, odShare = baseRev > 0 ? odRev / baseRev : 0.5;
+        const sharePreorder = chanTot > 0 ? (metaPre + googPre) / chanTot : 0;
+        const shareNonPre = 1 - sharePreorder;
+        const preorderSel = fulCats.includes("pre-order");
         const producedSel = fulCats.includes("on-demand") || fulCats.includes("from-batch");
         const inStockSel = fulCats.includes("in-stock");
-        const factor = (producedSel ? shareProduced : 0) + (inStockSel ? 1 - shareProduced : 0);
+        const factor = (preorderSel ? sharePreorder : 0) + shareNonPre * ((inStockSel ? inShare : 0) + (producedSel ? odShare : 0));
+        const shareProduced = sharePreorder; // (compat log)
         cSpend *= factor; pSpend *= factor;
         cMetaSpend *= factor; pMetaSpend *= factor;
         cGoogleSpend *= factor; pGoogleSpend *= factor;
