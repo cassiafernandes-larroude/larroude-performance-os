@@ -26,8 +26,9 @@ const API_VERSION = process.env.SHOPIFY_API_VERSION_OVERRIDE || '2024-07';
  * Executa query ShopifyQL via Admin GraphQL.
  * Endpoint: /admin/api/2024-07/graphql.json com shopifyqlQuery
  */
-async function runShopifyQL(market: Market, query: string): Promise<{
+export async function runShopifyQL(market: Market, query: string): Promise<{
   rows: Record<string, any>[];
+  columns?: { name: string; dataType: string }[];
   raw?: any;
   error?: string;
 }> {
@@ -88,7 +89,8 @@ async function runShopifyQL(market: Market, query: string): Promise<{
       table.columns!.forEach((col: any, i: number) => { obj[col.name] = row[i]; });
       return obj;
     });
-    return { rows, raw: json };
+    const columns = (table.columns || []).map((c: any) => ({ name: c.name, dataType: c.dataType }));
+    return { rows, columns, raw: json };
   } catch (err: any) {
     console.warn(`[shopify-admin ${market}] fetch falhou:`, err?.message);
     return { rows: [], error: err?.message };
