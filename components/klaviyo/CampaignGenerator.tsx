@@ -44,6 +44,41 @@ export default function CampaignGenerator({ initialMarket = "US" }: { initialMar
   const [draftUrl, setDraftUrl] = useState<string | null>(null);
   const [draftError, setDraftError] = useState<string | null>(null);
 
+  const [templateLoading, setTemplateLoading] = useState(false);
+  const [templateError, setTemplateError] = useState<string | null>(null);
+
+  function genPayload() {
+    return {
+      market,
+      type,
+      objective,
+      destinationUrl,
+      offer: offer || undefined,
+      productName: productName || undefined,
+      revenueGoal: revenueGoal ? Number(revenueGoal.replace(/[^\d]/g, "")) || undefined : undefined,
+      creatives: creatives.filter((c) => c.imageUrl.trim()),
+    };
+  }
+
+  async function fetchTemplate(payload: ReturnType<typeof genPayload>) {
+    setTemplateLoading(true);
+    setTemplateError(null);
+    try {
+      const res = await fetch("/api/klaviyo/generate-template", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erro ao gerar o template.");
+      setCampaign((prev) => (prev ? { ...prev, html: data.html } : prev));
+    } catch (e) {
+      setTemplateError((e as Error).message);
+    } finally {
+      setTemplateLoading(false);
+    }
+  }
+
   function updateCreative(i: number, patch: Partial<CreativeInput>) {
     setCreatives((cs) => cs.map((c, idx) => (idx === i ? { ...c, ...patch } : c)));
   }
@@ -73,31 +108,26 @@ export default function CampaignGenerator({ initialMarket = "US" }: { initialMar
     setCampaign(null);
     setDraftUrl(null);
     setDraftError(null);
+    setTemplateError(null);
     if (!objective.trim() || !destinationUrl.trim()) {
       setError("Preencha o objetivo e o link de destino.");
       return;
     }
     setLoading(true);
     try {
+      const payload = genPayload();
       const res = await fetch("/api/klaviyo/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          market,
-          type,
-          objective,
-          destinationUrl,
-          offer: offer || undefined,
-          productName: productName || undefined,
-          revenueGoal: revenueGoal ? Number(revenueGoal.replace(/[^\d]/g, "")) || undefined : undefined,
-          creatives: creatives.filter((c) => c.imageUrl.trim()),
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erro ao gerar campanha.");
       setCampaign(data.campaign);
       setContext(data.context);
       setSelectedSubject(0);
+      // Etapa 2: o template (HTML) é gerado em paralelo, sem travar o preview dos assuntos.
+      void fetchTemplate(payload);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -106,7 +136,7 @@ export default function CampaignGenerator({ initialMarket = "US" }: { initialMar
   }
 
   async function handleCreateDraft() {
-    if (!campaign) return;
+    if (!campaign || !campaign.html) return;
     setCreating(true);
     setDraftError(null);
     setDraftUrl(null);
@@ -480,13 +510,26 @@ export default function CampaignGenerator({ initialMarket = "US" }: { initialMar
                     ? `Duplicado de "${context.baseTemplate.campaignName}" (último ${context.focusTypeLabel} enviado em ${context.baseTemplate.sendDate}) — imagem e copy ajustadas.`
                     : `Sem e-mail anterior do tipo ${context?.focusTypeLabel ?? ""} — template criado do zero.`}
                 </p>
-                <iframe
-                  title="preview"
-                  sandbox=""
-                  srcDoc={campaign.html}
-                  className="w-full rounded-lg"
-                  style={{ height: 480, border: "1px solid var(--border, #eee)", background: "#fff" }}
-                />
+                {campaign.html ? (
+                  <iframe
+                    title="preview"
+                    sandbox=""
+                    srcDoc={campaign.html}
+                    className="w-full rounded-lg"
+                    style={{ height: 480, border: "1px solid var(--border, #eee)", background: "#fff" }}
+                  />
+                ) : templateError ? (
+                  <p className="text-xs flex items-start gap-1.5" style={{ color: "#d33" }}>
+                    <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" /> {templateError}
+                  </p>
+                ) : (
+                  <div
+                    className="flex items-center justify-center gap-2 text-sm rounded-lg"
+                    style={{ height: 200, border: "1px dashed var(--border, #ddd)", color: "var(--ink-muted, #999)" }}
+                  >
+                    <Loader2 className="w-4 h-4 animate-spin" /> Gerando template… (alguns segundos)
+                  </div>
+                )}
               </Card>
 
               {/* Criar rascunho */}
@@ -497,12 +540,12 @@ export default function CampaignGenerator({ initialMarket = "US" }: { initialMar
                 </p>
                 <button
                   onClick={handleCreateDraft}
-                  disabled={creating}
+                  disabled={creating || !campaign.html}
                   className="w-full py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60"
                   style={{ background: "var(--pink, #e8508d)", color: "#fff" }}
                 >
-                  {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                  {creating ? "Criando rascunho…" : "Criar rascunho no Klaviyo"}
+                  {creating || templateLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                  {creating ? "Criando rascunho…" : !campaign.html ? "Aguardando o template…" : "Criar rascunho no Klaviyo"}
                 </button>
                 {draftUrl && (
                   <a

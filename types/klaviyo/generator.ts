@@ -129,7 +129,7 @@ export interface GeneratedCampaign {
   segmentationRationale: string;
   goalPlan: GoalPlan | null;               // preenchido quando há meta de faturamento
   recommendedSendDay: string;              // ex.: "Quinta-feira ~10h"
-  html: string;                            // template completo
+  html?: string;                           // template completo — preenchido na 2ª etapa (generate-template)
   campaignNameSuggestion: string;
   rationale: string;                       // resumo estratégico
 }
