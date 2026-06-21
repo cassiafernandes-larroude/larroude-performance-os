@@ -17,6 +17,7 @@ const titleMap: Record<string, string> = {
   "/meta-ads": "Meta Ads",
   "/google-ads": "Google Ads",
   "/shopify": "Shopify",
+  "/funil": "Funil de Conversão",
   "/inventory": "Inventory Intelligence",
   "/site-performance": "Site Performance",
   "/diagnostics": "Diagnostics",
