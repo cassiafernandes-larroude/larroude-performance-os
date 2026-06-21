@@ -98,7 +98,7 @@ export async function GET(req: NextRequest) {
       .map((g) => ({ ...g, roas: g.spend > 0 ? g.revenue / g.spend : 0, ads: g.ads.sort((a, b) => b.spend - a.spend) }))
       .sort((a, b) => b.spend - a.spend);
 
-    return NextResponse.json({ collections }, { headers: { 'Cache-Control': 's-maxage=600, stale-while-revalidate=3600, public' } });
+    return NextResponse.json({ collections, _debug: { accounts: accounts.length, adsRaw: adsRaw.length, collAds: collAds.length, sampleNames: adsRaw.slice(0, 3).map((r) => r.ad_name) } }, { headers: { 'Cache-Control': 's-maxage=600, stale-while-revalidate=3600, public' } });
   } catch (e: any) {
     console.error('[collections-performance]', e?.message || e);
     return NextResponse.json({ error: e?.message || 'Internal error' }, { status: 500 });
