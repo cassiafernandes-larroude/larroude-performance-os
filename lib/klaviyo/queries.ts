@@ -89,11 +89,11 @@ export async function listSegments(market: Market) {
   });
 }
 
-// Lists (subscription growth).
+// Lists (subscription growth). Klaviyo limita /lists a page_size máx. 10 (Cassia 2026-06-21: era 50 → 400).
 export async function listLists(market: Market) {
   return klaviyoPaginate(market, '/lists', {
     'fields[list]': 'name,created,updated',
-    'page[size]': 50
+    'page[size]': 10
   });
 }
 
