@@ -60,12 +60,12 @@ async function fxBrlPerUsd(yyyymm: string): Promise<number> {
 // Ranking de UMA praça, com imagem + período anterior. Memoizado por praça+janela+origem.
 async function rankingForMarket(market: Market, start: string, end: string, fulCats?: FulfillmentCategory[] | null): Promise<PerfRow[]> {
   const fulKey = fulCats && fulCats.length ? fulCats.slice().sort().join('+') : 'all';
-  return memo(`pp-rank:${market}:${start}:${end}:${fulKey}:v8`, TTL_30M, async () => {
+  return memo(`pp-rank:${market}:${start}:${end}:${fulKey}:v9`, TTL_30M, async () => {
     const { from: pStart, to: pEnd } = previousRangeOf(start, end);
     const [cur, prev, imgs] = await Promise.all([
       getProductPerformance(market, start, end, fulCats),
       getProductPerformance(market, pStart, pEnd, fulCats),
-      memo(`pp-img:${market}:v6`, TTL_6H, () => getProductImages(market)),
+      memo(`pp-img:${market}:v7`, TTL_6H, () => getProductImages(market)),
     ]);
     const prevMap = new Map(prev.map((r) => [r.motherSku, r]));
     return cur.map((r) => {

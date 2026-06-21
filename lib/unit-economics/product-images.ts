@@ -69,13 +69,15 @@ function collabOf(title: string, titles: string[]): string | null {
     if (m) { const n = cleanCollab(m[1]); if (n) names.push(n); }
   }
   if (names.length) return names.sort((a, b) => a.length - b.length)[0]; // base do designer
-  // fallback pelo TÍTULO (muitos produtos só têm a coleção genérica "Larroudé Collabs"):
+  // fallback pelo TÍTULO — SÓ com delimitador (":"/"—"/"–") logo após o designer, pra não
+  // capturar a descrição do produto. E limita a ≤3 palavras (nome de designer é curto).
+  const short = (n: string): string | null => (n && n.split(/\s+/).length <= 3 && n.length <= 24 ? n : null);
   //   "Larroudé x/×/by/for <Designer>: ..."  (ex.: "Larroudé x Kenneth Cole: Sandal", "Larroudé x Nicolò B.: Nana")
-  const tx = title.match(/^\s*larroud[eé]\s*(?:x|×|by|for)\s+(.+)$/i);
-  if (tx) { const n = cleanCollab(tx[1]); if (n) return n; }
+  const tx = title.match(/^\s*larroud[eé]\s*(?:x|×|by|for)\s+([^:—–]+)[:—–]/i);
+  if (tx) { const n = short(cleanCollab(tx[1])); if (n) return n; }
   //   "<Designer> by L.: ..."
   const t = title.match(/^(.+?)\s+by\s+l\.?\s*[:\-]/i);
-  if (t) { const n = cleanCollab(t[1]); if (n) return n; }
+  if (t) { const n = short(cleanCollab(t[1])); if (n) return n; }
   return null;
 }
 
