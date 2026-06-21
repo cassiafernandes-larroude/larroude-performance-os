@@ -35,8 +35,8 @@ function sanitizeSlug(slug: string): string {
 export async function generateCampaign(
   input: GeneratorInput
 ): Promise<{ campaign: GeneratedCampaign; context: PerformanceContext }> {
-  // Janela ampla (12M) para análise completa do histórico, não só campanhas recentes.
-  const context = await buildPerformanceContext(input.market, input.type, input.period || '12M');
+  // Janela 6M: equilíbrio entre análise ampla e tempo de resposta (a voz já está embutida em brand-voice.ts).
+  const context = await buildPerformanceContext(input.market, input.type, input.period || '6M');
 
   // Plano de segmentação pela meta de faturamento (determinístico, em código).
   let goalPlan: GoalPlan | null = null;
