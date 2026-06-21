@@ -19,16 +19,16 @@ const ADMIN_TOKENS: Record<Market, string | undefined> = {
 };
 
 // Cassia 2026-06-21: shopifyqlQuery foi REMOVIDO da 2024-07 (probe: "Field 'shopifyqlQuery'
-// doesn't exist on type 'QueryRoot'"). Continua funcionando apenas na API `unstable` (confirmado
-// via conector Shopify). Por isso o default agora é `unstable` — revive sessões/CVR/funil.
-// Override manual via SHOPIFY_API_VERSION_OVERRIDE.
-const API_VERSION = process.env.SHOPIFY_API_VERSION_OVERRIDE || 'unstable';
+// doesn't exist on type 'QueryRoot'"). Continua funcionando apenas na API `unstable` — mas isso
+// é passado POR CHAMADA (param apiVersion), não como default global, p/ não mexer nas chamadas
+// existentes. Override manual via SHOPIFY_API_VERSION_OVERRIDE.
+const API_VERSION = process.env.SHOPIFY_API_VERSION_OVERRIDE || '2024-07';
 
 /**
  * Executa query ShopifyQL via Admin GraphQL.
  * Endpoint: /admin/api/2024-07/graphql.json com shopifyqlQuery
  */
-export async function runShopifyQL(market: Market, query: string): Promise<{
+export async function runShopifyQL(market: Market, query: string, apiVersion?: string): Promise<{
   rows: Record<string, any>[];
   columns?: { name: string; dataType: string }[];
   raw?: any;
@@ -39,7 +39,7 @@ export async function runShopifyQL(market: Market, query: string): Promise<{
   if (!token) {
     return { rows: [], error: `SHOPIFY_${market}_ADMIN_API_TOKEN não configurado` };
   }
-  const url = `https://${domain}/admin/api/${API_VERSION}/graphql.json`;
+  const url = `https://${domain}/admin/api/${apiVersion || API_VERSION}/graphql.json`;
   const body = {
     query: `query ShopifyQL($q: String!) {
       shopifyqlQuery(query: $q) {

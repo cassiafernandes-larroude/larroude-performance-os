@@ -56,7 +56,7 @@ function mapFunnelRow(r: Record<string, any>, dateKey: string): FunnelPoint {
 /** Série do funil por granularidade (ShopifyQL direto do Shopify). */
 export async function getFunnelSeries(market: Market, since: string, until: string, gran: Granularity): Promise<FunnelPoint[]> {
   const q = `FROM sessions SHOW ${FUNNEL_COLS} GROUP BY ${gran} SINCE ${since} UNTIL ${until}`;
-  const { rows, error } = await runShopifyQL(market, q);
+  const { rows, error } = await runShopifyQL(market, q, 'unstable');
   if (error) throw new Error(`ShopifyQL funnel: ${error}`);
   return rows
     .map((r) => mapFunnelRow(r, gran))
@@ -67,7 +67,7 @@ export async function getFunnelSeries(market: Market, since: string, until: stri
 /** Totais do funil no período (sem GROUP BY). */
 export async function getFunnelTotals(market: Market, since: string, until: string): Promise<FunnelTotals> {
   const q = `FROM sessions SHOW ${FUNNEL_COLS} SINCE ${since} UNTIL ${until}`;
-  const { rows, error } = await runShopifyQL(market, q);
+  const { rows, error } = await runShopifyQL(market, q, 'unstable');
   if (error) throw new Error(`ShopifyQL funnel totals: ${error}`);
   const r = rows[0] ?? {};
   return {
