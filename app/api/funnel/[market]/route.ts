@@ -89,8 +89,12 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
         overallCvr: share(totals.completed, totals.sessions),
       };
 
-      const alerts: Array<{ step: string; todayRate: number; periodRate: number; dropPct: number }> = [];
-      if (today && today.sessions >= 100) {
+      // Cassia 2026-06-22: status de cada transição do funil HOJE vs média do período, sempre visível.
+      // Severidade por desvio relativo: crítico (queda ≥40%), atenção (≥20%), acima (alta ≥20%), normal.
+      // 'insufficient' quando o denominador da etapa hoje é pequeno demais p/ ser confiável.
+      type Severity = 'critical' | 'warning' | 'ok' | 'good' | 'insufficient';
+      const stepStatus: Array<{ step: string; todayRate: number; periodRate: number; deltaPct: number; severity: Severity }> = [];
+      if (today && today.sessions >= 50) {
         const steps = [
           { label: 'Sessões → Carrinho', tn: today.addToCart, td: today.sessions, pn: totals.addToCart, pd: totals.sessions },
           { label: 'Carrinho → Checkout', tn: today.reachedCheckout, td: today.addToCart, pn: totals.reachedCheckout, pd: totals.addToCart },
@@ -99,13 +103,22 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
         for (const s of steps) {
           const todayRate = share(s.tn, s.td);
           const periodRate = share(s.pn, s.pd);
-          if (periodRate > 0 && todayRate < periodRate * 0.6 && s.td >= 30) {
-            alerts.push({ step: s.label, todayRate, periodRate, dropPct: ((periodRate - todayRate) / periodRate) * 100 });
-          }
+          const deltaPct = periodRate > 0 ? ((todayRate - periodRate) / periodRate) * 100 : 0;
+          let severity: Severity;
+          if (s.td < 25 || periodRate <= 0) severity = 'insufficient';
+          else if (todayRate < periodRate * 0.60) severity = 'critical';
+          else if (todayRate < periodRate * 0.80) severity = 'warning';
+          else if (todayRate > periodRate * 1.20) severity = 'good';
+          else severity = 'ok';
+          stepStatus.push({ step: s.label, todayRate, periodRate, deltaPct, severity });
         }
       }
+      // Banner só dispara nas etapas problemáticas (queda); inclui dropPct p/ compat com o banner.
+      const alerts = stepStatus
+        .filter((s) => s.severity === 'critical' || s.severity === 'warning')
+        .map((s) => ({ step: s.step, todayRate: s.todayRate, periodRate: s.periodRate, dropPct: -s.deltaPct, severity: s.severity }));
 
-      return { available: true, market, since, until, gran, series, totals, shares, payment, today, alerts, shareSeries, context, mediaSessTotal, crmSessTotal, directSessTotal, organicSessTotal, paidOrdersTotal };
+      return { available: true, market, since, until, gran, series, totals, shares, payment, today, alerts, stepStatus, shareSeries, context, mediaSessTotal, crmSessTotal, directSessTotal, organicSessTotal, paidOrdersTotal };
     });
     return NextResponse.json(result, {
       headers: { 'Cache-Control': 'public, max-age=300, s-maxage=600, stale-while-revalidate=3600' },
@@ -117,7 +130,7 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
       available: false, market, since, until, gran, error: msg,
       series: [], totals: null, shares: null,
       payment: { cards: [], cardTotal: 0, pixPaid: 0, pixPending: 0, other: 0, hasPix: market === 'BR' }, today: null, alerts: [],
-      shareSeries: [], context: [], mediaSessTotal: 0, crmSessTotal: 0, directSessTotal: 0, organicSessTotal: 0, paidOrdersTotal: 0,
+      stepStatus: [], shareSeries: [], context: [], mediaSessTotal: 0, crmSessTotal: 0, directSessTotal: 0, organicSessTotal: 0, paidOrdersTotal: 0,
     });
   }
 }

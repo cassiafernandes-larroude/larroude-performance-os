@@ -21,7 +21,8 @@ interface Bundle {
   shares: { cartFromSessions: number; checkoutFromCart: number; completedFromCheckout: number; overallCvr: number } | null;
   payment: { cards: Array<{ brand: string; orders: number }>; cardTotal: number; pixPaid: number; pixPending: number; other: number; hasPix: boolean };
   today: { sessions: number; addToCart: number; reachedCheckout: number; completed: number } | null;
-  alerts: Array<{ step: string; todayRate: number; periodRate: number; dropPct: number }>;
+  alerts: Array<{ step: string; todayRate: number; periodRate: number; dropPct: number; severity: 'critical' | 'warning' }>;
+  stepStatus: Array<{ step: string; todayRate: number; periodRate: number; deltaPct: number; severity: 'critical' | 'warning' | 'ok' | 'good' | 'insufficient' }>;
   shareSeries: Array<{ date: string; cart: number; checkout: number; pedido: number; cvr: number }>;
   context: Array<{ date: string; sessions: number; mediaSessions: number; crmSessions: number; directSessions: number; organicSessions: number; addToCart: number; checkout: number; paidOrders: number; bounceRate: number }>;
   mediaSessTotal: number;
@@ -55,6 +56,15 @@ const STAGES = [
   { key: 'reachedCheckout', label: 'Checkout (info pgto)', color: '#f59e0b' },
   { key: 'completed', label: 'Pedido concluído', color: '#10b981' },
 ] as const;
+
+// Cassia 2026-06-22: semáforo do alerta de funil de HOJE.
+const SEV: Record<string, { color: string; bg: string; label: string }> = {
+  critical: { color: '#e11d48', bg: 'rgba(225,29,72,0.10)', label: 'Crítico' },
+  warning: { color: '#f59e0b', bg: 'rgba(245,158,11,0.10)', label: 'Atenção' },
+  ok: { color: '#10b981', bg: 'rgba(16,185,129,0.08)', label: 'Normal' },
+  good: { color: '#0ea5e9', bg: 'rgba(14,165,233,0.08)', label: 'Acima' },
+  insufficient: { color: '#94a3b8', bg: 'rgba(148,163,184,0.08)', label: 'Sem dados' },
+};
 
 export default function FunnelDashboard() {
   const params = useSearchParams();
@@ -156,21 +166,25 @@ export default function FunnelDashboard() {
       {data && data.available && t && sh && (
         <div className="space-y-6">
           {/* ALERTA tempo real */}
-          {data.alerts.length > 0 && (
-            <div className="card" style={{ background: 'rgba(225,29,72,0.08)', border: '1px solid rgba(225,29,72,0.4)' }}>
-              <div className="flex items-center gap-2 mb-2 font-semibold" style={{ color: '#e11d48' }}>
-                <span style={{ width: 9, height: 9, borderRadius: 99, background: '#e11d48', display: 'inline-block', animation: 'pulse 1.5s infinite' }} />
-                ⚠ Possível problema no funil HOJE
+          {data.alerts.length > 0 && (() => {
+            const worst = data.alerts.some((a) => a.severity === 'critical') ? 'critical' : 'warning';
+            const sv = SEV[worst];
+            return (
+              <div className="card" style={{ background: sv.bg, border: `1px solid ${sv.color}66` }}>
+                <div className="flex items-center gap-2 mb-2 font-semibold" style={{ color: sv.color }}>
+                  <span style={{ width: 9, height: 9, borderRadius: 99, background: sv.color, display: 'inline-block', animation: 'pulse 1.5s infinite' }} />
+                  {worst === 'critical' ? '⚠ Possível problema no funil HOJE' : '⚠ Atenção: etapa do funil abaixo do normal HOJE'}
+                </div>
+                <div className="space-y-1 text-[12px]" style={{ color: 'var(--ink)' }}>
+                  {data.alerts.map((a) => (
+                    <div key={a.step}>
+                      <strong>{a.step}</strong>: hoje {fmtP(a.todayRate)} vs média {fmtP(a.periodRate)} do período — queda de <strong style={{ color: SEV[a.severity].color }}>{fmtP(a.dropPct, 0)}</strong>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="space-y-1 text-[12px]" style={{ color: 'var(--ink)' }}>
-                {data.alerts.map((a) => (
-                  <div key={a.step}>
-                    <strong>{a.step}</strong>: hoje {fmtP(a.todayRate)} vs média {fmtP(a.periodRate)} do período — queda de <strong style={{ color: '#e11d48' }}>{fmtP(a.dropPct, 0)}</strong>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Tempo real — funil de HOJE */}
           {data.today && (
@@ -197,6 +211,36 @@ export default function FunnelDashboard() {
                   );
                 })}
               </div>
+
+              {/* Status de cada transição HOJE vs média do período (sempre visível) */}
+              {data.stepStatus.length > 0 && (
+                <div className="mt-4">
+                  <div className="text-[10px] uppercase tracking-wider mb-2" style={{ color: 'var(--ink-muted)' }}>
+                    Conversão de cada etapa · hoje vs média do período
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {data.stepStatus.map((s) => {
+                      const sv = SEV[s.severity];
+                      const up = s.deltaPct >= 0;
+                      return (
+                        <div key={s.step} className="rounded-lg p-3" style={{ background: sv.bg, borderLeft: `3px solid ${sv.color}` }}>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[11px] font-semibold" style={{ color: 'var(--ink)' }}>{s.step}</span>
+                            <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded" style={{ color: sv.color, background: `${sv.color}1a` }}>{sv.label}</span>
+                          </div>
+                          <div className="font-num font-bold text-[18px] mt-1" style={{ color: sv.color }}>{fmtP(s.todayRate)}</div>
+                          <div className="text-[10px] mt-0.5" style={{ color: 'var(--ink-muted)' }}>
+                            média {fmtP(s.periodRate)}
+                            {s.severity !== 'insufficient' && (
+                              <span style={{ color: sv.color, fontWeight: 600 }}> · {up ? '▲' : '▼'} {fmtP(Math.abs(s.deltaPct), 0)}</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
