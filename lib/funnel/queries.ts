@@ -25,12 +25,14 @@ export interface FunnelPoint {
   addToCart: number;
   reachedCheckout: number;
   completed: number;
+  bounceRate: number; // % (0-100)
 }
 export interface FunnelTotals {
   sessions: number;
   addToCart: number;
   reachedCheckout: number;
   completed: number;
+  bounceRate: number; // % (0-100)
 }
 export interface CardBrand { brand: string; orders: number; }
 export interface PaymentBreakdown {
@@ -49,7 +51,7 @@ const TX_TABLE: Record<Market, string> = {
   BR: 'larroude-data-prod.stg_shopify_br.transactions',
 };
 
-const FUNNEL_COLS = 'sessions, sessions_with_cart_additions, sessions_that_reached_checkout, sessions_that_completed_checkout';
+const FUNNEL_COLS = 'sessions, sessions_with_cart_additions, sessions_that_reached_checkout, sessions_that_completed_checkout, bounce_rate';
 
 function mapFunnelRow(r: Record<string, any>, dateKey: string): FunnelPoint {
   return {
@@ -58,6 +60,7 @@ function mapFunnelRow(r: Record<string, any>, dateKey: string): FunnelPoint {
     addToCart: Number(r.sessions_with_cart_additions) || 0,
     reachedCheckout: Number(r.sessions_that_reached_checkout) || 0,
     completed: Number(r.sessions_that_completed_checkout) || 0,
+    bounceRate: (Number(r.bounce_rate) || 0) * 100, // ShopifyQL devolve fração 0-1
   };
 }
 
@@ -83,6 +86,7 @@ export async function getFunnelTotals(market: Market, since: string, until: stri
     addToCart: Number(r.sessions_with_cart_additions) || 0,
     reachedCheckout: Number(r.sessions_that_reached_checkout) || 0,
     completed: Number(r.sessions_that_completed_checkout) || 0,
+    bounceRate: (Number(r.bounce_rate) || 0) * 100,
   };
 }
 
@@ -147,31 +151,37 @@ export async function getPaymentBreakdown(market: Market, since: string, until: 
 export interface SpendPoint { date: string; spend: number; }
 export interface CrmPoint { date: string; sends: number; }
 
-// Cassia 2026-06-21: classificação de sessões por origem (UTM).
-// Mídia = google/criteo/meta (no BR o Meta vem como placements Instagram_*/Facebook_*).
-const MEDIA_SOURCE_RE = /(google|criteo|meta|facebook|instagram|^ig$|^ig[_-]|^fb$|^fb[_-]|audience_network|^an$)/i;
-// CRM = email/SMS/WhatsApp (US: email+sms; BR: email+sms+whatsapp). Detecta pelo utm_medium.
-const CRM_MEDIUM_RE = /(email|sms|whats|flow|campaign|newsletter|push|mobile_messaging)/i;
+// Cassia 2026-06-21: classificação de sessões por ORIGEM, 1 só dimensão (utm_medium) — buckets
+// mutuamente exclusivos validados nos 2 mercados (cross-tab utm_source×utm_medium):
+//   mídia  = tráfego pago (cpc/paid/display/paid_social) → captura google+criteo+meta
+//   CRM    = e-mail/SMS/WhatsApp (Klaviyo flow/campaign, attentive sms/text, whats)
+//   orgânico = social/organic/referral (social orgânico; pago usa cpc/paid)
+//   direto = sem utm_medium (tráfego não-marcado/direto)
+// (afiliados awin/shopmy ficam de fora dos 4 — entram só no total do site.)
+function classifyMedium(medium: string | null | undefined): 'media' | 'crm' | 'organic' | 'direct' | 'other' {
+  const m = String(medium || '').trim().toLowerCase();
+  if (!m) return 'direct';
+  if (m === 'cpc' || m === 'paid' || m === 'display' || m === 'cpm' || m === 'paid_social' || m === 'paidsocial') return 'media';
+  if (m === 'email' || m === 'sms' || m === 'text' || m === 'flow' || m === 'campaign' || m === 'newsletter' || m === 'push'
+    || m.includes('whats') || m === 'mobile_messaging') return 'crm';
+  if (m === 'social' || m === 'organic' || m === 'referral') return 'organic';
+  return 'other';
+}
 
-export interface SessionSplit { media: number; crm: number; }
+export interface SessionSplit { media: number; crm: number; direct: number; organic: number; }
 
-/** Sessões por período divididas em mídia (utm_source) e CRM (utm_medium), via ShopifyQL. */
+/** Sessões por período divididas em mídia/CRM/direto/orgânico (utm_medium), via ShopifyQL. */
 export async function getSessionSplitByPeriod(market: Market, since: string, until: string, gran: Granularity): Promise<Map<string, SessionSplit>> {
-  const [src, med] = await Promise.all([
-    runShopifyQL(market, `FROM sessions SHOW sessions GROUP BY ${gran}, utm_source SINCE ${since} UNTIL ${until}`, 'unstable'),
-    runShopifyQL(market, `FROM sessions SHOW sessions GROUP BY ${gran}, utm_medium SINCE ${since} UNTIL ${until}`, 'unstable'),
-  ]);
+  const { rows } = await runShopifyQL(market, `FROM sessions SHOW sessions GROUP BY ${gran}, utm_medium SINCE ${since} UNTIL ${until}`, 'unstable');
   const map = new Map<string, SessionSplit>();
-  const get = (d: string) => { let e = map.get(d); if (!e) { e = { media: 0, crm: 0 }; map.set(d, e); } return e; };
-  for (const r of src.rows) {
+  for (const r of rows) {
     const d = r[gran] ? String(r[gran]).slice(0, 10) : '';
     if (!d) continue;
-    if (MEDIA_SOURCE_RE.test(String(r.utm_source || ''))) get(d).media += Number(r.sessions) || 0;
-  }
-  for (const r of med.rows) {
-    const d = r[gran] ? String(r[gran]).slice(0, 10) : '';
-    if (!d) continue;
-    if (CRM_MEDIUM_RE.test(String(r.utm_medium || ''))) get(d).crm += Number(r.sessions) || 0;
+    let e = map.get(d);
+    if (!e) { e = { media: 0, crm: 0, direct: 0, organic: 0 }; map.set(d, e); }
+    const bucket = classifyMedium(r.utm_medium);
+    if (bucket === 'other') continue;
+    e[bucket] += Number(r.sessions) || 0;
   }
   return map;
 }

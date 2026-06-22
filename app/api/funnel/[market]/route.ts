@@ -43,7 +43,7 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
         getFunnelTotals(market, since, until),
         getPaymentBreakdown(market, since, until).catch((e) => { console.warn('[funnel] payment failed:', e?.message); return emptyPay; }),
         getFunnelTotals(market, 'today', 'today').catch(() => null),
-        getSessionSplitByPeriod(market, since, until, gran).catch((e) => { console.warn('[funnel] sessionSplit failed:', e?.message); return new Map<string, { media: number; crm: number }>(); }),
+        getSessionSplitByPeriod(market, since, until, gran).catch((e) => { console.warn('[funnel] sessionSplit failed:', e?.message); return new Map<string, { media: number; crm: number; direct: number; organic: number }>(); }),
         getPaidOrdersDaily(market, since, until).catch((e) => { console.warn('[funnel] paidOrders failed:', e?.message); return []; }),
       ]);
 
@@ -62,19 +62,24 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
         arr.filter((x) => x.date >= from && (toExcl == null || x.date < toExcl)).reduce((s, x) => s + (Number(x[key]) || 0), 0);
       const context = series.map((p, i) => {
         const toExcl = i + 1 < series.length ? series[i + 1].date : null;
-        const split = sessionSplit.get(p.date) || { media: 0, crm: 0 };
+        const split = sessionSplit.get(p.date) || { media: 0, crm: 0, direct: 0, organic: 0 };
         return {
           date: p.date,
           sessions: p.sessions,            // site (total)
-          mediaSessions: split.media,      // google + criteo + meta
+          mediaSessions: split.media,      // pago: google + criteo + meta
           crmSessions: split.crm,          // email + sms + whatsapp
+          directSessions: split.direct,    // tráfego direto (sem utm_medium)
+          organicSessions: split.organic,  // social/organic/referral
           addToCart: p.addToCart,
           checkout: p.reachedCheckout,
           paidOrders: sumRange(paidDaily, 'paidOrders', p.date, toExcl),
+          bounceRate: p.bounceRate,
         };
       });
       const mediaSessTotal = context.reduce((s, x) => s + x.mediaSessions, 0);
       const crmSessTotal = context.reduce((s, x) => s + x.crmSessions, 0);
+      const directSessTotal = context.reduce((s, x) => s + x.directSessions, 0);
+      const organicSessTotal = context.reduce((s, x) => s + x.organicSessions, 0);
       const paidOrdersTotal = paidDaily.reduce((s, x) => s + x.paidOrders, 0);
 
       const shares = {
@@ -100,7 +105,7 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
         }
       }
 
-      return { available: true, market, since, until, gran, series, totals, shares, payment, today, alerts, shareSeries, context, mediaSessTotal, crmSessTotal, paidOrdersTotal };
+      return { available: true, market, since, until, gran, series, totals, shares, payment, today, alerts, shareSeries, context, mediaSessTotal, crmSessTotal, directSessTotal, organicSessTotal, paidOrdersTotal };
     });
     return NextResponse.json(result, {
       headers: { 'Cache-Control': 'public, max-age=300, s-maxage=600, stale-while-revalidate=3600' },
@@ -112,7 +117,7 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
       available: false, market, since, until, gran, error: msg,
       series: [], totals: null, shares: null,
       payment: { cards: [], cardTotal: 0, pixPaid: 0, pixPending: 0, other: 0, hasPix: market === 'BR' }, today: null, alerts: [],
-      shareSeries: [], context: [], mediaSessTotal: 0, crmSessTotal: 0, paidOrdersTotal: 0,
+      shareSeries: [], context: [], mediaSessTotal: 0, crmSessTotal: 0, directSessTotal: 0, organicSessTotal: 0, paidOrdersTotal: 0,
     });
   }
 }

@@ -13,19 +13,21 @@ import MultiLineChart, { type Series } from '@/components/klaviyo/MultiLineChart
 
 type Market = 'US' | 'BR';
 
-interface FunnelPoint { date: string; sessions: number; addToCart: number; reachedCheckout: number; completed: number; }
+interface FunnelPoint { date: string; sessions: number; addToCart: number; reachedCheckout: number; completed: number; bounceRate: number; }
 interface Bundle {
   available: boolean; market: Market; since: string; until: string; gran: string;
   series: FunnelPoint[];
-  totals: { sessions: number; addToCart: number; reachedCheckout: number; completed: number } | null;
+  totals: { sessions: number; addToCart: number; reachedCheckout: number; completed: number; bounceRate: number } | null;
   shares: { cartFromSessions: number; checkoutFromCart: number; completedFromCheckout: number; overallCvr: number } | null;
   payment: { cards: Array<{ brand: string; orders: number }>; cardTotal: number; pixPaid: number; pixPending: number; other: number; hasPix: boolean };
   today: { sessions: number; addToCart: number; reachedCheckout: number; completed: number } | null;
   alerts: Array<{ step: string; todayRate: number; periodRate: number; dropPct: number }>;
   shareSeries: Array<{ date: string; cart: number; checkout: number; pedido: number; cvr: number }>;
-  context: Array<{ date: string; sessions: number; mediaSessions: number; crmSessions: number; addToCart: number; checkout: number; paidOrders: number }>;
+  context: Array<{ date: string; sessions: number; mediaSessions: number; crmSessions: number; directSessions: number; organicSessions: number; addToCart: number; checkout: number; paidOrders: number; bounceRate: number }>;
   mediaSessTotal: number;
   crmSessTotal: number;
+  directSessTotal: number;
+  organicSessTotal: number;
   paidOrdersTotal: number;
   error?: string;
 }
@@ -99,14 +101,22 @@ export default function FunnelDashboard() {
   const ctx = data?.context ?? [];
   const ctxDates = ctx.map((p) => p.date);
 
-  // #2: sessões site × mídia × CRM (todas em contagem de sessões — comparáveis direto, sem índice).
+  // #2: sessões site × mídia × CRM × direto × orgânico (contagens — comparáveis direto, sem índice).
   const mediaHas = ctx.some((p) => p.mediaSessions > 0);
   const crmHas = ctx.some((p) => p.crmSessions > 0);
+  const directHas = ctx.some((p) => p.directSessions > 0);
+  const organicHas = ctx.some((p) => p.organicSessions > 0);
   const sessLines: Series[] = [
     { label: 'Sessões site', values: ctx.map((p) => p.sessions), color: '#5d4ec5' },
     { label: 'Sessões mídia', values: ctx.map((p) => p.mediaSessions), color: '#e11d48' },
     { label: 'Sessões CRM', values: ctx.map((p) => p.crmSessions), color: '#0ea5e9' },
+    { label: 'Sessões direto', values: ctx.map((p) => p.directSessions), color: '#64748b' },
+    { label: 'Sessões orgânico', values: ctx.map((p) => p.organicSessions), color: '#10b981' },
   ];
+
+  // bounce rate por período (barras) — vem do dataset sessions do Shopify (bounce_rate, fração → %).
+  const bounceBars: BarPoint[] = (data?.series ?? []).map((p) => ({ date: p.date, value: p.bounceRate, inPeriod: true }));
+  const bounceHas = (data?.series ?? []).some((p) => p.bounceRate > 0);
 
   // #3: add ao carrinho × checkout × pedidos concluídos (PAGOS).
   const orderLines: Series[] = [
@@ -232,21 +242,36 @@ export default function FunnelDashboard() {
             <div className="card"><BarLineChart title="Pedidos concluídos" data={seriesFor('completed')} color="#10b981" unit="number" market={market} height={200} /></div>
           </div>
 
-          {/* #2 — Sessões site × mídia × CRM */}
+          {/* #2 — Sessões site × mídia × CRM × direto × orgânico */}
           <div className="card">
-            <h3 className="text-[14px] font-semibold mb-1" style={{ color: 'var(--ink)' }}>Sessões site × mídia × CRM</h3>
+            <h3 className="text-[14px] font-semibold mb-1" style={{ color: 'var(--ink)' }}>Sessões site × mídia × CRM × direto × orgânico</h3>
             <p className="text-[11px] mb-3" style={{ color: 'var(--ink-soft)' }}>
-              Sessões totais do site vs. originadas de mídia (Google + Criteo + Meta) e de CRM ({market === 'BR' ? 'e-mail + SMS + WhatsApp' : 'e-mail + SMS'}) — classificadas por UTM no Shopify.
+              Sessões totais do site vs. mídia paga (Google + Criteo + Meta), CRM ({market === 'BR' ? 'e-mail + SMS + WhatsApp' : 'e-mail + SMS'}), direto (sem campanha) e orgânico (social/busca/referência) — classificadas por UTM no Shopify.
             </p>
-            <div className="grid grid-cols-3 gap-3 mb-3">
-              <Stat label="Sessões site" value={fmtN((data.totals!).sessions)} color="#5d4ec5" />
-              <Stat label="Sessões mídia" value={mediaHas ? fmtN(data.mediaSessTotal) : '—'} color="#e11d48" />
-              <Stat label="Sessões CRM" value={crmHas ? fmtN(data.crmSessTotal) : '—'} color="#0ea5e9" />
+            <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 mb-3">
+              <Stat label="Site" value={fmtN((data.totals!).sessions)} color="#5d4ec5" />
+              <Stat label="Mídia" value={mediaHas ? fmtN(data.mediaSessTotal) : '—'} color="#e11d48" />
+              <Stat label="CRM" value={crmHas ? fmtN(data.crmSessTotal) : '—'} color="#0ea5e9" />
+              <Stat label="Direto" value={directHas ? fmtN(data.directSessTotal) : '—'} color="#64748b" />
+              <Stat label="Orgânico" value={organicHas ? fmtN(data.organicSessTotal) : '—'} color="#10b981" />
             </div>
             {ctxDates.length > 1 ? (
               <MultiLineChart title="" dates={ctxDates} series={sessLines} unit="number" market={market} height={260} />
             ) : (
               <p className="text-[12px]" style={{ color: 'var(--ink-muted)' }}>Período curto demais para a série temporal.</p>
+            )}
+          </div>
+
+          {/* Bounce rate (barras) */}
+          <div className="card">
+            <h3 className="text-[14px] font-semibold mb-1" style={{ color: 'var(--ink)' }}>Bounce rate · ao longo do tempo</h3>
+            <p className="text-[11px] mb-3" style={{ color: 'var(--ink-soft)' }}>
+              % de sessões que saíram sem interagir (uma única visualização) — fonte: dataset de sessões do Shopify.
+            </p>
+            {bounceHas ? (
+              <BarLineChart title="Bounce rate" data={bounceBars} color="#f59e0b" unit="percent" market={market} height={240} />
+            ) : (
+              <p className="text-[12px]" style={{ color: 'var(--ink-muted)' }}>Dados de bounce rate indisponíveis no período.</p>
             )}
           </div>
 
