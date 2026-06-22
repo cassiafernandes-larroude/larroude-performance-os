@@ -139,6 +139,88 @@ export default function FunnelDashboard() {
 
   return (
     <div className="px-4 lg:px-8 py-5 lg:py-8 max-w-[1500px] mx-auto">
+      {/* Tempo real (alerta + funil de HOJE) — fica ACIMA do filtro de período pois não depende dele */}
+      {data && data.available && data.today && (
+        <div className="space-y-6 mb-6">
+          {/* ALERTA tempo real */}
+          {data.alerts.length > 0 && (() => {
+            const worst = data.alerts.some((a) => a.severity === 'critical') ? 'critical' : 'warning';
+            const sv = SEV[worst];
+            return (
+              <div className="card" style={{ background: sv.bg, border: `1px solid ${sv.color}66` }}>
+                <div className="flex items-center gap-2 mb-2 font-semibold" style={{ color: sv.color }}>
+                  <span style={{ width: 9, height: 9, borderRadius: 99, background: sv.color, display: 'inline-block', animation: 'pulse 1.5s infinite' }} />
+                  {worst === 'critical' ? '⚠ Possível problema no funil HOJE' : '⚠ Atenção: etapa do funil abaixo do normal HOJE'}
+                </div>
+                <div className="space-y-1 text-[12px]" style={{ color: 'var(--ink)' }}>
+                  {data.alerts.map((a) => (
+                    <div key={a.step}>
+                      <strong>{a.step}</strong>: hoje {fmtP(a.todayRate)} vs média {fmtP(a.periodRate)} do período — queda de <strong style={{ color: SEV[a.severity].color }}>{fmtP(a.dropPct, 0)}</strong>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Tempo real — funil de HOJE */}
+          <div className="card">
+            <div className="flex items-center gap-2 mb-3">
+              <span style={{ width: 8, height: 8, borderRadius: 99, background: '#10b981', display: 'inline-block' }} />
+              <h3 className="text-[14px] font-semibold" style={{ color: 'var(--ink)' }}>Hoje · tempo real</h3>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {STAGES.map((s, i) => {
+                const td = data.today as any;
+                const val = Number(td[s.key]) || 0;
+                const prev = i === 0 ? val : Number(td[STAGES[i - 1].key]) || 0;
+                const sh = i === 0 ? null : prev > 0 ? (val / prev) * 100 : 0;
+                const ofSess = data.today!.sessions > 0 ? (val / data.today!.sessions) * 100 : 0;
+                return (
+                  <div key={s.key} className="rounded-lg p-3" style={{ background: 'var(--paper)' }}>
+                    <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--ink-muted)' }}>{s.label}</div>
+                    <div className="font-num font-bold text-[20px]" style={{ color: s.color }}>{fmtN(val)}</div>
+                    <div className="text-[10px] mt-0.5" style={{ color: 'var(--ink-muted)' }}>
+                      {i === 0 ? '100% das sessões' : `${fmtP(sh as number)} da etapa ant. · ${fmtP(ofSess)} das sessões`}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Status de cada transição HOJE vs média do período (sempre visível) */}
+            {data.stepStatus.length > 0 && (
+              <div className="mt-4">
+                <div className="text-[10px] uppercase tracking-wider mb-2" style={{ color: 'var(--ink-muted)' }}>
+                  Conversão de cada etapa · hoje vs média do período
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {data.stepStatus.map((s) => {
+                    const sv = SEV[s.severity];
+                    const up = s.deltaPct >= 0;
+                    return (
+                      <div key={s.step} className="rounded-lg p-3" style={{ background: sv.bg, borderLeft: `3px solid ${sv.color}` }}>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[11px] font-semibold" style={{ color: 'var(--ink)' }}>{s.step}</span>
+                          <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded" style={{ color: sv.color, background: `${sv.color}1a` }}>{sv.label}</span>
+                        </div>
+                        <div className="font-num font-bold text-[18px] mt-1" style={{ color: sv.color }}>{fmtP(s.todayRate)}</div>
+                        <div className="text-[10px] mt-0.5" style={{ color: 'var(--ink-muted)' }}>
+                          média {fmtP(s.periodRate)}
+                          {s.severity !== 'insufficient' && (
+                            <span style={{ color: sv.color, fontWeight: 600 }}> · {up ? '▲' : '▼'} {fmtP(Math.abs(s.deltaPct), 0)}</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <Header
         market={market}
         period={periodParam}
@@ -165,85 +247,6 @@ export default function FunnelDashboard() {
 
       {data && data.available && t && sh && (
         <div className="space-y-6">
-          {/* ALERTA tempo real */}
-          {data.alerts.length > 0 && (() => {
-            const worst = data.alerts.some((a) => a.severity === 'critical') ? 'critical' : 'warning';
-            const sv = SEV[worst];
-            return (
-              <div className="card" style={{ background: sv.bg, border: `1px solid ${sv.color}66` }}>
-                <div className="flex items-center gap-2 mb-2 font-semibold" style={{ color: sv.color }}>
-                  <span style={{ width: 9, height: 9, borderRadius: 99, background: sv.color, display: 'inline-block', animation: 'pulse 1.5s infinite' }} />
-                  {worst === 'critical' ? '⚠ Possível problema no funil HOJE' : '⚠ Atenção: etapa do funil abaixo do normal HOJE'}
-                </div>
-                <div className="space-y-1 text-[12px]" style={{ color: 'var(--ink)' }}>
-                  {data.alerts.map((a) => (
-                    <div key={a.step}>
-                      <strong>{a.step}</strong>: hoje {fmtP(a.todayRate)} vs média {fmtP(a.periodRate)} do período — queda de <strong style={{ color: SEV[a.severity].color }}>{fmtP(a.dropPct, 0)}</strong>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* Tempo real — funil de HOJE */}
-          {data.today && (
-            <div className="card">
-              <div className="flex items-center gap-2 mb-3">
-                <span style={{ width: 8, height: 8, borderRadius: 99, background: '#10b981', display: 'inline-block' }} />
-                <h3 className="text-[14px] font-semibold" style={{ color: 'var(--ink)' }}>Hoje · tempo real</h3>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {STAGES.map((s, i) => {
-                  const td = data.today as any;
-                  const val = Number(td[s.key]) || 0;
-                  const prev = i === 0 ? val : Number(td[STAGES[i - 1].key]) || 0;
-                  const sh = i === 0 ? null : prev > 0 ? (val / prev) * 100 : 0;
-                  const ofSess = data.today!.sessions > 0 ? (val / data.today!.sessions) * 100 : 0;
-                  return (
-                    <div key={s.key} className="rounded-lg p-3" style={{ background: 'var(--paper)' }}>
-                      <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--ink-muted)' }}>{s.label}</div>
-                      <div className="font-num font-bold text-[20px]" style={{ color: s.color }}>{fmtN(val)}</div>
-                      <div className="text-[10px] mt-0.5" style={{ color: 'var(--ink-muted)' }}>
-                        {i === 0 ? '100% das sessões' : `${fmtP(sh as number)} da etapa ant. · ${fmtP(ofSess)} das sessões`}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Status de cada transição HOJE vs média do período (sempre visível) */}
-              {data.stepStatus.length > 0 && (
-                <div className="mt-4">
-                  <div className="text-[10px] uppercase tracking-wider mb-2" style={{ color: 'var(--ink-muted)' }}>
-                    Conversão de cada etapa · hoje vs média do período
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {data.stepStatus.map((s) => {
-                      const sv = SEV[s.severity];
-                      const up = s.deltaPct >= 0;
-                      return (
-                        <div key={s.step} className="rounded-lg p-3" style={{ background: sv.bg, borderLeft: `3px solid ${sv.color}` }}>
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-[11px] font-semibold" style={{ color: 'var(--ink)' }}>{s.step}</span>
-                            <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded" style={{ color: sv.color, background: `${sv.color}1a` }}>{sv.label}</span>
-                          </div>
-                          <div className="font-num font-bold text-[18px] mt-1" style={{ color: sv.color }}>{fmtP(s.todayRate)}</div>
-                          <div className="text-[10px] mt-0.5" style={{ color: 'var(--ink-muted)' }}>
-                            média {fmtP(s.periodRate)}
-                            {s.severity !== 'insufficient' && (
-                              <span style={{ color: sv.color, fontWeight: 600 }}> · {up ? '▲' : '▼'} {fmtP(Math.abs(s.deltaPct), 0)}</span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
           {/* FUNIL do período + share de cada etapa */}
           <div className="card">
             <h3 className="text-[14px] font-semibold mb-1" style={{ color: 'var(--ink)' }}>Funil · {data.since} → {data.until}</h3>
