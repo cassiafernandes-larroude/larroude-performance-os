@@ -214,6 +214,54 @@ async function productSkusByTag(market: Market, tag: string): Promise<string[]> 
   return [...skus];
 }
 
+const DROP_PRODUCTS_QUERY = `
+  query DropProds($q: String!, $cursor: String) {
+    products(first: 50, query: $q, after: $cursor) {
+      edges { node { title variants(first: 1) { edges { node { sku } } } } }
+      pageInfo { hasNextPage endCursor }
+    }
+  }
+`;
+
+export interface DropProduct { title: string; sku: string; }
+
+/** Lista os produtos de um drop (por tag de produto): título + SKU canônico (modelo+cor+estilo). */
+export async function getDropProducts(market: Market, tag: string): Promise<DropProduct[]> {
+  const url = shopUrl(market);
+  const token = shopToken(market);
+  const out: DropProduct[] = [];
+  const seen = new Set<string>();
+  let cursor: string | null = null;
+  let hasNext = true;
+  let pages = 0;
+  while (hasNext && pages < 50) {
+    pages++;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token },
+      body: JSON.stringify({ query: DROP_PRODUCTS_QUERY, variables: { q: `tag:${tag}`, cursor } }),
+      cache: 'no-store',
+    });
+    if (!res.ok) throw new Error(`Shopify products ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    const json = (await res.json()) as any;
+    if (json.errors?.length) throw new Error(`Shopify products errors: ${JSON.stringify(json.errors).slice(0, 200)}`);
+    const products = json.data?.products;
+    if (!products) break;
+    for (const pe of products.edges) {
+      const firstSku = pe.node.variants?.edges?.[0]?.node?.sku || '';
+      const sku = canonicalSku(firstSku);
+      const title = pe.node.title || '(sem título)';
+      const key = sku || title;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ title, sku });
+    }
+    hasNext = products.pageInfo?.hasNextPage;
+    cursor = products.pageInfo?.endCursor || null;
+  }
+  return out.sort((a, b) => a.title.localeCompare(b.title));
+}
+
 /** Resolve uma collection Shopify → lista de SKUs das variações. */
 async function collectionSkus(market: Market, collectionId: string): Promise<string[]> {
   const url = shopUrl(market);
