@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import type { Market, PeriodKey, PeriodRange } from '@/lib/main-dashboard/types';
 
 type Lang = 'pt' | 'en';
@@ -23,6 +23,8 @@ interface Props {
   title?: string;
   subtitleSuffix?: string;
   lang?: Lang;
+  // Cassia 2026-06-22: conteúdo opcional renderizado ENTRE o título/mercado e o card de filtro de período.
+  beforeFilter?: ReactNode;
 }
 
 // Presets per design spec: Yesterday / 7D / 14D / 28D / 3M / 6M / 12M
@@ -92,6 +94,7 @@ export default function Header({
   title = 'Larroudé - Dashboard',
   subtitleSuffix,
   lang = 'pt',
+  beforeFilter,
 }: Props) {
   const [draftStart, setDraftStart] = useState<string>(customStart ?? '');
   const [draftEnd, setDraftEnd] = useState<string>(customEnd ?? '');
@@ -214,6 +217,8 @@ export default function Header({
           {' '}{t.viaSource}
         </p>
       </div>
+
+      {beforeFilter}
 
       {/* Row 4: filter card */}
       <div
