@@ -285,13 +285,15 @@ export async function getActionResult(
     return null;
   }
 
+  // Vendas: casa pelos SKUs IDENTIFICADOS na tag/collection/manual (exatos via startsWith) — preciso,
+  // não pega outras cores do mesmo modelo. Investido: usa o SKU-mãe (é o que vem no nome do anúncio).
   const mothers = toMothers(rawSkus);
-  const sales = await salesBySkuPrefixes(market, start, end, mothers);
+  const sales = await salesBySkuPrefixes(market, start, end, rawSkus);
   const ad = await getAdSpendForMothers(market, start, end, mothers).catch(() => ({ spend: 0, ok: false }));
   return {
     ...sales,
     basis,
-    skuCount: mothers.length,
+    skuCount: rawSkus.length,
     tag,
     spend: ad.spend,
     spendOk: ad.ok,

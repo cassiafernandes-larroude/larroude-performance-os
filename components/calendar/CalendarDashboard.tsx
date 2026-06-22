@@ -218,9 +218,9 @@ function ActionRow({ a, market }: { a: Action; market: Market }) {
               {a.result.roas != null ? ` · ROAS ${a.result.roas.toFixed(1)}×` : ''}
               {' · '}
               {a.result.basis === 'tag'
-                ? `tag ${a.result.tag} · ${a.result.skuCount} produtos`
+                ? `tag ${a.result.tag} · ${a.result.skuCount} SKUs`
                 : a.result.basis === 'collection'
-                  ? `collection · ${a.result.skuCount} produtos`
+                  ? `collection · ${a.result.skuCount} SKUs`
                   : `${a.result.skuCount} SKU(s)`}
               {a.window ? ` · ${fmtDate(a.window.start)}–${fmtDate(a.window.end)}` : ''}
               {a.result.partial ? ' · ⚠ vendas parciais' : ''}
