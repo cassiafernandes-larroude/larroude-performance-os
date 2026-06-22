@@ -191,9 +191,9 @@ interface DropProduct { title: string; sku: string; }
 
 function ActionRow({ a, market }: { a: Action; market: Market }) {
   const isAds = a.category.includes('ADS');
-  const isSale = a.category.includes('Sale') || a.category.includes('Sales');
-  // Mostra SKUs ao clicar: drops (tag auto), sales, ou qualquer ação com Collection ID / SKUs preenchidos.
-  const skuMode = !isAds && (!!a.dropTag || isSale || !!a.collectionId || a.skus.length > 0);
+  // Mostra SKUs ao clicar: drops (tag auto) e SKUs manuais. Collection ID NÃO lista SKUs
+  // (a collection já é o identificador — não precisa puxar os produtos).
+  const skuMode = !isAds && !a.collectionId && (!!a.dropTag || a.skus.length > 0);
   const expandable = isAds || skuMode;
   const [open, setOpen] = useState(false);
   const [subs, setSubs] = useState<SubTask[] | null>(null);
@@ -201,14 +201,12 @@ function ActionRow({ a, market }: { a: Action; market: Market }) {
   const [loading, setLoading] = useState(false);
   const [detErr, setDetErr] = useState<string | null>(null);
 
-  // Prioridade do vínculo (igual ao resultado): Collection ID > SKUs manuais > tag de drop.
-  const skuQuery = a.collectionId
-    ? `collection=${encodeURIComponent(a.collectionId)}`
-    : a.skus.length > 0
-      ? `skus=${encodeURIComponent(a.skus.join(','))}`
-      : a.dropTag
-        ? `tag=${encodeURIComponent(a.dropTag)}`
-        : null;
+  // SKUs manuais têm prioridade sobre a tag de drop. (Collection ID não entra — não lista SKUs.)
+  const skuQuery = a.skus.length > 0
+    ? `skus=${encodeURIComponent(a.skus.join(','))}`
+    : a.dropTag
+      ? `tag=${encodeURIComponent(a.dropTag)}`
+      : null;
 
   const toggle = useCallback(async () => {
     if (!expandable) return;
@@ -337,14 +335,12 @@ function ActionRow({ a, market }: { a: Action; market: Market }) {
 
           {/* Drop/Sale/linkadas → lista de SKUs/produtos */}
           {skuMode && !loading && prods && prods.length === 0 && !detErr && (
-            <div className="text-[11px] py-1" style={{ color: 'var(--ink-muted)' }}>
-              {skuQuery ? 'Nenhum produto encontrado para o vínculo.' : 'Sem SKUs vinculados — preencha Collection ID ou SKUs no Asana.'}
-            </div>
+            <div className="text-[11px] py-1" style={{ color: 'var(--ink-muted)' }}>Nenhum produto encontrado para o vínculo.</div>
           )}
           {skuMode && prods && prods.length > 0 && (
             <div className="mt-1">
               <div className="text-[10px] uppercase tracking-wider mb-1" style={{ color: 'var(--ink-muted)' }}>
-                {prods.length} SKUs{a.dropTag && !a.collectionId && a.skus.length === 0 ? ` · tag ${a.dropTag}` : a.collectionId ? ` · collection ${a.collectionId}` : ''}
+                {prods.length} SKUs{a.skus.length === 0 && a.dropTag ? ` · tag ${a.dropTag}` : ''}
               </div>
               <div className="space-y-1">
                 {prods.map((p) => (
