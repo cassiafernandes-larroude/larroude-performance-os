@@ -7,7 +7,7 @@ import { RefreshCw, ExternalLink, CalendarDays } from 'lucide-react';
 
 type Market = 'US' | 'BR';
 
-interface ActionResult { gmv: number; units: number; orders: number; basis: 'sku' | 'collection'; skuCount: number; window: { start: string; end: string }; }
+interface ActionResult { gmv: number; units: number; orders: number; basis: 'sku' | 'collection'; skuCount: number; window: { start: string; end: string }; partial?: boolean; }
 interface Action {
   gid: string; title: string; url: string; week: string; category: string[];
   market: 'US' | 'BR' | 'BOTH';
@@ -216,6 +216,7 @@ function ActionRow({ a, market }: { a: Action; market: Market }) {
             <div className="text-[9px] mt-1" style={{ color: 'var(--ink-muted)' }}>
               {a.result.basis === 'collection' ? `collection · ${a.result.skuCount} SKUs` : `${a.result.skuCount} SKU(s)`}
               {a.window ? ` · ${fmtDate(a.window.start)}–${fmtDate(a.window.end)}` : ''}
+              {a.result.partial ? ' · ⚠ parcial' : ''} · Shopify ao vivo
             </div>
           </div>
         )}

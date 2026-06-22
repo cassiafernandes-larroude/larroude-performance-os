@@ -1,18 +1,13 @@
-// Cassia 2026-06-22: motor de resultado das ações do Calendário.
-// Dado (mercado, janela, SKUs | Collection ID) → GMV + unidades + pedidos, do BigQuery (orders mirror).
-// - SKUs: casa por prefixo (STARTS_WITH), então um SKU-mãe "L123-456" captura todas as variações/tamanhos.
-// - Collection ID: resolve a collection → SKUs das variações via Shopify Admin GraphQL, e cai no mesmo caminho.
-// Líquido de devoluções (refunds[].refund_line_items). Filtros DTC iguais aos demais dashboards.
+// Cassia 2026-06-22: motor de resultado das ações do Calendário — DIRETO DO SHOPIFY (Admin GraphQL),
+// não do espelho BQ (decisão da Cássia: "cruzar com os dados direto do shopify").
+// Dado (mercado, janela, SKUs | Collection ID) → GMV + unidades + pedidos.
+// - SKUs: casa por prefixo (startsWith) → um SKU-mãe "L123-456" captura todas as variações/tamanhos.
+// - Collection ID: resolve a collection → SKUs das variações via Shopify Admin, e cai no mesmo caminho.
+// Exclui cancelados/test, VOIDED/REFUNDED e tags não-DTC (mesma regra do shopify-sales28d).
+// Cada (mercado, janela) é escaneado UMA vez e cacheado em memória (~5min), pois várias ações
+// compartilham período (ex.: ADS/CRM da mesma semana).
 
-import { runQuery } from '@/lib/ltv-dashboard/bigquery';
 import type { Market } from './asana';
-
-const ORDERS_TABLE: Record<Market, string> = {
-  US: 'larroude-data-prod.stg_shopify.orders',
-  BR: 'larroude-data-prod.stg_shopify_br.orders',
-};
-const TZ: Record<Market, string> = { US: 'America/New_York', BR: 'America/Sao_Paulo' };
-const EXCLUDED_TAGS_REGEX = 'b2b|wholesale|marketplace|redo|influencer';
 
 const SHOPIFY_API_VERSION = process.env.SHOPIFY_API_VERSION || '2025-01';
 function shopifyConfig(market: Market) {
@@ -28,58 +23,138 @@ function shopifyConfig(market: Market) {
   };
 }
 
+function shopUrl(market: Market) {
+  const { domain } = shopifyConfig(market);
+  return `https://${domain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`;
+}
+function shopToken(market: Market) {
+  const { token } = shopifyConfig(market);
+  if (!token) throw new Error(`SHOPIFY_${market}_ADMIN_API_TOKEN não configurado`);
+  return token;
+}
+
+const EXCLUDED_TAGS = /b2b|wholesale|marketplace|redo|influencer|exchange-only/i;
+
 export interface ActionResult {
   gmv: number;
   units: number;
   orders: number;
   basis: 'sku' | 'collection';
-  skuCount: number;        // nº de SKUs/prefixos considerados
+  skuCount: number;          // nº de SKUs/prefixos considerados
   window: { start: string; end: string };
+  partial: boolean;          // true se o scan do Shopify bateu no limite de tempo/páginas
 }
 
-/** GMV/unidades/pedidos líquidos para uma lista de prefixos de SKU numa janela. */
-async function salesBySkuPrefixes(market: Market, start: string, end: string, prefixes: string[]): Promise<{ gmv: number; units: number; orders: number }> {
-  if (!prefixes.length) return { gmv: 0, units: 0, orders: 0 };
-  const tz = TZ[market];
-  const ref = '`' + ORDERS_TABLE[market] + '`';
-  const sql = `
-    WITH refunded AS (
-      SELECT o.id AS order_id,
-             CAST(JSON_VALUE(rli, '$.line_item_id') AS INT64) AS lid,
-             SUM(CAST(JSON_VALUE(rli, '$.quantity') AS FLOAT64)) AS rq
-      FROM ${ref} o,
-        UNNEST(JSON_QUERY_ARRAY(o.refunds)) AS r,
-        UNNEST(JSON_QUERY_ARRAY(r, '$.refund_line_items')) AS rli
-      WHERE o.cancelled_at IS NULL AND o.test = FALSE
-      GROUP BY 1, 2
-    ),
-    li AS (
-      SELECT o.id AS order_id,
-             CAST(JSON_VALUE(l, '$.id') AS INT64) AS lid,
-             UPPER(JSON_VALUE(l, '$.sku')) AS sku,
-             CAST(JSON_VALUE(l, '$.quantity') AS FLOAT64) AS qty,
-             CAST(JSON_VALUE(l, '$.price') AS FLOAT64) AS price
-      FROM ${ref} o,
-        UNNEST(JSON_QUERY_ARRAY(o.line_items)) AS l
-      WHERE o.cancelled_at IS NULL AND o.test = FALSE
-        AND NOT REGEXP_CONTAINS(LOWER(IFNULL(o.tags, '')), r'${EXCLUDED_TAGS_REGEX}')
-        AND DATE(o.created_at, '${tz}') BETWEEN @start AND @end
-    ),
-    net AS (
-      SELECT li.order_id, li.sku, li.price, li.qty - IFNULL(rf.rq, 0) AS net_qty
-      FROM li LEFT JOIN refunded rf ON rf.order_id = li.order_id AND rf.lid = li.lid
-      WHERE li.sku IS NOT NULL AND li.qty - IFNULL(rf.rq, 0) > 0
-        AND EXISTS (SELECT 1 FROM UNNEST(@prefixes) p WHERE STARTS_WITH(li.sku, p))
-    )
-    SELECT
-      IFNULL(SUM(net_qty), 0) AS units,
-      IFNULL(SUM(net_qty * price), 0) AS gmv,
-      COUNT(DISTINCT order_id) AS orders
-    FROM net
-  `;
-  const rows = await runQuery<any>(sql, { start, end, prefixes: prefixes.map((p) => p.toUpperCase()) });
-  const r = rows[0] || {};
-  return { gmv: Number(r.gmv) || 0, units: Number(r.units) || 0, orders: Number(r.orders) || 0 };
+// ---------- line items da janela (escaneados do Shopify, cacheados) ----------
+interface WindowLine { orderId: string; sku: string; qty: number; revenue: number; }
+interface WindowData { lines: WindowLine[]; partial: boolean; }
+
+const windowCache = new Map<string, { ts: number; data: WindowData }>();
+const WINDOW_TTL = 5 * 60 * 1000;
+
+const ORDERS_QUERY = `
+  query CalOrders($cursor: String, $query: String!) {
+    orders(first: 250, after: $cursor, query: $query, sortKey: CREATED_AT) {
+      edges {
+        node {
+          id
+          cancelledAt
+          test
+          displayFinancialStatus
+          tags
+          customer { tags }
+          lineItems(first: 50) {
+            edges {
+              node {
+                sku
+                quantity
+                discountedUnitPriceSet { shopMoney { amount } }
+                originalUnitPriceSet { shopMoney { amount } }
+                variant { sku }
+              }
+            }
+          }
+        }
+      }
+      pageInfo { hasNextPage endCursor }
+    }
+  }
+`;
+
+/** Escaneia TODOS os line items DTC dos pedidos numa janela (cacheado por mercado+janela). */
+async function fetchWindowLines(market: Market, start: string, end: string, timeoutMs = 25_000): Promise<WindowData> {
+  const key = `${market}:${start}:${end}`;
+  const hit = windowCache.get(key);
+  if (hit && Date.now() - hit.ts < WINDOW_TTL) return hit.data;
+
+  const url = shopUrl(market);
+  const token = shopToken(market);
+  // created_at em data (Shopify interpreta no fuso da loja, que casa com o mercado).
+  const queryFilter = `created_at:>=${start} created_at:<=${end} AND -tag:b2b AND -tag:wholesale AND -tag:marketplace AND -tag:Exchange-Only AND -tag:influencer`;
+
+  const lines: WindowLine[] = [];
+  let cursor: string | null = null;
+  let hasNext = true;
+  let pages = 0;
+  let partial = false;
+  const MAX_PAGES = 200;
+  const t0 = Date.now();
+
+  while (hasNext && pages < MAX_PAGES) {
+    if (Date.now() - t0 > timeoutMs) { partial = true; break; }
+    pages++;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token },
+      body: JSON.stringify({ query: ORDERS_QUERY, variables: { cursor, query: queryFilter } }),
+      cache: 'no-store',
+    });
+    if (!res.ok) throw new Error(`Shopify orders ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    const json = (await res.json()) as any;
+    if (json.errors?.length) throw new Error(`Shopify orders errors: ${JSON.stringify(json.errors).slice(0, 200)}`);
+    const orders = json.data?.orders;
+    if (!orders) break;
+    for (const edge of orders.edges) {
+      const o = edge.node;
+      if (o.cancelledAt || o.test) continue;
+      const fs = (o.displayFinancialStatus || '').toUpperCase();
+      if (fs === 'VOIDED' || fs === 'REFUNDED') continue;
+      const tags = (o.tags || []).concat(o.customer?.tags || []).join(' ').toLowerCase();
+      if (EXCLUDED_TAGS.test(tags)) continue;
+      for (const li of o.lineItems.edges) {
+        const sku = (li.node.variant?.sku ?? li.node.sku) || '';
+        if (!sku) continue;
+        const qty = Number(li.node.quantity) || 0;
+        if (qty <= 0) continue;
+        const disc = parseFloat(li.node.discountedUnitPriceSet?.shopMoney?.amount || '0') || 0;
+        const orig = parseFloat(li.node.originalUnitPriceSet?.shopMoney?.amount || '0') || 0;
+        const price = disc > 0 ? disc : orig;
+        lines.push({ orderId: o.id, sku: sku.toUpperCase(), qty, revenue: price * qty });
+      }
+    }
+    hasNext = orders.pageInfo.hasNextPage;
+    cursor = orders.pageInfo.endCursor;
+  }
+
+  const data: WindowData = { lines, partial };
+  windowCache.set(key, { ts: Date.now(), data });
+  return data;
+}
+
+/** Agrega GMV/unidades/pedidos da janela para os SKUs cujo prefixo casa. */
+async function salesBySkuPrefixes(market: Market, start: string, end: string, prefixes: string[]): Promise<{ gmv: number; units: number; orders: number; partial: boolean }> {
+  if (!prefixes.length) return { gmv: 0, units: 0, orders: 0, partial: false };
+  const pfx = prefixes.map((p) => p.toUpperCase());
+  const { lines, partial } = await fetchWindowLines(market, start, end);
+  let gmv = 0, units = 0;
+  const orderIds = new Set<string>();
+  for (const l of lines) {
+    if (!pfx.some((p) => l.sku.startsWith(p))) continue;
+    units += l.qty;
+    gmv += l.revenue;
+    orderIds.add(l.orderId);
+  }
+  return { gmv, units, orders: orderIds.size, partial };
 }
 
 const COLLECTION_QUERY = `
@@ -95,9 +170,8 @@ const COLLECTION_QUERY = `
 
 /** Resolve uma collection Shopify → lista de SKUs das variações. */
 async function collectionSkus(market: Market, collectionId: string): Promise<string[]> {
-  const { domain, token } = shopifyConfig(market);
-  if (!token) throw new Error(`SHOPIFY_${market}_ADMIN_API_TOKEN não configurado`);
-  const url = `https://${domain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`;
+  const url = shopUrl(market);
+  const token = shopToken(market);
   const gid = `gid://shopify/Collection/${collectionId}`;
   const skus = new Set<string>();
   let cursor: string | null = null;
