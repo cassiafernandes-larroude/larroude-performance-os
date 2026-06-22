@@ -22,6 +22,7 @@ import {
   Database,
   Bell,
   PieChart,
+  CalendarDays,
   X,
 } from "lucide-react";
 
@@ -63,6 +64,7 @@ const navSections: NavSection[] = [
       { href: "/google-ads", label: "Google Ads", icon: Search },
       { href: "/shopify", label: "Shopify", icon: ShoppingBag },
       { href: "/funil", label: "Funil de Conversão", icon: Filter },
+      { href: "/calendario", label: "Calendário", icon: CalendarDays },
       { href: "/inventory", label: "Inventory Intelligence", icon: Package },
       { href: "/producao", label: "Produção 2.0", icon: Factory },
       { href: "/site-performance", label: "Site Performance", icon: Gauge },
