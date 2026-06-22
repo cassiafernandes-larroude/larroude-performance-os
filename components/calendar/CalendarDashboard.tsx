@@ -48,6 +48,7 @@ export default function CalendarDashboard() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [nonce, setNonce] = useState(0);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true); setErr(null);
@@ -55,6 +56,7 @@ export default function CalendarDashboard() {
       const res = await fetch(`/api/calendar/${market}?n=${nonce}`, { cache: 'no-store' });
       const json = (await res.json()) as Bundle;
       setData(json);
+      setLastUpdated(new Date());
     } catch (e: any) {
       setErr(e?.message || 'Falha ao carregar');
     } finally {
@@ -63,6 +65,20 @@ export default function CalendarDashboard() {
   }, [market, nonce]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Cassia 2026-06-22: auto-atualização às 11h e 16h (hora local) enquanto a aba estiver aberta.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    function scheduleNext() {
+      const now = new Date();
+      const candidates = [11, 16].map((h) => { const d = new Date(now); d.setHours(h, 0, 0, 0); return d; });
+      let next = candidates.find((d) => d.getTime() > now.getTime());
+      if (!next) { next = new Date(now); next.setDate(now.getDate() + 1); next.setHours(11, 0, 0, 0); }
+      timer = setTimeout(() => { setNonce((n) => n + 1); scheduleNext(); }, next.getTime() - now.getTime());
+    }
+    scheduleNext();
+    return () => clearTimeout(timer);
+  }, []);
 
   const notConfigured = data && !data.available && data.reason === 'asana_token';
 
@@ -75,7 +91,10 @@ export default function CalendarDashboard() {
             <CalendarDays className="w-7 h-7" style={{ color: 'var(--pink)' }} /> Calendário de Ações
           </h1>
           <p className="text-sm mt-1" style={{ color: 'var(--ink-soft)' }}>
-            Agenda do Asana (2026 Macro Calendar) × resultado de vendas no BigQuery
+            Agenda do Asana (2026 Macro Calendar) × resultado de vendas ao vivo do Shopify
+          </p>
+          <p className="text-[11px] mt-0.5" style={{ color: 'var(--ink-muted)' }}>
+            {lastUpdated ? `Atualizado ${lastUpdated.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} · ` : ''}atualiza automaticamente às 11h e 16h
           </p>
         </div>
         <div className="flex items-center gap-2">
