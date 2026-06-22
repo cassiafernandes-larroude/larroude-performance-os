@@ -147,6 +147,55 @@ export async function getPaymentBreakdown(market: Market, since: string, until: 
 export interface SpendPoint { date: string; spend: number; }
 export interface CrmPoint { date: string; sends: number; }
 
+// Cassia 2026-06-21: classificação de sessões por origem (UTM).
+// Mídia = google/criteo/meta (no BR o Meta vem como placements Instagram_*/Facebook_*).
+const MEDIA_SOURCE_RE = /(google|criteo|meta|facebook|instagram|^ig$|^ig[_-]|^fb$|^fb[_-]|audience_network|^an$)/i;
+// CRM = email/SMS/WhatsApp (US: email+sms; BR: email+sms+whatsapp). Detecta pelo utm_medium.
+const CRM_MEDIUM_RE = /(email|sms|whats|flow|campaign|newsletter|push|mobile_messaging)/i;
+
+export interface SessionSplit { media: number; crm: number; }
+
+/** Sessões por período divididas em mídia (utm_source) e CRM (utm_medium), via ShopifyQL. */
+export async function getSessionSplitByPeriod(market: Market, since: string, until: string, gran: Granularity): Promise<Map<string, SessionSplit>> {
+  const [src, med] = await Promise.all([
+    runShopifyQL(market, `FROM sessions SHOW sessions GROUP BY ${gran}, utm_source SINCE ${since} UNTIL ${until}`, 'unstable'),
+    runShopifyQL(market, `FROM sessions SHOW sessions GROUP BY ${gran}, utm_medium SINCE ${since} UNTIL ${until}`, 'unstable'),
+  ]);
+  const map = new Map<string, SessionSplit>();
+  const get = (d: string) => { let e = map.get(d); if (!e) { e = { media: 0, crm: 0 }; map.set(d, e); } return e; };
+  for (const r of src.rows) {
+    const d = r[gran] ? String(r[gran]).slice(0, 10) : '';
+    if (!d) continue;
+    if (MEDIA_SOURCE_RE.test(String(r.utm_source || ''))) get(d).media += Number(r.sessions) || 0;
+  }
+  for (const r of med.rows) {
+    const d = r[gran] ? String(r[gran]).slice(0, 10) : '';
+    if (!d) continue;
+    if (CRM_MEDIUM_RE.test(String(r.utm_medium || ''))) get(d).crm += Number(r.sessions) || 0;
+  }
+  return map;
+}
+
+export interface PaidOrdersPoint { date: string; paidOrders: number; }
+
+/** Pedidos PAGOS por dia (orders mirror Shopify) — para o gráfico add→checkout→pedido pago. */
+export async function getPaidOrdersDaily(market: Market, since: string, until: string): Promise<PaidOrdersPoint[]> {
+  const tz = TZ[market];
+  const tableRef = '`' + ORDERS_TABLE[market] + '`';
+  const sql = `
+    SELECT FORMAT_DATE('%Y-%m-%d', DATE(created_at, '${tz}')) AS d,
+           COUNTIF(financial_status = 'paid') AS paid
+    FROM ${tableRef}
+    WHERE cancelled_at IS NULL AND test = FALSE
+      AND NOT REGEXP_CONTAINS(LOWER(IFNULL(tags, '')), r'${EXCLUDED_TAGS_REGEX}')
+      AND DATE(created_at, '${tz}') BETWEEN @since AND @until
+    GROUP BY d
+    ORDER BY d
+  `;
+  const rows = await runQuery<any>(sql, { since, until });
+  return rows.map((r) => ({ date: String(r.d), paidOrders: Number(r.paid) || 0 }));
+}
+
 function dayAfter(iso: string): string {
   const d = new Date(iso + 'T00:00:00Z');
   d.setUTCDate(d.getUTCDate() + 1);

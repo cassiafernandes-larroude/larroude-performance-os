@@ -23,9 +23,10 @@ interface Bundle {
   today: { sessions: number; addToCart: number; reachedCheckout: number; completed: number } | null;
   alerts: Array<{ step: string; todayRate: number; periodRate: number; dropPct: number }>;
   shareSeries: Array<{ date: string; cart: number; checkout: number; pedido: number; cvr: number }>;
-  context: Array<{ date: string; sessions: number; spend: number; crmSends: number }>;
-  spendTotal: number;
-  crmTotal: number;
+  context: Array<{ date: string; sessions: number; mediaSessions: number; crmSessions: number; addToCart: number; checkout: number; paidOrders: number }>;
+  mediaSessTotal: number;
+  crmSessTotal: number;
+  paidOrdersTotal: number;
   error?: string;
 }
 
@@ -104,19 +105,23 @@ export default function FunnelDashboard() {
     { label: 'CVR geral', values: (data?.shareSeries ?? []).map((p) => p.cvr), color: '#5d4ec5' },
   ];
 
-  // #2: sessões × investimento × CRM — índice base 100 (relaciona tendências de unidades diferentes).
   const ctx = data?.context ?? [];
   const ctxDates = ctx.map((p) => p.date);
-  const idx = (vals: number[]): number[] => {
-    const base = vals.find((v) => v > 0) ?? 0;
-    return base > 0 ? vals.map((v) => (v / base) * 100) : vals.map(() => 0);
-  };
-  const crmHas = ctx.some((p) => p.crmSends > 0);
-  const spendHas = ctx.some((p) => p.spend > 0);
-  const relLines: Series[] = [
-    { label: 'Sessões', values: idx(ctx.map((p) => p.sessions)), color: '#5d4ec5' },
-    ...(spendHas ? [{ label: 'Investimento mídia', values: idx(ctx.map((p) => p.spend)), color: '#e11d48' }] : []),
-    ...(crmHas ? [{ label: 'Envios CRM', values: idx(ctx.map((p) => p.crmSends)), color: '#0ea5e9' }] : []),
+
+  // #2: sessões site × mídia × CRM (todas em contagem de sessões — comparáveis direto, sem índice).
+  const mediaHas = ctx.some((p) => p.mediaSessions > 0);
+  const crmHas = ctx.some((p) => p.crmSessions > 0);
+  const sessLines: Series[] = [
+    { label: 'Sessões site', values: ctx.map((p) => p.sessions), color: '#5d4ec5' },
+    { label: 'Sessões mídia', values: ctx.map((p) => p.mediaSessions), color: '#e11d48' },
+    { label: 'Sessões CRM', values: ctx.map((p) => p.crmSessions), color: '#0ea5e9' },
+  ];
+
+  // #3: add ao carrinho × checkout × pedidos concluídos (PAGOS).
+  const orderLines: Series[] = [
+    { label: 'Add ao carrinho', values: ctx.map((p) => p.addToCart), color: '#0ea5e9' },
+    { label: 'Checkout', values: ctx.map((p) => p.checkout), color: '#f59e0b' },
+    { label: 'Pedidos pagos', values: ctx.map((p) => p.paidOrders), color: '#10b981' },
   ];
 
   const pay = data?.payment;
@@ -245,22 +250,39 @@ export default function FunnelDashboard() {
             </div>
           )}
 
-          {/* #2 — Sessões × Investimento de mídia × Envios CRM */}
+          {/* #2 — Sessões site × mídia × CRM */}
           <div className="card">
-            <h3 className="text-[14px] font-semibold mb-1" style={{ color: 'var(--ink)' }}>Sessões × Investimento de mídia × Envios CRM</h3>
+            <h3 className="text-[14px] font-semibold mb-1" style={{ color: 'var(--ink)' }}>Sessões site × mídia × CRM</h3>
             <p className="text-[11px] mb-3" style={{ color: 'var(--ink-soft)' }}>
-              Índice base 100 (1º ponto = 100) — relaciona a tendência das sessões com o gasto em mídia (Meta+Google) e os envios de CRM (Klaviyo).
+              Sessões totais do site vs. originadas de mídia (Google + Criteo + Meta) e de CRM ({market === 'BR' ? 'e-mail + SMS + WhatsApp' : 'e-mail + SMS'}) — classificadas por UTM no Shopify.
             </p>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
-              <Stat label="Sessões (período)" value={fmtN((data.totals!).sessions)} color="#5d4ec5" />
-              <Stat label="Investimento mídia" value={spendHas ? new Intl.NumberFormat(market === 'BR' ? 'pt-BR' : 'en-US', { style: 'currency', currency: market === 'BR' ? 'BRL' : 'USD', notation: 'compact', maximumFractionDigits: 1 }).format(data.spendTotal) : '—'} color="#e11d48" />
-              <Stat label="Envios CRM" value={crmHas ? fmtN(data.crmTotal) : '—'} color="#0ea5e9" />
-              <Stat label="Sessões / R$ mídia" value={data.spendTotal > 0 ? fmtN((data.totals!).sessions / data.spendTotal) : '—'} />
+            <div className="grid grid-cols-3 gap-3 mb-3">
+              <Stat label="Sessões site" value={fmtN((data.totals!).sessions)} color="#5d4ec5" />
+              <Stat label="Sessões mídia" value={mediaHas ? fmtN(data.mediaSessTotal) : '—'} color="#e11d48" />
+              <Stat label="Sessões CRM" value={crmHas ? fmtN(data.crmSessTotal) : '—'} color="#0ea5e9" />
             </div>
-            {ctxDates.length > 1 && relLines.length > 1 ? (
-              <MultiLineChart title="" dates={ctxDates} series={relLines} unit="number" market={market} height={260} />
+            {ctxDates.length > 1 ? (
+              <MultiLineChart title="" dates={ctxDates} series={sessLines} unit="number" market={market} height={260} />
             ) : (
-              <p className="text-[12px]" style={{ color: 'var(--ink-muted)' }}>Sem dados de mídia/CRM no período para correlacionar.</p>
+              <p className="text-[12px]" style={{ color: 'var(--ink-muted)' }}>Período curto demais para a série temporal.</p>
+            )}
+          </div>
+
+          {/* #3 — Add ao carrinho × Checkout × Pedidos pagos */}
+          <div className="card">
+            <h3 className="text-[14px] font-semibold mb-1" style={{ color: 'var(--ink)' }}>Add ao carrinho × Checkout × Pedidos pagos</h3>
+            <p className="text-[11px] mb-3" style={{ color: 'var(--ink-soft)' }}>
+              Volume de cada etapa final do funil por período. Pedidos pagos = pedidos com pagamento confirmado (financial_status &ldquo;paid&rdquo;), do Shopify.
+            </p>
+            <div className="grid grid-cols-3 gap-3 mb-3">
+              <Stat label="Add ao carrinho" value={fmtN((data.totals!).addToCart)} color="#0ea5e9" />
+              <Stat label="Checkout" value={fmtN((data.totals!).reachedCheckout)} color="#f59e0b" />
+              <Stat label="Pedidos pagos" value={data.paidOrdersTotal > 0 ? fmtN(data.paidOrdersTotal) : '—'} color="#10b981" />
+            </div>
+            {ctxDates.length > 1 ? (
+              <MultiLineChart title="" dates={ctxDates} series={orderLines} unit="number" market={market} height={260} />
+            ) : (
+              <p className="text-[12px]" style={{ color: 'var(--ink-muted)' }}>Período curto demais para a série temporal.</p>
             )}
           </div>
 
