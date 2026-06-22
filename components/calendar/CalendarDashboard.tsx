@@ -3,7 +3,7 @@
 // resultado de vendas (GMV/unid/pedidos) de cada ação puxado ao vivo do BigQuery. Sem banco.
 
 import { useCallback, useEffect, useState } from 'react';
-import { RefreshCw, ExternalLink, CalendarDays, ChevronRight, ChevronDown, Check } from 'lucide-react';
+import { RefreshCw, ExternalLink, CalendarDays, ChevronRight, ChevronLeft, ChevronDown, Check } from 'lucide-react';
 
 type Market = 'US' | 'BR';
 
@@ -11,6 +11,7 @@ interface ActionResult { gmv: number; units: number; orders: number; basis: 'sku
 interface Action {
   gid: string; title: string; url: string; week: string; category: string[];
   market: 'US' | 'BR' | 'BOTH';
+  assignee?: string | null;
   startOn: string | null; dueOn: string | null; completed: boolean;
   skus: string[]; collectionId: string | null; dropTag: string | null;
   window: { start: string; end: string } | null;
@@ -49,6 +50,7 @@ export default function CalendarDashboard() {
   const [err, setErr] = useState<string | null>(null);
   const [nonce, setNonce] = useState(0);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [view, setView] = useState<'mensal' | 'lista'>('mensal');
 
   const load = useCallback(async () => {
     setLoading(true); setErr(null);
@@ -145,13 +147,26 @@ export default function CalendarDashboard() {
 
       {data && data.available && (
         <div className="space-y-6">
-          {data.totals && (
-            <div className="flex flex-wrap gap-3">
-              <Chip label="Ações no período" value={fmtN(data.totals.actions)} />
-              <Chip label="Com vínculo (SKU/Collection)" value={fmtN(data.totals.linked)} />
-              <Chip label="Com resultado medido" value={fmtN(data.totals.measured)} />
-            </div>
-          )}
+          {/* Abas de visualização */}
+          <div className="flex items-center gap-1 border-b" style={{ borderColor: 'var(--border)' }}>
+            {([['mensal', 'Mensal'], ['lista', 'Lista']] as const).map(([v, label]) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className="px-3 py-2 text-[13px] font-semibold -mb-px border-b-2 transition-colors"
+                style={view === v
+                  ? { color: 'var(--ink)', borderColor: 'var(--pink)' }
+                  : { color: 'var(--ink-muted)', borderColor: 'transparent' }}
+              >
+                {label}
+              </button>
+            ))}
+            {data.totals && (
+              <span className="ml-auto text-[11px]" style={{ color: 'var(--ink-muted)' }}>
+                {data.totals.actions} ações · {data.totals.linked} com vínculo · {data.totals.measured} medidas
+              </span>
+            )}
+          </div>
 
           {data.weeks.length === 0 && (
             <div className="card text-center py-8" style={{ color: 'var(--ink-soft)' }}>
@@ -159,7 +174,11 @@ export default function CalendarDashboard() {
             </div>
           )}
 
-          {data.weeks.map((wk) => (
+          {view === 'mensal' && data.weeks.length > 0 && (
+            <MonthGrid actions={data.weeks.flatMap((w) => w.actions)} />
+          )}
+
+          {view === 'lista' && data.weeks.map((wk) => (
             <div key={wk.week} className="card">
               <h3 className="text-[14px] font-semibold mb-3 pb-2" style={{ color: 'var(--ink)', borderBottom: '1px solid var(--border)' }}>
                 {wk.week}
@@ -363,6 +382,114 @@ function Metric({ label, value, color }: { label: string; value: string; color: 
     <div className="rounded-lg px-2 py-1.5 text-center" style={{ background: 'white', border: '1px solid var(--border)' }}>
       <div className="text-[9px] uppercase tracking-wider" style={{ color: 'var(--ink-muted)' }}>{label}</div>
       <div className="font-num font-bold text-[14px]" style={{ color }}>{value}</div>
+    </div>
+  );
+}
+
+// Categoria principal + cor para os blocos da grade (esquema do print: DROP verde, SALES vermelho, ADS laranja).
+function gridCat(cats: string[]): { label: string; color: string } {
+  if (cats.some((c) => /drop|pre-?order/i.test(c))) return { label: 'DROP', color: '#10b981' };
+  if (cats.some((c) => /sale/i.test(c))) return { label: 'SALES', color: '#e11d48' };
+  if (cats.some((c) => /ads/i.test(c))) return { label: 'ADS', color: '#f59e0b' };
+  if (cats.some((c) => /crm/i.test(c))) return { label: 'CRM', color: '#0ea5e9' };
+  if (cats.some((c) => /campanha/i.test(c))) return { label: 'CAMPANHA', color: '#8b5cf6' };
+  if (cats.some((c) => /collab/i.test(c))) return { label: 'COLLAB', color: '#ec4899' };
+  return { label: (cats[0] || '—').toUpperCase(), color: '#94a3b8' };
+}
+
+const WEEKDAYS = ['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB', 'DOM'];
+const MONTHS_PT = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+const isoDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+function MonthGrid({ actions }: { actions: Action[] }) {
+  // Mês inicial: o do "hoje". Navegação prev/next/hoje.
+  const [cursor, setCursor] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() }; });
+  const todayIso = isoDay(new Date());
+
+  // Indexa ações por dia (start_on se houver, senão due_on).
+  const byDay = new Map<string, Action[]>();
+  for (const a of actions) {
+    const day = a.startOn || a.dueOn;
+    if (!day) continue;
+    if (!byDay.has(day)) byDay.set(day, []);
+    byDay.get(day)!.push(a);
+  }
+
+  // Grade Mon→Sun cobrindo o mês (semanas completas).
+  const first = new Date(cursor.y, cursor.m, 1);
+  const startOffset = (first.getDay() + 6) % 7; // 0 = segunda
+  const gridStart = new Date(cursor.y, cursor.m, 1 - startOffset);
+  const daysInMonth = new Date(cursor.y, cursor.m + 1, 0).getDate();
+  const weeksCount = Math.ceil((startOffset + daysInMonth) / 7);
+  const cells: Date[] = [];
+  for (let i = 0; i < weeksCount * 7; i++) cells.push(new Date(cursor.y, cursor.m, 1 - startOffset + i));
+
+  const shift = (delta: number) => setCursor((c) => { const d = new Date(c.y, c.m + delta, 1); return { y: d.getFullYear(), m: d.getMonth() }; });
+  const goToday = () => { const d = new Date(); setCursor({ y: d.getFullYear(), m: d.getMonth() }); };
+
+  return (
+    <div className="card">
+      {/* Navegação do mês */}
+      <div className="flex items-center justify-between mb-3 gap-2">
+        <button onClick={() => shift(-1)} className="pill pill-ghost px-2 py-1.5" aria-label="Mês anterior"><ChevronLeft className="w-4 h-4" /></button>
+        <h3 className="text-[15px] font-semibold" style={{ color: 'var(--ink)' }}>{MONTHS_PT[cursor.m]} de {cursor.y}</h3>
+        <div className="flex items-center gap-2">
+          <button onClick={goToday} className="pill pill-ghost px-3 py-1.5 text-[12px]">Hoje</button>
+          <button onClick={() => shift(1)} className="pill pill-ghost px-2 py-1.5" aria-label="Próximo mês"><ChevronRight className="w-4 h-4" /></button>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto">
+        <div style={{ minWidth: 880 }}>
+          {/* Cabeçalho dos dias */}
+          <div className="grid grid-cols-7 gap-1 mb-1">
+            {WEEKDAYS.map((w) => (
+              <div key={w} className="text-[10px] font-semibold uppercase tracking-wider text-center py-1" style={{ color: 'var(--ink-muted)' }}>{w}</div>
+            ))}
+          </div>
+          {/* Células */}
+          <div className="grid grid-cols-7 gap-1">
+            {cells.map((d, i) => {
+              const inMonth = d.getMonth() === cursor.m;
+              const dIso = isoDay(d);
+              const dayActions = byDay.get(dIso) || [];
+              const isToday = dIso === todayIso;
+              return (
+                <div
+                  key={i}
+                  className="rounded-lg p-1.5 min-h-[120px] flex flex-col gap-1"
+                  style={{ background: inMonth ? 'var(--paper)' : 'transparent', border: '1px solid var(--border)', opacity: inMonth ? 1 : 0.45 }}
+                >
+                  <div
+                    className="text-[11px] font-semibold w-6 h-6 flex items-center justify-center rounded-full"
+                    style={isToday ? { background: 'var(--pink)', color: 'white' } : { color: 'var(--ink-soft)' }}
+                  >
+                    {d.getDate()}
+                  </div>
+                  {dayActions.map((a) => {
+                    const gc = gridCat(a.category);
+                    return (
+                      <a
+                        key={a.gid}
+                        href={a.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block rounded px-1.5 py-1 hover:brightness-95"
+                        style={{ background: 'white', borderLeft: `3px solid ${gc.color}`, boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}
+                        title={a.title}
+                      >
+                        <div className="text-[8px] font-bold uppercase tracking-wide" style={{ color: gc.color }}>{gc.label}</div>
+                        <div className="text-[10px] leading-tight font-medium truncate" style={{ color: 'var(--ink)', textDecoration: a.completed ? 'line-through' : 'none' }}>{a.title}</div>
+                        {a.assignee && <div className="text-[8px] truncate" style={{ color: 'var(--ink-muted)' }}>{a.assignee}</div>}
+                      </a>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

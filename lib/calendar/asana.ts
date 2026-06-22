@@ -19,6 +19,7 @@ export interface CalendarAction {
   startOn: string | null;             // YYYY-MM-DD
   dueOn: string | null;               // YYYY-MM-DD
   completed: boolean;
+  assignee: string | null;            // responsável (nome)
   skus: string[];                     // campo "SKUs"
   collectionId: string | null;        // campo "Collection ID"
   dropTag: string | null;             // tag de pedido do drop (auto: DROP_DD.MM.AA pela data)
@@ -95,7 +96,7 @@ async function asanaGet(path: string): Promise<any> {
 
 const OPT_FIELDS = [
   'name', 'permalink_url', 'start_on', 'due_on', 'completed',
-  'memberships.section.name',
+  'memberships.section.name', 'assignee.name',
   'custom_fields.name', 'custom_fields.display_value', 'custom_fields.text_value',
   'custom_fields.number_value', 'custom_fields.enum_value.name', 'custom_fields.multi_enum_values.name',
 ].join(',');
@@ -142,6 +143,7 @@ export async function getMacroCalendar(): Promise<CalendarAction[]> {
         startOn: t.start_on || null,
         dueOn: t.due_on || null,
         completed: !!t.completed,
+        assignee: t.assignee?.name || null,
         skus: splitSkus(cfValue(byName('SKUs'))),
         collectionId: (cfValue(byName('Collection ID')) || '').replace(/[^0-9]/g, '') || null,
         dropTag: isDrop ? dropTagFromDate(t.due_on) : null,
