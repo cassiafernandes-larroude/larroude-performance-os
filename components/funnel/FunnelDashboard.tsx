@@ -96,15 +96,6 @@ export default function FunnelDashboard() {
     (data?.series ?? []).map((p) => ({ date: p.date, value: Number(p[key]) || 0 }));
   const cvrSeries: BarPoint[] = (data?.series ?? []).map((p) => ({ date: p.date, value: p.sessions > 0 ? (p.completed / p.sessions) * 100 : 0 }));
 
-  // #1: share de cada etapa (overtime, linhas %).
-  const shareDates = (data?.shareSeries ?? []).map((p) => p.date);
-  const shareLines: Series[] = [
-    { label: 'Carrinho / Sessões', values: (data?.shareSeries ?? []).map((p) => p.cart), color: '#0ea5e9' },
-    { label: 'Checkout / Carrinho', values: (data?.shareSeries ?? []).map((p) => p.checkout), color: '#f59e0b' },
-    { label: 'Pedido / Checkout', values: (data?.shareSeries ?? []).map((p) => p.pedido), color: '#10b981' },
-    { label: 'CVR geral', values: (data?.shareSeries ?? []).map((p) => p.cvr), color: '#5d4ec5' },
-  ];
-
   const ctx = data?.context ?? [];
   const ctxDates = ctx.map((p) => p.date);
 
@@ -240,15 +231,6 @@ export default function FunnelDashboard() {
             <div className="card"><BarLineChart title="Checkout (info de pagamento)" data={seriesFor('reachedCheckout')} color="#f59e0b" unit="number" market={market} height={200} /></div>
             <div className="card"><BarLineChart title="Pedidos concluídos" data={seriesFor('completed')} color="#10b981" unit="number" market={market} height={200} /></div>
           </div>
-
-          {/* #1 — Share de cada etapa overtime (linhas) */}
-          {shareDates.length > 1 && (
-            <div className="card">
-              <h3 className="text-[14px] font-semibold mb-1" style={{ color: 'var(--ink)' }}>Share de cada etapa · ao longo do tempo</h3>
-              <p className="text-[11px] mb-3" style={{ color: 'var(--ink-soft)' }}>Conversão entre etapas (%) por período — quanto cada passo converte.</p>
-              <MultiLineChart title="" dates={shareDates} series={shareLines} unit="percent" market={market} height={260} />
-            </div>
-          )}
 
           {/* #2 — Sessões site × mídia × CRM */}
           <div className="card">
