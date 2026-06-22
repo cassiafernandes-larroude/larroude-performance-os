@@ -7,7 +7,6 @@ import {
   Target,
   LayoutDashboard,
   BarChart3,
-  TrendingUp,
   Users,
   Mail,
   Megaphone,
@@ -52,7 +51,6 @@ const navSections: NavSection[] = [
     items: [
       { href: "/dashboard-principal", label: "Main Dashboard", icon: BarChart3 },
       { href: "/channel-share", label: "Channel Share", icon: PieChart },
-      { href: "/ltv-native", label: "LTV", icon: TrendingUp },
       { href: "/cac-native", label: "CAC", icon: Users },
       { href: "/clientes", label: "Clientes", icon: Users },
       { href: "/unit-economics", label: "Unit Economics", icon: Microscope },
