@@ -90,7 +90,8 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
       };
 
       // Cassia 2026-06-22: status de cada transição do funil HOJE vs média do período, sempre visível.
-      // Severidade por desvio relativo: crítico (queda ≥40%), atenção (≥20%), acima (alta ≥20%), normal.
+      // Severidade pelo desvio relativo JÁ ARREDONDADO (o mesmo número que aparece no card, p/ badge e
+      // valor nunca divergirem): crítico (queda ≥40%), atenção (≥15%), acima (alta ≥15%), normal.
       // 'insufficient' quando o denominador da etapa hoje é pequeno demais p/ ser confiável.
       type Severity = 'critical' | 'warning' | 'ok' | 'good' | 'insufficient';
       const stepStatus: Array<{ step: string; todayRate: number; periodRate: number; deltaPct: number; severity: Severity }> = [];
@@ -103,12 +104,12 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
         for (const s of steps) {
           const todayRate = share(s.tn, s.td);
           const periodRate = share(s.pn, s.pd);
-          const deltaPct = periodRate > 0 ? ((todayRate - periodRate) / periodRate) * 100 : 0;
+          const deltaPct = periodRate > 0 ? Math.round(((todayRate - periodRate) / periodRate) * 100) : 0;
           let severity: Severity;
           if (s.td < 25 || periodRate <= 0) severity = 'insufficient';
-          else if (todayRate < periodRate * 0.60) severity = 'critical';
-          else if (todayRate < periodRate * 0.80) severity = 'warning';
-          else if (todayRate > periodRate * 1.20) severity = 'good';
+          else if (deltaPct <= -40) severity = 'critical';
+          else if (deltaPct <= -15) severity = 'warning';
+          else if (deltaPct >= 15) severity = 'good';
           else severity = 'ok';
           stepStatus.push({ step: s.label, todayRate, periodRate, deltaPct, severity });
         }
