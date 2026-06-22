@@ -151,35 +151,43 @@ export async function getPaymentBreakdown(market: Market, since: string, until: 
 export interface SpendPoint { date: string; spend: number; }
 export interface CrmPoint { date: string; sends: number; }
 
-// Cassia 2026-06-21: classificação de sessões por ORIGEM, 1 só dimensão (utm_medium) — buckets
-// mutuamente exclusivos validados nos 2 mercados (cross-tab utm_source×utm_medium):
-//   mídia  = tráfego pago (cpc/paid/display/paid_social) → captura google+criteo+meta
-//   CRM    = e-mail/SMS/WhatsApp (Klaviyo flow/campaign, attentive sms/text, whats)
-//   orgânico = social/organic/referral (social orgânico; pago usa cpc/paid)
-//   direto = sem utm_medium (tráfego não-marcado/direto)
-// (afiliados awin/shopmy ficam de fora dos 4 — entram só no total do site.)
-function classifyMedium(medium: string | null | undefined): 'media' | 'crm' | 'organic' | 'direct' | 'other' {
+// Cassia 2026-06-21: classificação de sessões por ORIGEM combinando CANAL (referrer_source) + TIPO
+// (utm_medium) — porque o mesmo canal pode ser pago OU orgânico (ex.: "Google Search paid" vs
+// "Google Search organic"). Buckets mutuamente exclusivos validados no cross-tab dos 2 mercados:
+//   mídia    = tráfego pago: utm_medium cpc/paid/display/paid_social, ou referrer_source=paid
+//   CRM      = e-mail/SMS/WhatsApp: utm_medium email/sms/flow/campaign/whats…, ou referrer_source=email
+//   orgânico = busca/social orgânicos: referrer_source search/social (sem marca paga), ou medium organic/referral
+//   direto   = referrer direto/desconhecido sem campanha
+// Prioridade: pago → CRM → afiliado(residual) → orgânico → direto. (afiliados awin/shopmy = residual,
+// só no total do site.) Isso corrige busca/social orgânicos SEM utm, que antes caíam em "direto".
+const PAID_MEDIUMS = new Set(['cpc', 'paid', 'display', 'cpm', 'paid_social', 'paidsocial']);
+const CRM_MEDIUMS = new Set(['email', 'sms', 'text', 'flow', 'campaign', 'newsletter', 'push', 'mobile_messaging']);
+const AFFILIATE_MEDIUMS = new Set(['affiliate', 'afilliate', 'afiliado', 'offline']);
+const ORGANIC_MEDIUMS = new Set(['organic', 'social', 'referral']);
+
+function classifyOrigin(referrerSource: string | null | undefined, medium: string | null | undefined): 'media' | 'crm' | 'organic' | 'direct' | 'other' {
+  const rs = String(referrerSource || '').trim().toLowerCase();
   const m = String(medium || '').trim().toLowerCase();
-  if (!m) return 'direct';
-  if (m === 'cpc' || m === 'paid' || m === 'display' || m === 'cpm' || m === 'paid_social' || m === 'paidsocial') return 'media';
-  if (m === 'email' || m === 'sms' || m === 'text' || m === 'flow' || m === 'campaign' || m === 'newsletter' || m === 'push'
-    || m.includes('whats') || m === 'mobile_messaging') return 'crm';
-  if (m === 'social' || m === 'organic' || m === 'referral') return 'organic';
+  if (PAID_MEDIUMS.has(m) || rs === 'paid') return 'media';
+  if (CRM_MEDIUMS.has(m) || m.includes('whats') || rs === 'email') return 'crm';
+  if (AFFILIATE_MEDIUMS.has(m)) return 'other';
+  if (rs === 'search' || rs === 'social' || ORGANIC_MEDIUMS.has(m)) return 'organic';
+  if (!m && (rs === 'direct' || rs === 'unknown' || rs === '')) return 'direct';
   return 'other';
 }
 
 export interface SessionSplit { media: number; crm: number; direct: number; organic: number; }
 
-/** Sessões por período divididas em mídia/CRM/direto/orgânico (utm_medium), via ShopifyQL. */
+/** Sessões por período divididas em mídia/CRM/direto/orgânico (canal × tipo), via ShopifyQL. */
 export async function getSessionSplitByPeriod(market: Market, since: string, until: string, gran: Granularity): Promise<Map<string, SessionSplit>> {
-  const { rows } = await runShopifyQL(market, `FROM sessions SHOW sessions GROUP BY ${gran}, utm_medium SINCE ${since} UNTIL ${until}`, 'unstable');
+  const { rows } = await runShopifyQL(market, `FROM sessions SHOW sessions GROUP BY ${gran}, referrer_source, utm_medium SINCE ${since} UNTIL ${until} LIMIT 5000`, 'unstable');
   const map = new Map<string, SessionSplit>();
   for (const r of rows) {
     const d = r[gran] ? String(r[gran]).slice(0, 10) : '';
     if (!d) continue;
     let e = map.get(d);
     if (!e) { e = { media: 0, crm: 0, direct: 0, organic: 0 }; map.set(d, e); }
-    const bucket = classifyMedium(r.utm_medium);
+    const bucket = classifyOrigin(r.referrer_source, r.utm_medium);
     if (bucket === 'other') continue;
     e[bucket] += Number(r.sessions) || 0;
   }
