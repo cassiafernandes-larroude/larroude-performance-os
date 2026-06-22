@@ -8,6 +8,7 @@
 // compartilham período (ex.: ADS/CRM da mesma semana).
 
 import type { Market } from './asana';
+import { getAdSpendForMothers, motherOf } from './ad-spend';
 
 const SHOPIFY_API_VERSION = process.env.SHOPIFY_API_VERSION || '2025-01';
 function shopifyConfig(market: Market) {
@@ -40,8 +41,11 @@ export interface ActionResult {
   units: number;
   orders: number;
   basis: 'sku' | 'collection' | 'tag';
-  skuCount: number;          // nº de SKUs/prefixos considerados (0 quando basis=tag)
-  tag?: string;              // tag do pedido usada quando basis=tag (ex.: DROP_17.06.26)
+  skuCount: number;          // nº de SKUs-mãe (produtos) considerados
+  tag?: string;              // tag de produto usada quando basis=tag (ex.: DROP_17.06.26)
+  spend: number;             // total investido (ads Meta cujo nome casa os SKUs)
+  spendOk: boolean;          // false quando o token Meta falta/expira (investido incompleto)
+  roas: number | null;       // faturamento / investido (null se sem spend)
   window: { start: string; end: string };
   partial: boolean;          // true se o scan do Shopify bateu no limite de tempo/páginas
 }
@@ -158,20 +162,6 @@ async function salesBySkuPrefixes(market: Market, start: string, end: string, pr
   return { gmv, units, orders: orderIds.size, partial };
 }
 
-/** Resultado de um DROP pela TAG do pedido (DROP_DD.MM.AA): soma os pedidos inteiros que carregam a tag. */
-async function salesByOrderTag(market: Market, tag: string): Promise<{ gmv: number; units: number; orders: number; partial: boolean }> {
-  const filter = `tag:${tag} AND ${DTC_EXCLUSIONS}`;
-  const { lines, partial } = await fetchOrderLines(market, filter);
-  let gmv = 0, units = 0;
-  const orderIds = new Set<string>();
-  for (const l of lines) {
-    units += l.qty;
-    gmv += l.revenue;
-    orderIds.add(l.orderId);
-  }
-  return { gmv, units, orders: orderIds.size, partial };
-}
-
 const COLLECTION_QUERY = `
   query CollSkus($id: ID!, $cursor: String) {
     collection(id: $id) {
@@ -182,6 +172,48 @@ const COLLECTION_QUERY = `
     }
   }
 `;
+
+const PRODUCTS_BY_TAG_QUERY = `
+  query ProdSkusByTag($q: String!, $cursor: String) {
+    products(first: 50, query: $q, after: $cursor) {
+      edges { node { variants(first: 100) { edges { node { sku } } } } }
+      pageInfo { hasNextPage endCursor }
+    }
+  }
+`;
+
+/** Resolve uma tag de PRODUTO (ex.: DROP_17.06.26) → lista de SKUs das variações dos produtos do drop. */
+async function productSkusByTag(market: Market, tag: string): Promise<string[]> {
+  const url = shopUrl(market);
+  const token = shopToken(market);
+  const skus = new Set<string>();
+  let cursor: string | null = null;
+  let hasNext = true;
+  let pages = 0;
+  while (hasNext && pages < 50) {
+    pages++;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token },
+      body: JSON.stringify({ query: PRODUCTS_BY_TAG_QUERY, variables: { q: `tag:${tag}`, cursor } }),
+      cache: 'no-store',
+    });
+    if (!res.ok) throw new Error(`Shopify products ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    const json = (await res.json()) as any;
+    if (json.errors?.length) throw new Error(`Shopify products errors: ${JSON.stringify(json.errors).slice(0, 200)}`);
+    const products = json.data?.products;
+    if (!products) break;
+    for (const pe of products.edges) {
+      for (const ve of pe.node.variants?.edges || []) {
+        const sku = ve.node?.sku;
+        if (sku) skus.add(String(sku).toUpperCase());
+      }
+    }
+    hasNext = products.pageInfo?.hasNextPage;
+    cursor = products.pageInfo?.endCursor || null;
+  }
+  return [...skus];
+}
 
 /** Resolve uma collection Shopify → lista de SKUs das variações. */
 async function collectionSkus(market: Market, collectionId: string): Promise<string[]> {
@@ -217,9 +249,18 @@ async function collectionSkus(market: Market, collectionId: string): Promise<str
   return [...skus];
 }
 
+/** Reduz uma lista de SKUs a SKUs-mãe distintos (mantém o SKU cheio se não houver mãe). */
+function toMothers(skus: string[]): string[] {
+  const out = new Set<string>();
+  for (const s of skus) out.add(motherOf(s) || s.toUpperCase());
+  return [...out];
+}
+
 /**
- * Resultado de uma ação. Prioridade: Collection ID (manual) > SKUs (manual) > tag de drop (auto).
- * Tag de drop usa filtro server-side `tag:DROP_DD.MM.AA` e soma os pedidos inteiros (não precisa de janela).
+ * Resultado de uma ação. Prioridade do vínculo: Collection ID (manual) > SKUs (manual) > tag de drop (auto).
+ * Em todos os casos resolve os produtos → SKUs-mãe e mede no Shopify ao vivo na janela:
+ *   - unidades + faturamento (linhas dos pedidos cujos SKUs casam)
+ *   - investido (spend dos ads Meta cujo nome carrega esses SKUs-mãe) → ROAS
  */
 export async function getActionResult(
   market: Market,
@@ -227,20 +268,36 @@ export async function getActionResult(
   end: string,
   link: { skus: string[]; collectionId: string | null; dropTag?: string | null }
 ): Promise<ActionResult | null> {
+  let basis: 'sku' | 'collection' | 'tag';
+  let rawSkus: string[];
+  let tag: string | undefined;
   if (link.collectionId) {
-    const skus = await collectionSkus(market, link.collectionId);
-    const sales = await salesBySkuPrefixes(market, start, end, skus);
-    return { ...sales, basis: 'collection', skuCount: skus.length, window: { start, end } };
+    basis = 'collection';
+    rawSkus = await collectionSkus(market, link.collectionId);
+  } else if (link.skus.length) {
+    basis = 'sku';
+    rawSkus = link.skus;
+  } else if (link.dropTag) {
+    basis = 'tag';
+    tag = link.dropTag;
+    rawSkus = await productSkusByTag(market, link.dropTag);
+  } else {
+    return null;
   }
-  if (link.skus.length) {
-    const sales = await salesBySkuPrefixes(market, start, end, link.skus);
-    return { ...sales, basis: 'sku', skuCount: link.skus.length, window: { start, end } };
-  }
-  if (link.dropTag) {
-    const sales = await salesByOrderTag(market, link.dropTag);
-    return { ...sales, basis: 'tag', skuCount: 0, tag: link.dropTag, window: { start, end } };
-  }
-  return null;
+
+  const mothers = toMothers(rawSkus);
+  const sales = await salesBySkuPrefixes(market, start, end, mothers);
+  const ad = await getAdSpendForMothers(market, start, end, mothers).catch(() => ({ spend: 0, ok: false }));
+  return {
+    ...sales,
+    basis,
+    skuCount: mothers.length,
+    tag,
+    spend: ad.spend,
+    spendOk: ad.ok,
+    roas: ad.spend > 0 ? sales.gmv / ad.spend : null,
+    window: { start, end },
+  };
 }
 
 /** Janela de medição de uma ação. Drop (só due) → due..due+14d; com range → start..due. */

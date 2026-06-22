@@ -209,18 +209,22 @@ function ActionRow({ a, market }: { a: Action; market: Market }) {
         {a.status === 'measured' && a.result && (
           <div>
             <div className="grid grid-cols-3 gap-2">
-              <Metric label="GMV" value={fmtMoney(a.result.gmv, market)} color="#10b981" />
+              <Metric label="Faturamento" value={fmtMoney(a.result.gmv, market)} color="#10b981" />
               <Metric label="Unidades" value={fmtN(a.result.units)} color="#5d4ec5" />
-              <Metric label="Pedidos" value={fmtN(a.result.orders)} color="#0ea5e9" />
+              <Metric label="Investido" value={a.result.spendOk ? fmtMoney(a.result.spend, market) : '—'} color="#e11d48" />
             </div>
             <div className="text-[9px] mt-1" style={{ color: 'var(--ink-muted)' }}>
+              {fmtN(a.result.orders)} pedidos
+              {a.result.roas != null ? ` · ROAS ${a.result.roas.toFixed(1)}×` : ''}
+              {' · '}
               {a.result.basis === 'tag'
-                ? `tag ${a.result.tag}`
+                ? `tag ${a.result.tag} · ${a.result.skuCount} produtos`
                 : a.result.basis === 'collection'
-                  ? `collection · ${a.result.skuCount} SKUs`
+                  ? `collection · ${a.result.skuCount} produtos`
                   : `${a.result.skuCount} SKU(s)`}
-              {a.result.basis !== 'tag' && a.window ? ` · ${fmtDate(a.window.start)}–${fmtDate(a.window.end)}` : ''}
-              {a.result.partial ? ' · ⚠ parcial' : ''} · Shopify ao vivo
+              {a.window ? ` · ${fmtDate(a.window.start)}–${fmtDate(a.window.end)}` : ''}
+              {a.result.partial ? ' · ⚠ vendas parciais' : ''}
+              {!a.result.spendOk ? ' · ⚠ investido indisponível (token Meta)' : ''}
             </div>
           </div>
         )}
