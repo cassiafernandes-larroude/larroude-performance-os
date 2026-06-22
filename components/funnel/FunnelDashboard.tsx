@@ -5,13 +5,13 @@
 // e funil de HOJE em tempo real com alerta de queda anormal por etapa.
 
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { FiltersBar } from '@/components/filters/FiltersBar';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
+import Header from '@/components/main-dashboard/Header';
+import type { PeriodKey } from '@/lib/main-dashboard/types';
 import BarLineChart, { type BarPoint } from '@/components/shared/BarLineChart';
 import MultiLineChart, { type Series } from '@/components/klaviyo/MultiLineChart';
 
 type Market = 'US' | 'BR';
-type PeriodKey = 'today' | '7d' | '14d' | '28d' | '3M' | '6M' | '12M';
 
 interface FunnelPoint { date: string; sessions: number; addToCart: number; reachedCheckout: number; completed: number; }
 interface Bundle {
@@ -32,7 +32,7 @@ interface Bundle {
 function presetRange(key: PeriodKey): { since: string; until: string } {
   const DAY = 86400000;
   const end = new Date(Date.now() - DAY);
-  const days = ({ today: 1, '7d': 7, '14d': 14, '28d': 28, '3M': 90, '6M': 180, '12M': 365 } as Record<string, number>)[key] ?? 28;
+  const days = ({ '1d': 1, '7d': 7, '14d': 14, '28d': 28, '60d': 60, '90d': 90, '3M': 90, '6M': 180, '12M': 365 } as Record<string, number>)[key] ?? 28;
   const start = new Date(end.getTime() - (days - 1) * DAY);
   const iso = (d: Date) => d.toISOString().slice(0, 10);
   return { since: iso(start), until: iso(end) };
@@ -55,15 +55,26 @@ const STAGES = [
 
 export default function FunnelDashboard() {
   const params = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const market = (params.get('market') || 'US') as Market;
   const periodParam = (params.get('period') || '28d') as PeriodKey;
   const urlFrom = params.get('from');
   const urlTo = params.get('to');
-  const { since, until } = urlFrom && urlTo ? { since: urlFrom, until: urlTo } : presetRange(periodParam);
+  const isCustom = !!(urlFrom && urlTo);
+  const { since, until } = isCustom ? { since: urlFrom!, until: urlTo! } : presetRange(periodParam);
+  const daysCount = Math.round((new Date(until).getTime() - new Date(since).getTime()) / 86400000) + 1;
+
+  const setParams = (updates: Record<string, string | null>) => {
+    const next = new URLSearchParams(params.toString());
+    for (const [k, v] of Object.entries(updates)) { if (v == null) next.delete(k); else next.set(k, v); }
+    router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+  };
 
   const [data, setData] = useState<Bundle | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [nonce, setNonce] = useState(0); // "Atualizar agora" → re-fetch
 
   useEffect(() => {
     let cancelled = false;
@@ -74,7 +85,7 @@ export default function FunnelDashboard() {
       .catch((e) => { if (!cancelled) setErr(e.message); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [market, since, until]);
+  }, [market, since, until, nonce]);
 
   const t = data?.totals;
   const sh = data?.shares;
@@ -112,14 +123,21 @@ export default function FunnelDashboard() {
 
   return (
     <div className="px-4 lg:px-8 py-5 lg:py-8 max-w-[1500px] mx-auto">
-      <div className="mb-3">
-        <h1 className="font-display text-[26px] lg:text-[36px]" style={{ color: 'var(--ink)' }}>Funil de Conversão</h1>
-        <p className="text-[12px] lg:text-[14px] mt-1" style={{ color: 'var(--ink-soft)' }}>
-          Sessões → carrinho → checkout → pedido · direto do Shopify · share de cada etapa · pagamento PIX/cartão · tempo real
-        </p>
-      </div>
-
-      <FiltersBar />
+      <Header
+        market={market}
+        period={periodParam}
+        customStart={urlFrom ?? undefined}
+        customEnd={urlTo ?? undefined}
+        isCustom={isCustom}
+        onMarketChange={(m) => setParams({ market: m })}
+        onPeriodChange={(p) => setParams({ period: p, from: null, to: null })}
+        onCustomRange={(s, e) => setParams({ from: s, to: e, period: null })}
+        onRefresh={() => setNonce((n) => n + 1)}
+        onExportPdf={() => { if (typeof window !== 'undefined') window.print(); }}
+        refreshing={loading}
+        periodRange={{ start: since, end: until, days: daysCount }}
+        title="Funil de Conversão"
+      />
 
       {loading && <div className="card text-center py-8" style={{ color: 'var(--ink-soft)' }}>Carregando funil…</div>}
       {err && <div className="card border-rose-300 bg-rose-50 text-rose-700 text-sm">Erro: {err}</div>}
