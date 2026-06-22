@@ -262,6 +262,54 @@ export async function getDropProducts(market: Market, tag: string): Promise<Drop
   return out.sort((a, b) => a.title.localeCompare(b.title));
 }
 
+const COLLECTION_PRODUCTS_QUERY = `
+  query CollProds($id: ID!, $cursor: String) {
+    collection(id: $id) {
+      products(first: 50, after: $cursor) {
+        edges { node { title variants(first: 1) { edges { node { sku } } } } }
+        pageInfo { hasNextPage endCursor }
+      }
+    }
+  }
+`;
+
+/** Lista os produtos de uma collection: título + SKU canônico. */
+export async function getCollectionProducts(market: Market, collectionId: string): Promise<DropProduct[]> {
+  const url = shopUrl(market);
+  const token = shopToken(market);
+  const gid = `gid://shopify/Collection/${collectionId}`;
+  const out: DropProduct[] = [];
+  const seen = new Set<string>();
+  let cursor: string | null = null;
+  let hasNext = true;
+  let pages = 0;
+  while (hasNext && pages < 50) {
+    pages++;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token },
+      body: JSON.stringify({ query: COLLECTION_PRODUCTS_QUERY, variables: { id: gid, cursor } }),
+      cache: 'no-store',
+    });
+    if (!res.ok) throw new Error(`Shopify collection ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    const json = (await res.json()) as any;
+    if (json.errors?.length) throw new Error(`Shopify collection errors: ${JSON.stringify(json.errors).slice(0, 200)}`);
+    const products = json.data?.collection?.products;
+    if (!products) break;
+    for (const pe of products.edges) {
+      const sku = canonicalSku(pe.node.variants?.edges?.[0]?.node?.sku || '');
+      const title = pe.node.title || '(sem título)';
+      const key = sku || title;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ title, sku });
+    }
+    hasNext = products.pageInfo?.hasNextPage;
+    cursor = products.pageInfo?.endCursor || null;
+  }
+  return out.sort((a, b) => a.title.localeCompare(b.title));
+}
+
 /** Resolve uma collection Shopify → lista de SKUs das variações. */
 async function collectionSkus(market: Market, collectionId: string): Promise<string[]> {
   const url = shopUrl(market);

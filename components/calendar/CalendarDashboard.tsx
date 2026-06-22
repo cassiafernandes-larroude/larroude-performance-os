@@ -191,13 +191,24 @@ interface DropProduct { title: string; sku: string; }
 
 function ActionRow({ a, market }: { a: Action; market: Market }) {
   const isAds = a.category.includes('ADS');
-  const isDrop = !!a.dropTag;
-  const expandable = isAds || isDrop;
+  const isSale = a.category.includes('Sale') || a.category.includes('Sales');
+  // Mostra SKUs ao clicar: drops (tag auto), sales, ou qualquer ação com Collection ID / SKUs preenchidos.
+  const skuMode = !isAds && (!!a.dropTag || isSale || !!a.collectionId || a.skus.length > 0);
+  const expandable = isAds || skuMode;
   const [open, setOpen] = useState(false);
   const [subs, setSubs] = useState<SubTask[] | null>(null);
   const [prods, setProds] = useState<DropProduct[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [detErr, setDetErr] = useState<string | null>(null);
+
+  // Prioridade do vínculo (igual ao resultado): Collection ID > SKUs manuais > tag de drop.
+  const skuQuery = a.collectionId
+    ? `collection=${encodeURIComponent(a.collectionId)}`
+    : a.skus.length > 0
+      ? `skus=${encodeURIComponent(a.skus.join(','))}`
+      : a.dropTag
+        ? `tag=${encodeURIComponent(a.dropTag)}`
+        : null;
 
   const toggle = useCallback(async () => {
     if (!expandable) return;
@@ -213,17 +224,18 @@ function ActionRow({ a, market }: { a: Action; market: Market }) {
         if (!json.available && json.error) setDetErr(json.error);
       } catch (e: any) { setDetErr(e?.message || 'falha'); setSubs([]); }
       finally { setLoading(false); }
-    } else if (isDrop && prods === null) {
+    } else if (skuMode && prods === null) {
+      if (!skuQuery) { setProds([]); return; } // sale/ação sem vínculo → prompt
       setLoading(true); setDetErr(null);
       try {
-        const res = await fetch(`/api/calendar/drop-skus/${market}?tag=${encodeURIComponent(a.dropTag!)}`, { cache: 'no-store' });
+        const res = await fetch(`/api/calendar/drop-skus/${market}?${skuQuery}`, { cache: 'no-store' });
         const json = await res.json();
         setProds(Array.isArray(json.products) ? json.products : []);
         if (!json.available && json.error) setDetErr(json.error);
       } catch (e: any) { setDetErr(e?.message || 'falha'); setProds([]); }
       finally { setLoading(false); }
     }
-  }, [expandable, isAds, isDrop, open, loading, subs, prods, a.gid, a.dropTag, market]);
+  }, [expandable, isAds, skuMode, skuQuery, open, loading, subs, prods, a.gid, market]);
 
   return (
     <div className="rounded-xl" style={{ background: 'var(--paper)', border: '1px solid var(--border)' }}>
@@ -244,7 +256,7 @@ function ActionRow({ a, market }: { a: Action; market: Market }) {
             <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: '#ebe9e3', color: '#1a1a1a' }}>{a.market}</span>
           )}
           {isAds && <span className="text-[10px]" style={{ color: 'var(--ink-muted)' }}>· subtarefas</span>}
-          {isDrop && !isAds && <span className="text-[10px]" style={{ color: 'var(--ink-muted)' }}>· SKUs do drop</span>}
+          {skuMode && <span className="text-[10px]" style={{ color: 'var(--ink-muted)' }}>· SKUs</span>}
         </div>
         <div className="flex items-center gap-2 flex-wrap mt-1.5">
           {a.category.map((c) => (
@@ -323,13 +335,17 @@ function ActionRow({ a, market }: { a: Action; market: Market }) {
             </div>
           )}
 
-          {/* Drop → lista de SKUs/produtos */}
-          {isDrop && !isAds && !loading && prods && prods.length === 0 && !detErr && (
-            <div className="text-[11px] py-1" style={{ color: 'var(--ink-muted)' }}>Nenhum produto com a tag {a.dropTag}.</div>
+          {/* Drop/Sale/linkadas → lista de SKUs/produtos */}
+          {skuMode && !loading && prods && prods.length === 0 && !detErr && (
+            <div className="text-[11px] py-1" style={{ color: 'var(--ink-muted)' }}>
+              {skuQuery ? 'Nenhum produto encontrado para o vínculo.' : 'Sem SKUs vinculados — preencha Collection ID ou SKUs no Asana.'}
+            </div>
           )}
-          {isDrop && !isAds && prods && prods.length > 0 && (
+          {skuMode && prods && prods.length > 0 && (
             <div className="mt-1">
-              <div className="text-[10px] uppercase tracking-wider mb-1" style={{ color: 'var(--ink-muted)' }}>{prods.length} SKUs · tag {a.dropTag}</div>
+              <div className="text-[10px] uppercase tracking-wider mb-1" style={{ color: 'var(--ink-muted)' }}>
+                {prods.length} SKUs{a.dropTag && !a.collectionId && a.skus.length === 0 ? ` · tag ${a.dropTag}` : a.collectionId ? ` · collection ${a.collectionId}` : ''}
+              </div>
               <div className="space-y-1">
                 {prods.map((p) => (
                   <div key={p.sku || p.title} className="flex items-center justify-between gap-3 text-[12px]" style={{ color: 'var(--ink)' }}>
