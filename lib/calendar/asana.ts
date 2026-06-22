@@ -100,6 +100,19 @@ const OPT_FIELDS = [
   'custom_fields.number_value', 'custom_fields.enum_value.name', 'custom_fields.multi_enum_values.name',
 ].join(',');
 
+export interface SubTask { gid: string; name: string; completed: boolean; dueOn: string | null; }
+
+/** Subtarefas (checklist) de uma tarefa — usado para abrir o detalhe das ações de ADS. */
+export async function getSubtasks(taskGid: string): Promise<SubTask[]> {
+  const json = await asanaGet(`/tasks/${taskGid}/subtasks?opt_fields=name,completed,due_on&limit=100`);
+  return (json.data || []).map((t: any) => ({
+    gid: t.gid,
+    name: t.name || '',
+    completed: !!t.completed,
+    dueOn: t.due_on || null,
+  }));
+}
+
 /** Lê todas as tarefas do 2026 Macro Calendar, normalizadas. */
 export async function getMacroCalendar(): Promise<CalendarAction[]> {
   const actions: CalendarAction[] = [];

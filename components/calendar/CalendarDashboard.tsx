@@ -3,7 +3,7 @@
 // resultado de vendas (GMV/unid/pedidos) de cada ação puxado ao vivo do BigQuery. Sem banco.
 
 import { useCallback, useEffect, useState } from 'react';
-import { RefreshCw, ExternalLink, CalendarDays } from 'lucide-react';
+import { RefreshCw, ExternalLink, CalendarDays, ChevronRight, ChevronDown, Check } from 'lucide-react';
 
 type Market = 'US' | 'BR';
 
@@ -167,19 +167,53 @@ function Chip({ label, value }: { label: string; value: string }) {
   );
 }
 
+interface SubTask { gid: string; name: string; completed: boolean; dueOn: string | null; }
+
 function ActionRow({ a, market }: { a: Action; market: Market }) {
+  const isAds = a.category.includes('ADS');
+  const [open, setOpen] = useState(false);
+  const [subs, setSubs] = useState<SubTask[] | null>(null);
+  const [subLoading, setSubLoading] = useState(false);
+  const [subErr, setSubErr] = useState<string | null>(null);
+
+  const toggle = useCallback(async () => {
+    if (!isAds) return;
+    const next = !open;
+    setOpen(next);
+    if (next && subs === null && !subLoading) {
+      setSubLoading(true); setSubErr(null);
+      try {
+        const res = await fetch(`/api/calendar/subtasks/${a.gid}`, { cache: 'no-store' });
+        const json = await res.json();
+        setSubs(Array.isArray(json.subtasks) ? json.subtasks : []);
+        if (!json.available && json.error) setSubErr(json.error);
+      } catch (e: any) {
+        setSubErr(e?.message || 'falha'); setSubs([]);
+      } finally {
+        setSubLoading(false);
+      }
+    }
+  }, [isAds, open, subs, subLoading, a.gid]);
+
   return (
-    <div className="rounded-xl p-3 flex flex-col lg:flex-row lg:items-center gap-3" style={{ background: 'var(--paper)', border: '1px solid var(--border)' }}>
+    <div className="rounded-xl" style={{ background: 'var(--paper)', border: '1px solid var(--border)' }}>
+      <div
+        className={`p-3 flex flex-col lg:flex-row lg:items-center gap-3 ${isAds ? 'cursor-pointer hover:bg-black/[0.02]' : ''}`}
+        onClick={isAds ? toggle : undefined}
+        role={isAds ? 'button' : undefined}
+      >
       {/* Esquerda: ação */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
+          {isAds && (open ? <ChevronDown className="w-4 h-4 shrink-0" style={{ color: 'var(--ink-muted)' }} /> : <ChevronRight className="w-4 h-4 shrink-0" style={{ color: 'var(--ink-muted)' }} />)}
           {a.completed && <span title="Concluída" className="text-[12px]">✅</span>}
-          <a href={a.url} target="_blank" rel="noopener noreferrer" className="text-[13px] font-semibold hover:underline inline-flex items-center gap-1" style={{ color: 'var(--ink)' }}>
+          <a href={a.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-[13px] font-semibold hover:underline inline-flex items-center gap-1" style={{ color: 'var(--ink)' }}>
             {a.title || '(sem título)'} <ExternalLink className="w-3 h-3 opacity-50" />
           </a>
           {a.market !== 'BOTH' && (
             <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: '#ebe9e3', color: '#1a1a1a' }}>{a.market}</span>
           )}
+          {isAds && <span className="text-[10px]" style={{ color: 'var(--ink-muted)' }}>· subtarefas</span>}
         </div>
         <div className="flex items-center gap-2 flex-wrap mt-1.5">
           {a.category.map((c) => (
@@ -229,6 +263,34 @@ function ActionRow({ a, market }: { a: Action; market: Market }) {
           </div>
         )}
       </div>
+      </div>
+
+      {/* Subtarefas (ADS) — abre ao clicar no bloco */}
+      {isAds && open && (
+        <div className="px-3 pb-3 pt-1" style={{ borderTop: '1px solid var(--border)' }}>
+          {subLoading && <div className="text-[11px] py-1" style={{ color: 'var(--ink-muted)' }}>Carregando subtarefas…</div>}
+          {subErr && <div className="text-[11px] py-1" style={{ color: '#e11d48' }}>Erro: {subErr}</div>}
+          {!subLoading && subs && subs.length === 0 && !subErr && (
+            <div className="text-[11px] py-1" style={{ color: 'var(--ink-muted)' }}>Sem subtarefas.</div>
+          )}
+          {subs && subs.length > 0 && (
+            <div className="mt-1 space-y-1">
+              {subs.map((s) => (
+                <div key={s.gid} className="flex items-center gap-2 text-[12px]" style={{ color: 'var(--ink)' }}>
+                  <span
+                    className="inline-flex items-center justify-center w-4 h-4 rounded shrink-0"
+                    style={{ border: `1px solid ${s.completed ? '#10b981' : 'var(--border)'}`, background: s.completed ? '#10b981' : 'transparent' }}
+                  >
+                    {s.completed && <Check className="w-3 h-3" style={{ color: 'white' }} />}
+                  </span>
+                  <span style={{ textDecoration: s.completed ? 'line-through' : 'none', color: s.completed ? 'var(--ink-muted)' : 'var(--ink)' }}>{s.name}</span>
+                  {s.dueOn && <span className="text-[10px]" style={{ color: 'var(--ink-muted)' }}>· {fmtDate(s.dueOn)}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
