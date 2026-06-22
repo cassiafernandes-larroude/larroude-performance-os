@@ -18,9 +18,11 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
   }
 
   const today = new Date().toISOString().slice(0, 10);
+  // ?n=… (botão Atualizar) fura o cache de 10min, forçando releitura do Asana + Shopify.
+  const nonce = new URL(req.url).searchParams.get('n') || '';
 
   try {
-    const result = await memo(`calendar:v1:${market}:${today}`, TTL_10M, async () => {
+    const result = await memo(`calendar:v1:${market}:${today}:${nonce}`, TTL_10M, async () => {
       const all = await getMacroCalendar();
       // Mercado: a aba US mostra US + Ambos; BR mostra BR + Ambos.
       const mine = all.filter((a) => a.market === market || a.market === 'BOTH');
