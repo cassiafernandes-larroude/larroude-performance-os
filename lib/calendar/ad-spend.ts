@@ -25,10 +25,20 @@ function token(): string | null {
   );
 }
 
-/** SKU-mãe (L + 3-5 dígitos) de um SKU completo ou nome. */
-export function motherOf(sku: string | null | undefined): string | null {
-  const m = /L\d{3,5}/i.exec(sku || '');
-  return m ? m[0].toUpperCase() : null;
+/**
+ * SKU canônico (modelo+cor+estilo, SEM tamanho): L<nº>-MODELO-COR-ESTILO (ex.: L422-VERO-RICE-1839).
+ * A variante do pedido traz o tamanho no índice 2 (ex.: L420-LOUL-5.0-BLAC-2985 → L420-LOUL-BLAC-2985).
+ * Um SKU já canônico ou um SKU-mãe bruto (L422) passa inalterado.
+ */
+export function canonicalSku(sku: string | null | undefined): string {
+  const parts = String(sku || '').toUpperCase().split('-');
+  if (parts.length >= 5 && /^\d{1,2}(\.\d+)?$/.test(parts[2])) parts.splice(2, 1);
+  return parts.join('-');
+}
+
+/** Casa um SKU canônico contra alvos canônicos: igual, ou alvo é prefixo de modelo+cor (mãe → todas as cores). */
+export function skuInTargets(cano: string, targets: string[]): boolean {
+  return targets.some((t) => cano === t || cano.startsWith(t + '-'));
 }
 
 async function getFxUsdBrl(yyyymm: string): Promise<number> {
@@ -70,14 +80,13 @@ async function fetchAccountRange(accountId: string, since: string, until: string
 export interface AdSpendResult { spend: number; ok: boolean; }
 
 /**
- * Soma o spend Meta na janela dos anúncios cujo nome contém um SKU cujo SKU-mãe está em `mothers`.
- * `ok=false` quando o token Meta falta/expira (spend fica incompleto → a UI sinaliza).
+ * Soma o spend Meta na janela dos anúncios cujo nome carrega um SKU que casa com `targets`
+ * (SKUs canônicos modelo+cor+estilo). `ok=false` quando o token Meta falta/expira (spend incompleto).
  */
-export async function getAdSpendForMothers(market: Market, since: string, until: string, mothers: string[]): Promise<AdSpendResult> {
-  if (!mothers.length) return { spend: 0, ok: true };
+export async function getAdSpendForSkus(market: Market, since: string, until: string, targets: string[]): Promise<AdSpendResult> {
+  if (!targets.length) return { spend: 0, ok: true };
   const tk = token();
   if (!tk) return { spend: 0, ok: false };
-  const target = new Set(mothers.map((m) => m.toUpperCase()));
   const fx = market === 'BR' ? await getFxUsdBrl(since.slice(0, 7)) : 1;
 
   const results = await Promise.all(ACCOUNT_IDS[market].map((id) => fetchAccountRange(id, since, until, tk)));
@@ -88,8 +97,7 @@ export async function getAdSpendForMothers(market: Market, since: string, until:
     for (const row of res.rows) {
       const ref = extractAdRefFromName(row.ad_name);
       if (!ref || ref.type !== 'sku') continue;
-      const mother = motherOf(ref.value);
-      if (!mother || !target.has(mother)) continue;
+      if (!skuInTargets(canonicalSku(ref.value), targets)) continue;
       spend += (Number(row.spend) || 0) * fx;
     }
   }

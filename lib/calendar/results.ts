@@ -8,7 +8,7 @@
 // compartilham período (ex.: ADS/CRM da mesma semana).
 
 import type { Market } from './asana';
-import { getAdSpendForMothers, motherOf } from './ad-spend';
+import { getAdSpendForSkus, canonicalSku, skuInTargets } from './ad-spend';
 
 const SHOPIFY_API_VERSION = process.env.SHOPIFY_API_VERSION || '2025-01';
 function shopifyConfig(market: Market) {
@@ -144,17 +144,16 @@ async function fetchOrderLines(market: Market, queryFilter: string, timeoutMs = 
   return data;
 }
 
-/** Agrega GMV/unidades/pedidos da janela para os SKUs cujo prefixo casa. */
-async function salesBySkuPrefixes(market: Market, start: string, end: string, prefixes: string[]): Promise<{ gmv: number; units: number; orders: number; partial: boolean }> {
-  if (!prefixes.length) return { gmv: 0, units: 0, orders: 0, partial: false };
-  const pfx = prefixes.map((p) => p.toUpperCase());
+/** Agrega GMV/unidades/pedidos da janela para os SKUs cujo SKU canônico (modelo+cor) casa os alvos. */
+async function salesByCanonical(market: Market, start: string, end: string, targets: string[]): Promise<{ gmv: number; units: number; orders: number; partial: boolean }> {
+  if (!targets.length) return { gmv: 0, units: 0, orders: 0, partial: false };
   // created_at em data (Shopify interpreta no fuso da loja, que casa com o mercado).
   const filter = `created_at:>=${start} created_at:<=${end} AND ${DTC_EXCLUSIONS}`;
   const { lines, partial } = await fetchOrderLines(market, filter);
   let gmv = 0, units = 0;
   const orderIds = new Set<string>();
   for (const l of lines) {
-    if (!l.sku || !pfx.some((p) => l.sku.startsWith(p))) continue;
+    if (!l.sku || !skuInTargets(canonicalSku(l.sku), targets)) continue;
     units += l.qty;
     gmv += l.revenue;
     orderIds.add(l.orderId);
@@ -249,10 +248,10 @@ async function collectionSkus(market: Market, collectionId: string): Promise<str
   return [...skus];
 }
 
-/** Reduz uma lista de SKUs a SKUs-mãe distintos (mantém o SKU cheio se não houver mãe). */
-function toMothers(skus: string[]): string[] {
+/** Reduz uma lista de SKUs (variantes/mães) a SKUs canônicos distintos (modelo+cor+estilo, sem tamanho). */
+function toCanonical(skus: string[]): string[] {
   const out = new Set<string>();
-  for (const s of skus) out.add(motherOf(s) || s.toUpperCase());
+  for (const s of skus) { const c = canonicalSku(s); if (c) out.add(c); }
   return [...out];
 }
 
@@ -285,15 +284,16 @@ export async function getActionResult(
     return null;
   }
 
-  // Vendas: casa pelos SKUs IDENTIFICADOS na tag/collection/manual (exatos via startsWith) — preciso,
-  // não pega outras cores do mesmo modelo. Investido: usa o SKU-mãe (é o que vem no nome do anúncio).
-  const mothers = toMothers(rawSkus);
-  const sales = await salesBySkuPrefixes(market, start, end, rawSkus);
-  const ad = await getAdSpendForMothers(market, start, end, mothers).catch(() => ({ spend: 0, ok: false }));
+  // Tudo casa pelo SKU canônico (modelo+cor+estilo, ex.: L422-VERO-RICE-1839) — preciso por cor,
+  // não mistura cores do mesmo modelo. Vendas: canônico do SKU da linha do pedido. Investido: canônico
+  // do SKU extraído do nome do anúncio.
+  const targets = toCanonical(rawSkus);
+  const sales = await salesByCanonical(market, start, end, targets);
+  const ad = await getAdSpendForSkus(market, start, end, targets).catch(() => ({ spend: 0, ok: false }));
   return {
     ...sales,
     basis,
-    skuCount: rawSkus.length,
+    skuCount: targets.length,
     tag,
     spend: ad.spend,
     spendOk: ad.ok,
