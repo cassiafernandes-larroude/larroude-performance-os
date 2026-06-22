@@ -7,12 +7,12 @@ import { RefreshCw, ExternalLink, CalendarDays } from 'lucide-react';
 
 type Market = 'US' | 'BR';
 
-interface ActionResult { gmv: number; units: number; orders: number; basis: 'sku' | 'collection'; skuCount: number; window: { start: string; end: string }; partial?: boolean; }
+interface ActionResult { gmv: number; units: number; orders: number; basis: 'sku' | 'collection' | 'tag'; skuCount: number; tag?: string; window: { start: string; end: string }; partial?: boolean; }
 interface Action {
   gid: string; title: string; url: string; week: string; category: string[];
   market: 'US' | 'BR' | 'BOTH';
   startOn: string | null; dueOn: string | null; completed: boolean;
-  skus: string[]; collectionId: string | null;
+  skus: string[]; collectionId: string | null; dropTag: string | null;
   window: { start: string; end: string } | null;
   hasLink: boolean; result: ActionResult | null; resultError: string | null;
   status: 'no_link' | 'pending' | 'measured';
@@ -214,8 +214,12 @@ function ActionRow({ a, market }: { a: Action; market: Market }) {
               <Metric label="Pedidos" value={fmtN(a.result.orders)} color="#0ea5e9" />
             </div>
             <div className="text-[9px] mt-1" style={{ color: 'var(--ink-muted)' }}>
-              {a.result.basis === 'collection' ? `collection · ${a.result.skuCount} SKUs` : `${a.result.skuCount} SKU(s)`}
-              {a.window ? ` · ${fmtDate(a.window.start)}–${fmtDate(a.window.end)}` : ''}
+              {a.result.basis === 'tag'
+                ? `tag ${a.result.tag}`
+                : a.result.basis === 'collection'
+                  ? `collection · ${a.result.skuCount} SKUs`
+                  : `${a.result.skuCount} SKU(s)`}
+              {a.result.basis !== 'tag' && a.window ? ` · ${fmtDate(a.window.start)}–${fmtDate(a.window.end)}` : ''}
               {a.result.partial ? ' · ⚠ parcial' : ''} · Shopify ao vivo
             </div>
           </div>

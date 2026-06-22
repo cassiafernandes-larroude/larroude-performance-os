@@ -21,6 +21,7 @@ export interface CalendarAction {
   completed: boolean;
   skus: string[];                     // campo "SKUs"
   collectionId: string | null;        // campo "Collection ID"
+  dropTag: string | null;             // tag de pedido do drop (auto: DROP_DD.MM.AA pela data)
 }
 
 export function asanaConfigured(): boolean {
@@ -48,6 +49,15 @@ function normalizeMarket(v: string | null | undefined, name: string): 'US' | 'BR
   if (s === 'BR' || s === 'BRASIL' || s === 'BRAZIL') return 'BR';
   if (s === 'AMBOS' || s === 'BOTH' || s === 'US/BR') return 'BOTH';
   return marketFromName(name);
+}
+
+/** Tag de pedido do drop no Shopify: padrão DROP_DD.MM.AA derivado da data (due). */
+function dropTagFromDate(dueOn: string | null): string | null {
+  if (!dueOn) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dueOn);
+  if (!m) return null;
+  const [, y, mo, d] = m;
+  return `DROP_${d}.${mo}.${y.slice(2)}`;
 }
 
 function splitSkus(raw: string | null | undefined): string[] {
@@ -108,6 +118,7 @@ export async function getMacroCalendar(): Promise<CalendarAction[]> {
         return v ? v.split(/,\s*/).map((s) => s.trim()).filter(Boolean) : [];
       })();
       const week = t.memberships?.find((m: any) => m.section?.name)?.section?.name?.replace(/\s+/g, ' ').trim() || 'Sem semana';
+      const isDrop = category.some((c) => /drop/i.test(c)) || /^drop\b/i.test(name);
       actions.push({
         gid: t.gid,
         title: name,
@@ -120,6 +131,7 @@ export async function getMacroCalendar(): Promise<CalendarAction[]> {
         completed: !!t.completed,
         skus: splitSkus(cfValue(byName('SKUs'))),
         collectionId: (cfValue(byName('Collection ID')) || '').replace(/[^0-9]/g, '') || null,
+        dropTag: isDrop ? dropTagFromDate(t.due_on) : null,
       });
     }
     offset = json.next_page?.offset || null;

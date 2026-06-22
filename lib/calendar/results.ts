@@ -39,8 +39,9 @@ export interface ActionResult {
   gmv: number;
   units: number;
   orders: number;
-  basis: 'sku' | 'collection';
-  skuCount: number;          // nº de SKUs/prefixos considerados
+  basis: 'sku' | 'collection' | 'tag';
+  skuCount: number;          // nº de SKUs/prefixos considerados (0 quando basis=tag)
+  tag?: string;              // tag do pedido usada quando basis=tag (ex.: DROP_17.06.26)
   window: { start: string; end: string };
   partial: boolean;          // true se o scan do Shopify bateu no limite de tempo/páginas
 }
@@ -49,8 +50,8 @@ export interface ActionResult {
 interface WindowLine { orderId: string; sku: string; qty: number; revenue: number; }
 interface WindowData { lines: WindowLine[]; partial: boolean; }
 
-const windowCache = new Map<string, { ts: number; data: WindowData }>();
-const WINDOW_TTL = 5 * 60 * 1000;
+const linesCache = new Map<string, { ts: number; data: WindowData }>();
+const LINES_TTL = 5 * 60 * 1000;
 
 const ORDERS_QUERY = `
   query CalOrders($cursor: String, $query: String!) {
@@ -81,17 +82,16 @@ const ORDERS_QUERY = `
   }
 `;
 
-/** Escaneia TODOS os line items DTC dos pedidos numa janela (cacheado por mercado+janela). */
-async function fetchWindowLines(market: Market, start: string, end: string, timeoutMs = 25_000): Promise<WindowData> {
-  const key = `${market}:${start}:${end}`;
-  const hit = windowCache.get(key);
-  if (hit && Date.now() - hit.ts < WINDOW_TTL) return hit.data;
+const DTC_EXCLUSIONS = '-tag:b2b AND -tag:wholesale AND -tag:marketplace AND -tag:Exchange-Only AND -tag:influencer';
+
+/** Escaneia os line items DTC de TODOS os pedidos que casam com um filtro Shopify (cacheado por mercado+filtro). */
+async function fetchOrderLines(market: Market, queryFilter: string, timeoutMs = 25_000): Promise<WindowData> {
+  const key = `${market}:${queryFilter}`;
+  const hit = linesCache.get(key);
+  if (hit && Date.now() - hit.ts < LINES_TTL) return hit.data;
 
   const url = shopUrl(market);
   const token = shopToken(market);
-  // created_at em data (Shopify interpreta no fuso da loja, que casa com o mercado).
-  const queryFilter = `created_at:>=${start} created_at:<=${end} AND -tag:b2b AND -tag:wholesale AND -tag:marketplace AND -tag:Exchange-Only AND -tag:influencer`;
-
   const lines: WindowLine[] = [];
   let cursor: string | null = null;
   let hasNext = true;
@@ -123,7 +123,6 @@ async function fetchWindowLines(market: Market, start: string, end: string, time
       if (EXCLUDED_TAGS.test(tags)) continue;
       for (const li of o.lineItems.edges) {
         const sku = (li.node.variant?.sku ?? li.node.sku) || '';
-        if (!sku) continue;
         const qty = Number(li.node.quantity) || 0;
         if (qty <= 0) continue;
         const disc = parseFloat(li.node.discountedUnitPriceSet?.shopMoney?.amount || '0') || 0;
@@ -137,7 +136,7 @@ async function fetchWindowLines(market: Market, start: string, end: string, time
   }
 
   const data: WindowData = { lines, partial };
-  windowCache.set(key, { ts: Date.now(), data });
+  linesCache.set(key, { ts: Date.now(), data });
   return data;
 }
 
@@ -145,11 +144,27 @@ async function fetchWindowLines(market: Market, start: string, end: string, time
 async function salesBySkuPrefixes(market: Market, start: string, end: string, prefixes: string[]): Promise<{ gmv: number; units: number; orders: number; partial: boolean }> {
   if (!prefixes.length) return { gmv: 0, units: 0, orders: 0, partial: false };
   const pfx = prefixes.map((p) => p.toUpperCase());
-  const { lines, partial } = await fetchWindowLines(market, start, end);
+  // created_at em data (Shopify interpreta no fuso da loja, que casa com o mercado).
+  const filter = `created_at:>=${start} created_at:<=${end} AND ${DTC_EXCLUSIONS}`;
+  const { lines, partial } = await fetchOrderLines(market, filter);
   let gmv = 0, units = 0;
   const orderIds = new Set<string>();
   for (const l of lines) {
-    if (!pfx.some((p) => l.sku.startsWith(p))) continue;
+    if (!l.sku || !pfx.some((p) => l.sku.startsWith(p))) continue;
+    units += l.qty;
+    gmv += l.revenue;
+    orderIds.add(l.orderId);
+  }
+  return { gmv, units, orders: orderIds.size, partial };
+}
+
+/** Resultado de um DROP pela TAG do pedido (DROP_DD.MM.AA): soma os pedidos inteiros que carregam a tag. */
+async function salesByOrderTag(market: Market, tag: string): Promise<{ gmv: number; units: number; orders: number; partial: boolean }> {
+  const filter = `tag:${tag} AND ${DTC_EXCLUSIONS}`;
+  const { lines, partial } = await fetchOrderLines(market, filter);
+  let gmv = 0, units = 0;
+  const orderIds = new Set<string>();
+  for (const l of lines) {
     units += l.qty;
     gmv += l.revenue;
     orderIds.add(l.orderId);
@@ -202,12 +217,15 @@ async function collectionSkus(market: Market, collectionId: string): Promise<str
   return [...skus];
 }
 
-/** Resultado de uma ação: usa Collection ID se houver, senão SKUs. */
+/**
+ * Resultado de uma ação. Prioridade: Collection ID (manual) > SKUs (manual) > tag de drop (auto).
+ * Tag de drop usa filtro server-side `tag:DROP_DD.MM.AA` e soma os pedidos inteiros (não precisa de janela).
+ */
 export async function getActionResult(
   market: Market,
   start: string,
   end: string,
-  link: { skus: string[]; collectionId: string | null }
+  link: { skus: string[]; collectionId: string | null; dropTag?: string | null }
 ): Promise<ActionResult | null> {
   if (link.collectionId) {
     const skus = await collectionSkus(market, link.collectionId);
@@ -217,6 +235,10 @@ export async function getActionResult(
   if (link.skus.length) {
     const sales = await salesBySkuPrefixes(market, start, end, link.skus);
     return { ...sales, basis: 'sku', skuCount: link.skus.length, window: { start, end } };
+  }
+  if (link.dropTag) {
+    const sales = await salesByOrderTag(market, link.dropTag);
+    return { ...sales, basis: 'tag', skuCount: 0, tag: link.dropTag, window: { start, end } };
   }
   return null;
 }

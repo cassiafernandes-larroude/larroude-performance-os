@@ -30,13 +30,13 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
       // Resultado só para ações COM vínculo e cuja janela já começou (mensurável).
       const enriched = await Promise.all(mine.map(async (a) => {
         const win = actionWindow(a.startOn, a.dueOn);
-        const hasLink = a.collectionId != null || a.skus.length > 0;
+        const hasLink = a.collectionId != null || a.skus.length > 0 || a.dropTag != null;
         let result: ActionResult | null = null;
         let resultError: string | null = null;
         let status: 'no_link' | 'pending' | 'measured' = hasLink ? 'pending' : 'no_link';
         if (hasLink && win && win.start <= today) {
           try {
-            result = await getActionResult(market, win.start, win.end, { skus: a.skus, collectionId: a.collectionId });
+            result = await getActionResult(market, win.start, win.end, { skus: a.skus, collectionId: a.collectionId, dropTag: a.dropTag });
             status = 'measured';
           } catch (e: any) {
             resultError = e?.message ? String(e.message).slice(0, 160) : 'erro';
