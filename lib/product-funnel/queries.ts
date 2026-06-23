@@ -44,7 +44,7 @@ function dropDate(tag: string): string | null {
   return `20${m[3]}-${m[2]}-${m[1]}`;
 }
 
-export interface PreorderProduct { handle: string; title: string; sku: string; dropTag: string; dropDate: string; }
+export interface PreorderProduct { handle: string; title: string; sku: string; rawSku: string; dropTag: string; dropDate: string; }
 
 /** Produtos da coleção de pré-order que têm tag de drop (handle, título, SKU canônico, drop). */
 async function getPreorderProducts(market: Market): Promise<PreorderProduct[]> {
@@ -68,9 +68,10 @@ async function getPreorderProducts(market: Market): Promise<PreorderProduct[]> {
       if (!dtag) continue;
       const dd = dropDate(dtag);
       if (!dd) continue;
-      const sku = canonicalSku(e.node.variants?.edges?.[0]?.node?.sku || '');
+      const rawSku = String(e.node.variants?.edges?.[0]?.node?.sku || '').toUpperCase();
+      const sku = canonicalSku(rawSku);
       if (!sku) continue;
-      out.push({ handle: e.node.handle, title: e.node.title || e.node.handle, sku, dropTag: dtag, dropDate: dd });
+      out.push({ handle: e.node.handle, title: e.node.title || e.node.handle, sku, rawSku, dropTag: dtag, dropDate: dd });
     }
     hasNext = products.pageInfo.hasNextPage;
     cursor = products.pageInfo.endCursor;
@@ -210,14 +211,12 @@ export async function getPreorderFunnel(market: Market): Promise<PreorderFunnelR
   const byDrop = new Map<string, PreorderProduct[]>();
   for (const p of products) { if (!byDrop.has(p.dropTag)) byDrop.set(p.dropTag, []); byDrop.get(p.dropTag)!.push(p); }
 
-  // COGS de todos os SKUs (unitCost por SKU; independe da janela).
-  const allSkus = [...new Set(products.map((p) => p.sku))];
-  const cogsMap = await getCogsBySku(market, allSkus).catch(() => new Map<string, number>());
-  const cogsOf = (sku: string): number => {
-    // unitCost pode estar cadastrado no SKU canônico ou numa variante — tenta canônico e prefixo.
-    for (const [k, v] of cogsMap.entries()) { if (canonicalSku(k) === sku) return v; }
-    return 0;
-  };
+  // COGS por variante (unitCost). Usa o SKU REAL da variante (com tamanho) — o canônico não casa no Shopify.
+  const allRaw = [...new Set(products.map((p) => p.rawSku))];
+  const cogsMap = await getCogsBySku(market, allRaw).catch(() => new Map<string, number>());
+  const cogsUpper = new Map<string, number>();
+  for (const [k, v] of cogsMap.entries()) cogsUpper.set(String(k).toUpperCase(), v);
+  const cogsOf = (rawSku: string): number => cogsUpper.get(rawSku.toUpperCase()) ?? 0;
 
   let spendOk = true;
   const drops: PreorderFunnelResult['drops'] = [];
@@ -250,7 +249,7 @@ export async function getPreorderFunnel(market: Market): Promise<PreorderFunnelR
       const s = sl.get(p.sku) || { grossUnits: 0, refundedUnits: 0, netRevenue: 0 };
       const units = s.grossUnits - s.refundedUnits;
       const revenue = s.netRevenue;
-      const cogs = cogsOf(p.sku) * units;
+      const cogs = cogsOf(p.rawSku) * units;
       const revMinusCost = revenue - cogs;
       return {
         handle: p.handle, title: p.title, sku: p.sku, dropTag: p.dropTag, dropDate: p.dropDate,
