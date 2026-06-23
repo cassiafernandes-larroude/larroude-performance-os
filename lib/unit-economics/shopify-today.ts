@@ -9,8 +9,28 @@
  */
 
 import type { Market } from './queries';
+import { runShopifyQL } from '@/lib/main-dashboard/shopify-admin';
 
 const API_VERSION = process.env.SHOPIFY_API_VERSION || '2025-01';
+
+/**
+ * Cassia 2026-06-23: vendas OFICIAIS do Shopify de HOJE (D0) via ShopifyQL `sales` — mesma fonte/
+ * definição do Triple Whale e do admin Shopify. gross_sales (pré-desconto) e total_sales (= net −
+ * returns + impostos + frete). Near-real-time (não depende do pipeline BQ).
+ */
+export async function getTodayShopifyQLSales(market: Market): Promise<{ grossSales: number; totalSales: number; netSales: number; discounts: number; returns: number }> {
+  const q = `FROM sales SHOW gross_sales, total_sales, net_sales, discounts, returns SINCE today UNTIL today`;
+  const { rows, error } = await runShopifyQL(market, q, 'unstable');
+  if (error) throw new Error(`ShopifyQL sales hoje: ${error}`);
+  const r = rows[0] || {};
+  return {
+    grossSales: Math.abs(Number(r.gross_sales) || 0),
+    totalSales: Number(r.total_sales) || 0,
+    netSales: Number(r.net_sales) || 0,
+    discounts: Math.abs(Number(r.discounts) || 0),
+    returns: Math.abs(Number(r.returns) || 0),
+  };
+}
 
 function getConfig(market: Market) {
   if (market === 'US') {
