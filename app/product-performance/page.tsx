@@ -785,7 +785,7 @@ function PreorderFunnelTab({ market, cur, loc }: { market: 'US' | 'BR'; cur: str
     { key: 'revenue', label: 'Faturamento', fmt: (r) => money(r.revenue), grp: 'res' },
     { key: 'returnRate', label: 'Returns', fmt: (r) => pct(r.returnRate), grp: 'res' },
     { key: 'revMinusCost', label: 'Receita − custo', fmt: (r) => money(r.revMinusCost), grp: 'pl' },
-    { key: 'contributionMargin', label: 'M. contrib.', fmt: (r) => money(r.contributionMargin), grp: 'pl' },
+    { key: 'contributionMargin', label: 'M. contrib.', fmt: (r) => pct(r.revenue > 0 ? (r.contributionMargin / r.revenue) * 100 : 0), grp: 'pl' },
     { key: 'grossMargin', label: 'M. bruta', fmt: (r) => pct(r.grossMargin), grp: 'pl' },
   ];
   const grpBg: Record<string, string> = { fun: '#f6f9ff', ads: '#fff7ed', res: '#f3fbf5', pl: '#faf5ff' };
