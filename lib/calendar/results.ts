@@ -9,6 +9,7 @@
 
 import type { Market } from './asana';
 import { getAdSpendForSkus, getTotalAdSpend, canonicalSku, skuInTargets } from './ad-spend';
+import { runShopifyQL } from '@/lib/main-dashboard/shopify-admin';
 
 const SHOPIFY_API_VERSION = process.env.SHOPIFY_API_VERSION || '2025-01';
 function shopifyConfig(market: Market) {
@@ -161,14 +162,22 @@ async function salesByCanonical(market: Market, start: string, end: string, targ
   return { gmv, units, orders: orderIds.size, partial };
 }
 
-/** Vendas DTC do SITE INTEIRO na janela (sem filtro de SKU) — para campanhas sitewide. */
+/**
+ * Vendas do SITE INTEIRO na janela — para campanhas sitewide. Usa o ShopifyQL `sales` (número oficial
+ * Shopify, completo e near-real-time): faturamento = total_sales (= net − returns + impostos + frete),
+ * unidades = net_items_sold, pedidos = orders. (Loja inteira, não filtra DTC — "todo o site".)
+ */
 async function salesAllSite(market: Market, start: string, end: string): Promise<{ gmv: number; units: number; orders: number; partial: boolean }> {
-  const filter = `created_at:>=${start} created_at:<=${end} AND ${DTC_EXCLUSIONS}`;
-  const { lines, partial } = await fetchOrderLines(market, filter);
-  let gmv = 0, units = 0;
-  const orderIds = new Set<string>();
-  for (const l of lines) { units += l.qty; gmv += l.revenue; orderIds.add(l.orderId); }
-  return { gmv, units, orders: orderIds.size, partial };
+  const q = `FROM sales SHOW gross_sales, total_sales, net_items_sold, orders SINCE ${start} UNTIL ${end}`;
+  const { rows, error } = await runShopifyQL(market, q, 'unstable');
+  if (error) throw new Error(`ShopifyQL sales sitewide: ${error}`);
+  const r = rows[0] || {};
+  return {
+    gmv: Number(r.total_sales) || 0,
+    units: Number(r.net_items_sold) || 0,
+    orders: Number(r.orders) || 0,
+    partial: false,
+  };
 }
 
 const COLLECTION_QUERY = `
