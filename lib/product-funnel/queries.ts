@@ -36,6 +36,10 @@ function metaToken(): string | null {
   return process.env.META_ACCESS_TOKEN || process.env.FACEBOOK_ACCESS_TOKEN || process.env.FB_ADS_ACCESS_TOKEN || process.env.META_GRAPH_ACCESS_TOKEN || null;
 }
 const today = () => new Date().toISOString().slice(0, 10);
+const addDays = (iso: string, n: number) => { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+/** Fim da janela do drop: 14 dias a partir do lançamento (cap em hoje, pra não consultar futuro). */
+const WINDOW_DAYS = 14;
+function windowUntil(since: string): string { const end = addDays(since, WINDOW_DAYS); const t = today(); return end > t ? t : end; }
 
 /** DROP_DD.MM.AA → data YYYY-MM-DD (data do drop). */
 function dropDate(tag: string): string | null {
@@ -81,8 +85,8 @@ async function getPreorderProducts(market: Market): Promise<PreorderProduct[]> {
 
 interface Funnel { sessions: number; atc: number; reached: number; completed: number; }
 /** Funil por página de produto (landing_page_path) numa janela → Map handle→funil. */
-async function getProductPageFunnel(market: Market, since: string): Promise<Map<string, Funnel>> {
-  const q = `FROM sessions SHOW sessions, sessions_with_cart_additions, sessions_that_reached_checkout, sessions_that_completed_checkout GROUP BY landing_page_path SINCE ${since} UNTIL ${today()} LIMIT 5000`;
+async function getProductPageFunnel(market: Market, since: string, until: string): Promise<Map<string, Funnel>> {
+  const q = `FROM sessions SHOW sessions, sessions_with_cart_additions, sessions_that_reached_checkout, sessions_that_completed_checkout GROUP BY landing_page_path SINCE ${since} UNTIL ${until} LIMIT 5000`;
   const { rows } = await runShopifyQL(market, q, 'unstable');
   const map = new Map<string, Funnel>();
   for (const r of rows) {
@@ -111,12 +115,12 @@ async function getFx(market: Market, yyyymm: string): Promise<number> {
   return FX_FALLBACK;
 }
 /** Métricas de ads por SKU canônico numa janela (spend convertido p/ moeda do mercado, cliques, impressões). */
-async function getAdMetricsBySku(market: Market, since: string): Promise<{ map: Map<string, AdMetrics>; ok: boolean }> {
+async function getAdMetricsBySku(market: Market, since: string, until: string): Promise<{ map: Map<string, AdMetrics>; ok: boolean }> {
   const tk = metaToken();
   const map = new Map<string, AdMetrics>();
   if (!tk) return { map, ok: false };
   const fx = await getFx(market, since.slice(0, 7));
-  const timeRange = encodeURIComponent(JSON.stringify({ since, until: today() }));
+  const timeRange = encodeURIComponent(JSON.stringify({ since, until }));
   let ok = true;
   await Promise.all(META_ACCOUNTS[market].map(async (acc) => {
     let url: string | null = `${GRAPH}/act_${acc}/insights?level=ad&time_range=${timeRange}&fields=ad_name,spend,clicks,impressions&limit=500&access_token=${tk}`;
@@ -146,7 +150,7 @@ async function getAdMetricsBySku(market: Market, since: string): Promise<{ map: 
 
 interface Sales { grossUnits: number; refundedUnits: number; netRevenue: number; }
 /** Unidades/faturamento/returns por SKU canônico numa janela (BQ orders, líquido de devoluções). */
-async function getSalesBySku(market: Market, since: string): Promise<Map<string, Sales>> {
+async function getSalesBySku(market: Market, since: string, until: string): Promise<Map<string, Sales>> {
   const tz = TZ[market];
   const ref = '`' + ORDERS_TABLE[market] + '`';
   const sql = `
@@ -174,7 +178,7 @@ async function getSalesBySku(market: Market, since: string): Promise<Map<string,
     WHERE li.sku IS NOT NULL
     GROUP BY li.sku
   `;
-  const rows = await runQuery<any>(sql, { since, until: today() });
+  const rows = await runQuery<any>(sql, { since, until });
   // Reduz variantes → SKU canônico.
   const map = new Map<string, Sales>();
   for (const r of rows) {
@@ -202,11 +206,12 @@ function variantRegexFromCanonical(canonical: string): string {
 /** Série diária de UM produto pré-order: sessões/add-to-cart (Shopify página) + unidades/faturamento (orders). */
 export async function getProductDaily(market: Market, handle: string, sku: string, since: string): Promise<DailyPoint[]> {
   const safeHandle = handle.replace(/[^a-z0-9._-]/gi, '');
+  const until = windowUntil(since);
   const tz = TZ[market];
   const ref = '`' + ORDERS_TABLE[market] + '`';
   const skuRe = variantRegexFromCanonical(sku);
 
-  const funnelQ = `FROM sessions SHOW sessions, sessions_with_cart_additions GROUP BY day WHERE landing_page_path = '/products/${safeHandle}' SINCE ${since} UNTIL ${today()}`;
+  const funnelQ = `FROM sessions SHOW sessions, sessions_with_cart_additions GROUP BY day WHERE landing_page_path = '/products/${safeHandle}' SINCE ${since} UNTIL ${until}`;
   const ordersSql = `
     WITH refunded AS (
       SELECT o.id AS oid, CAST(JSON_VALUE(rli, '$.line_item_id') AS INT64) AS lid,
@@ -233,7 +238,7 @@ export async function getProductDaily(market: Market, handle: string, sku: strin
 
   const [funnel, orders] = await Promise.all([
     runShopifyQL(market, funnelQ, 'unstable').catch(() => ({ rows: [] as any[] })),
-    runQuery<any>(ordersSql, { since, until: today(), skuRe }).catch(() => [] as any[]),
+    runQuery<any>(ordersSql, { since, until, skuRe }).catch(() => [] as any[]),
   ]);
 
   const map = new Map<string, DailyPoint>();
@@ -260,12 +265,27 @@ export interface ProductFunnelRow {
   clicks: number; impressions: number; ctr: number; spend: number;
   units: number; revenue: number; returnRate: number;
   cogs: number; revMinusCost: number; contributionMargin: number; grossMargin: number;
+  recommendation: 'produce' | 'evaluate' | 'stop' | 'nodata';
 }
 export interface PreorderFunnelResult {
   available: boolean;
   reason?: string;
   spendOk: boolean;
-  drops: { drop: string; dropDate: string; rows: ProductFunnelRow[] }[];
+  drops: { drop: string; dropDate: string; windowComplete: boolean; rows: ProductFunnelRow[] }[];
+}
+
+/**
+ * Recomendação de produção (regra Cassia: demanda + margem + returns), avaliada na janela de 14d:
+ *   🟢 produce  : contribuição>0, margem bruta ≥ 50%, returns ≤ 15% e vendeu bem (≥10 un OU conv ≥ 1%)
+ *   🔴 stop     : contribuição ≤ 0, returns > 25%, ou demanda muito baixa (<5 un e conv <0.5%)
+ *   🟡 evaluate : lucrativo mas algum sinal fraco
+ *   ⚪ nodata   : sem sinal de medição (0 sessões e 0 unidades)
+ */
+function produceRec(r: { contributionMargin: number; grossMargin: number; returnRate: number; units: number; convRate: number; sessions: number }): ProductFunnelRow['recommendation'] {
+  if (r.units === 0 && r.sessions === 0) return 'nodata';
+  if (r.contributionMargin <= 0 || r.returnRate > 25 || (r.units < 5 && r.convRate < 0.5)) return 'stop';
+  if (r.contributionMargin > 0 && r.grossMargin >= 50 && r.returnRate <= 15 && (r.units >= 10 || r.convRate >= 1)) return 'produce';
+  return 'evaluate';
 }
 
 export async function getPreorderFunnel(market: Market): Promise<PreorderFunnelResult> {
@@ -292,10 +312,11 @@ export async function getPreorderFunnel(market: Market): Promise<PreorderFunnelR
   const adByDate = new Map<string, Map<string, AdMetrics>>();
   const salesByDate = new Map<string, Map<string, Sales>>();
   await Promise.all(distinctSince.map(async (since) => {
+    const until = windowUntil(since); // 14 dias a partir do lançamento
     const [fn, ad, sl] = await Promise.all([
-      getProductPageFunnel(market, since).catch(() => new Map<string, Funnel>()),
-      getAdMetricsBySku(market, since).catch(() => ({ map: new Map<string, AdMetrics>(), ok: false })),
-      getSalesBySku(market, since).catch(() => new Map<string, Sales>()),
+      getProductPageFunnel(market, since, until).catch(() => new Map<string, Funnel>()),
+      getAdMetricsBySku(market, since, until).catch(() => ({ map: new Map<string, AdMetrics>(), ok: false })),
+      getSalesBySku(market, since, until).catch(() => new Map<string, Sales>()),
     ]);
     funnelByDate.set(since, fn);
     adByDate.set(since, ad.map);
@@ -316,16 +337,21 @@ export async function getPreorderFunnel(market: Market): Promise<PreorderFunnelR
       const revenue = s.netRevenue;
       const cogs = cogsOf(p.rawSku) * units;
       const revMinusCost = revenue - cogs;
+      const convRate = f.sessions > 0 ? (f.completed / f.sessions) * 100 : 0;
+      const returnRate = s.grossUnits > 0 ? (s.refundedUnits / s.grossUnits) * 100 : 0;
+      const contributionMargin = revMinusCost - a.spend;
+      const grossMargin = revenue > 0 ? (revMinusCost / revenue) * 100 : 0;
       return {
         handle: p.handle, title: p.title, sku: p.sku, dropTag: p.dropTag, dropDate: p.dropDate,
-        sessions: f.sessions, addToCart: f.atc, reachedCheckout: f.reached, completedCheckout: f.completed,
-        convRate: f.sessions > 0 ? (f.completed / f.sessions) * 100 : 0,
+        sessions: f.sessions, addToCart: f.atc, reachedCheckout: f.reached, completedCheckout: f.completed, convRate,
         clicks: a.clicks, impressions: a.impressions, ctr: a.impressions > 0 ? (a.clicks / a.impressions) * 100 : 0, spend: a.spend,
-        units, revenue, returnRate: s.grossUnits > 0 ? (s.refundedUnits / s.grossUnits) * 100 : 0,
-        cogs, revMinusCost, contributionMargin: revMinusCost - a.spend, grossMargin: revenue > 0 ? (revMinusCost / revenue) * 100 : 0,
+        units, revenue, returnRate,
+        cogs, revMinusCost, contributionMargin, grossMargin,
+        recommendation: produceRec({ contributionMargin, grossMargin, returnRate, units, convRate, sessions: f.sessions }),
       };
     }).sort((x, y) => y.revenue - x.revenue);
-    drops.push({ drop: tag, dropDate: since, rows });
+    const windowComplete = addDays(since, WINDOW_DAYS) <= today();
+    drops.push({ drop: tag, dropDate: since, windowComplete, rows });
   }
   drops.sort((a, b) => b.dropDate.localeCompare(a.dropDate));
   return { available: true, spendOk, drops };

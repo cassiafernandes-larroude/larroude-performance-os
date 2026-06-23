@@ -728,8 +728,16 @@ interface PFRow {
   clicks: number; impressions: number; ctr: number; spend: number;
   units: number; revenue: number; returnRate: number;
   cogs: number; revMinusCost: number; contributionMargin: number; grossMargin: number;
+  recommendation: 'produce' | 'evaluate' | 'stop' | 'nodata';
 }
-interface PFResult { available: boolean; reason?: string; error?: string; spendOk: boolean; drops: { drop: string; dropDate: string; rows: PFRow[] }[]; }
+interface PFResult { available: boolean; reason?: string; error?: string; spendOk: boolean; drops: { drop: string; dropDate: string; windowComplete: boolean; rows: PFRow[] }[]; }
+
+const REC: Record<PFRow['recommendation'], { label: string; color: string; bg: string }> = {
+  produce: { label: '✓ Produzir', color: '#16A34A', bg: '#e8f6ec' },
+  evaluate: { label: '~ Avaliar', color: '#b45309', bg: '#fdf3e3' },
+  stop: { label: '✕ Não produzir', color: '#dc2626', bg: '#fdeaea' },
+  nodata: { label: '— Sem dados', color: '#9ca3af', bg: '#f3f4f6' },
+};
 
 function PreorderFunnelTab({ market, cur, loc }: { market: 'US' | 'BR'; cur: string; loc: string }) {
   const [data, setData] = useState<PFResult | null>(null);
@@ -763,8 +771,9 @@ function PreorderFunnelTab({ market, cur, loc }: { market: 'US' | 'BR'; cur: str
   if (!data || !data.available) return <div className="card p-6 text-sm" style={{ color: '#b45309', background: '#fffbe6', border: '1px solid #f0e3b0' }}>Não foi possível carregar. {data?.error}</div>;
   if (data.drops.length === 0) return <div className="card p-8 text-center text-sm" style={{ color: '#6b7280' }}>Nenhum produto pré-order com tag de drop encontrado.</div>;
 
-  const COLS: { key: keyof PFRow | 'product'; label: string; fmt?: (r: PFRow) => string; align?: string; grp?: 'fun' | 'ads' | 'res' | 'pl' }[] = [
+  const COLS: { key: keyof PFRow | 'product' | 'rec'; label: string; fmt?: (r: PFRow) => string; align?: string; grp?: 'fun' | 'ads' | 'res' | 'pl' }[] = [
     { key: 'product', label: 'Produto', align: 'left' },
+    { key: 'rec', label: 'Produção', align: 'left' },
     { key: 'sessions', label: 'Sessões', fmt: (r) => num(r.sessions), grp: 'fun' },
     { key: 'addToCart', label: 'Add carrinho', fmt: (r) => num(r.addToCart), grp: 'fun' },
     { key: 'completedCheckout', label: 'Checkout', fmt: (r) => num(r.completedCheckout), grp: 'fun' },
@@ -783,9 +792,8 @@ function PreorderFunnelTab({ market, cur, loc }: { market: 'US' | 'BR'; cur: str
 
   return (
     <div className="flex flex-col gap-6 mb-8">
-      <div className="text-[12px]" style={{ color: '#6b7280' }}>
-        Funil por produto da coleção de pré-order, por drop · janela = desde a data do drop · mercado {market}.
-        {' '}Sessões/carrinho/checkout/conversão e returns/margens são do Shopify; cliques/CTR/investido são do Meta por SKU.
+      <div className="text-[12px] px-3 py-2 rounded-lg" style={{ color: '#4A4A4A', background: '#f6f4ef', border: '1px solid #e5e3de' }}>
+        <strong>Resultados medidos nos primeiros 14 dias a partir do lançamento de cada drop.</strong> Sessões/add-to-cart/conversão/returns/margens são do Shopify; cliques/CTR/investido são do Meta por SKU. A tag <strong>Produção</strong> é uma recomendação automática (demanda + margem + returns) por produto na janela de 14d — apoio à decisão, não substitui o julgamento.
         {!data.spendOk && <span style={{ color: '#b45309' }}> · ⚠ spend Meta incompleto (token).</span>}
       </div>
 
@@ -827,7 +835,7 @@ function PreorderFunnelTab({ market, cur, loc }: { market: 'US' | 'BR'; cur: str
         <div key={d.drop} className="card p-0 overflow-hidden">
           <div className="px-4 py-2.5 flex items-center gap-2" style={{ borderBottom: '1px solid #f0ece4' }}>
             <span className="text-[13px] font-bold" style={{ color: '#1A1A1A' }}>🗓️ {d.drop}</span>
-            <span className="text-[11px]" style={{ color: '#9ca3af' }}>{d.rows.length} produtos · desde {d.dropDate}</span>
+            <span className="text-[11px]" style={{ color: '#9ca3af' }}>{d.rows.length} produtos · 14d desde {d.dropDate}{!d.windowComplete && <span style={{ color: '#b45309' }}> · janela parcial (drop &lt; 14 dias)</span>}</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-[12px]" style={{ minWidth: 1100 }}>
@@ -845,6 +853,10 @@ function PreorderFunnelTab({ market, cur, loc }: { market: 'US' | 'BR'; cur: str
                       <td key="p" className="py-2 px-2" style={{ textAlign: 'left' }}>
                         <div style={{ fontWeight: 600, color: '#1A1A1A' }} className="truncate max-w-[220px]">{r.title}</div>
                         <div className="font-mono" style={{ fontSize: 10, color: '#9ca3af' }}>{r.sku}</div>
+                      </td>
+                    ) : c.key === 'rec' ? (
+                      <td key="rec" className="py-2 px-2 whitespace-nowrap" style={{ textAlign: 'left' }}>
+                        <span className="inline-block px-2 py-1 rounded-full text-[10px] font-bold" style={{ color: REC[r.recommendation].color, background: REC[r.recommendation].bg }}>{REC[r.recommendation].label}</span>
                       </td>
                     ) : (
                       <td key={c.label} className="py-2 px-2 font-num whitespace-nowrap" style={{ textAlign: 'right', background: c.grp ? grpBg[c.grp] : undefined, color: (c.key === 'contributionMargin' && r.contributionMargin < 0) || (c.key === 'revMinusCost' && r.revMinusCost < 0) ? '#dc2626' : '#1A1A1A' }}>
