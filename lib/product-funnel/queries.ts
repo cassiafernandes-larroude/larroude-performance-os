@@ -189,6 +189,71 @@ async function getSalesBySku(market: Market, since: string): Promise<Map<string,
   return map;
 }
 
+export interface DailyPoint { date: string; sessions: number; atc: number; units: number; revenue: number; }
+
+/** Constrói regex de variante a partir do SKU canônico (insere o tamanho no meio). */
+function variantRegexFromCanonical(canonical: string): string {
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const p = canonical.toUpperCase().split('-');
+  if (p.length === 4) return `^${esc(p[0])}-${esc(p[1])}-[0-9.]+-${esc(p[2])}-${esc(p[3])}$`;
+  return `^${esc(canonical.toUpperCase())}`;
+}
+
+/** Série diária de UM produto pré-order: sessões/add-to-cart (Shopify página) + unidades/faturamento (orders). */
+export async function getProductDaily(market: Market, handle: string, sku: string, since: string): Promise<DailyPoint[]> {
+  const safeHandle = handle.replace(/[^a-z0-9._-]/gi, '');
+  const tz = TZ[market];
+  const ref = '`' + ORDERS_TABLE[market] + '`';
+  const skuRe = variantRegexFromCanonical(sku);
+
+  const funnelQ = `FROM sessions SHOW sessions, sessions_with_cart_additions GROUP BY day WHERE landing_page_path = '/products/${safeHandle}' SINCE ${since} UNTIL ${today()}`;
+  const ordersSql = `
+    WITH refunded AS (
+      SELECT o.id AS oid, CAST(JSON_VALUE(rli, '$.line_item_id') AS INT64) AS lid,
+             SUM(CAST(JSON_VALUE(rli, '$.quantity') AS FLOAT64)) AS rq
+      FROM ${ref} o, UNNEST(JSON_QUERY_ARRAY(o.refunds)) AS r, UNNEST(JSON_QUERY_ARRAY(r, '$.refund_line_items')) AS rli
+      WHERE o.cancelled_at IS NULL AND o.test = FALSE GROUP BY 1, 2
+    ),
+    li AS (
+      SELECT FORMAT_DATE('%Y-%m-%d', DATE(o.created_at, '${tz}')) AS d,
+             o.id AS oid, CAST(JSON_VALUE(l, '$.id') AS INT64) AS lid,
+             UPPER(JSON_VALUE(l, '$.sku')) AS sku,
+             CAST(JSON_VALUE(l, '$.quantity') AS FLOAT64) AS qty,
+             CAST(JSON_VALUE(l, '$.price') AS FLOAT64) AS price
+      FROM ${ref} o, UNNEST(JSON_QUERY_ARRAY(o.line_items)) AS l
+      WHERE o.cancelled_at IS NULL AND o.test = FALSE
+        AND NOT REGEXP_CONTAINS(LOWER(IFNULL(o.tags, '')), r'${EXCLUDED_TAGS_REGEX}')
+        AND DATE(o.created_at, '${tz}') BETWEEN @since AND @until
+        AND REGEXP_CONTAINS(UPPER(JSON_VALUE(l, '$.sku')), @skuRe)
+    )
+    SELECT d, SUM(li.qty - IFNULL(rf.rq, 0)) AS units, SUM((li.qty - IFNULL(rf.rq, 0)) * li.price) AS revenue
+    FROM li LEFT JOIN refunded rf ON rf.oid = li.oid AND rf.lid = li.lid
+    GROUP BY d
+  `;
+
+  const [funnel, orders] = await Promise.all([
+    runShopifyQL(market, funnelQ, 'unstable').catch(() => ({ rows: [] as any[] })),
+    runQuery<any>(ordersSql, { since, until: today(), skuRe }).catch(() => [] as any[]),
+  ]);
+
+  const map = new Map<string, DailyPoint>();
+  const get = (d: string) => { let e = map.get(d); if (!e) { e = { date: d, sessions: 0, atc: 0, units: 0, revenue: 0 }; map.set(d, e); } return e; };
+  for (const r of funnel.rows) {
+    const d = r.day ? String(r.day).slice(0, 10) : '';
+    if (!d) continue;
+    const e = get(d);
+    e.sessions += Number(r.sessions) || 0;
+    e.atc += Number(r.sessions_with_cart_additions) || 0;
+  }
+  for (const r of orders) {
+    const d = String(r.d);
+    const e = get(d);
+    e.units += Number(r.units) || 0;
+    e.revenue += Number(r.revenue) || 0;
+  }
+  return [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
 export interface ProductFunnelRow {
   handle: string; title: string; sku: string; dropTag: string; dropDate: string;
   sessions: number; addToCart: number; reachedCheckout: number; completedCheckout: number; convRate: number;

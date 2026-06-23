@@ -8,6 +8,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import BarLineChart, { type BarPoint } from '@/components/shared/BarLineChart';
+import MultiLineChart, { type Series } from '@/components/klaviyo/MultiLineChart';
 import { FULFILLMENT_CATEGORY_GROUPS, type FulfillmentCategory } from '@/lib/shared/fulfillment-category';
 
 type MarketSel = 'US' | 'BR' | 'ALL';
@@ -733,14 +734,26 @@ interface PFResult { available: boolean; reason?: string; error?: string; spendO
 function PreorderFunnelTab({ market, cur, loc }: { market: 'US' | 'BR'; cur: string; loc: string }) {
   const [data, setData] = useState<PFResult | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sel, setSel] = useState<string>(''); // "handle|sku|since|title"
+  const [daily, setDaily] = useState<{ date: string; sessions: number; atc: number; units: number; revenue: number }[] | null>(null);
+  const [loadingDaily, setLoadingDaily] = useState(false);
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    setLoading(true); setSel('');
     fetch(`/api/product-funnel/${market}`, { cache: 'no-store' })
       .then((r) => r.json()).then((j: PFResult) => { if (!cancelled) { setData(j); setLoading(false); } })
       .catch(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [market]);
+  useEffect(() => {
+    if (!sel) { setDaily(null); return; }
+    const [handle, sku, since] = sel.split('|');
+    let cancelled = false; setLoadingDaily(true);
+    fetch(`/api/product-funnel/${market}/daily?handle=${encodeURIComponent(handle)}&sku=${encodeURIComponent(sku)}&since=${since}`, { cache: 'no-store' })
+      .then((r) => r.json()).then((j) => { if (!cancelled) { setDaily(j.points || []); setLoadingDaily(false); } })
+      .catch(() => { if (!cancelled) setLoadingDaily(false); });
+    return () => { cancelled = true; };
+  }, [sel, market]);
 
   const money = (v: number) => `${cur}${Math.round(v).toLocaleString(loc)}`;
   const num = (v: number) => Math.round(v).toLocaleString(loc);
@@ -775,6 +788,41 @@ function PreorderFunnelTab({ market, cur, loc }: { market: 'US' | 'BR'; cur: str
         {' '}Sessões/carrinho/checkout/conversão e returns/margens são do Shopify; cliques/CTR/investido são do Meta por SKU.
         {!data.spendOk && <span style={{ color: '#b45309' }}> · ⚠ spend Meta incompleto (token).</span>}
       </div>
+
+      {/* Seletor de produto + gráfico de série diária */}
+      {(() => {
+        const allProds = data.drops.flatMap((d) => d.rows.map((r) => ({ handle: r.handle, sku: r.sku, title: r.title, dropDate: r.dropDate, drop: r.dropTag })));
+        const dates = (daily || []).map((p) => p.date);
+        const countSeries: Series[] = [
+          { label: 'Sessões', values: (daily || []).map((p) => p.sessions), color: '#5d4ec5' },
+          { label: 'Add ao carrinho', values: (daily || []).map((p) => p.atc), color: '#0ea5e9' },
+          { label: 'Unidades vendidas', values: (daily || []).map((p) => p.units), color: '#10b981' },
+        ];
+        const revSeries: Series[] = [{ label: 'Faturamento', values: (daily || []).map((p) => p.revenue), color: '#16A34A' }];
+        return (
+          <div className="card p-4">
+            <div className="flex items-center gap-2 flex-wrap mb-3">
+              <span className="text-[13px] font-bold" style={{ color: '#1A1A1A' }}>📈 Evolução diária por produto</span>
+              <select value={sel} onChange={(e) => setSel(e.target.value)} className="px-3 py-1.5 rounded-lg text-[13px]" style={{ background: '#fff', border: '1px solid #e5e3de', maxWidth: 420 }}>
+                <option value="">Selecione um produto…</option>
+                {allProds.map((p) => (
+                  <option key={p.sku} value={`${p.handle}|${p.sku}|${p.dropDate}`}>{p.title} · {p.drop}</option>
+                ))}
+              </select>
+            </div>
+            {!sel && <div className="text-[12px] py-4 text-center" style={{ color: '#9ca3af' }}>Escolha um produto para ver sessões, add-to-cart, unidades e faturamento por dia (desde o drop).</div>}
+            {sel && loadingDaily && <div className="text-[12px] py-4 text-center" style={{ color: '#9ca3af' }}>Carregando série…</div>}
+            {sel && !loadingDaily && daily && daily.length === 0 && <div className="text-[12px] py-4 text-center" style={{ color: '#9ca3af' }}>Sem dados diários para este produto na janela.</div>}
+            {sel && !loadingDaily && daily && daily.length > 0 && (
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                <MultiLineChart title="Funil · sessões / add-to-cart / unidades (dia)" dates={dates} series={countSeries} unit="number" market={market} height={260} />
+                <MultiLineChart title="Faturamento por dia" dates={dates} series={revSeries} unit="currency" market={market} height={260} />
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
       {data.drops.map((d) => (
         <div key={d.drop} className="card p-0 overflow-hidden">
           <div className="px-4 py-2.5 flex items-center gap-2" style={{ borderBottom: '1px solid #f0ece4' }}>
