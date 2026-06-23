@@ -12,7 +12,7 @@ import { getMetaSpendAdjustment } from "@/lib/shared/meta-adjustments";
 import { cached } from "@/lib/cache";
 import { getFixedToolsCostInRange, getAgentShopCost, CHANNEL_COSTS } from "@/lib/channel-costs";
 import { todayInMarket } from "@/lib/utils/market-tz";
-import { getTodaySales, getTodayShopifyQLSales } from "@/lib/unit-economics/shopify-today";
+import { getTodaySales, getTodayRefunds } from "@/lib/unit-economics/shopify-today";
 
 type AggRow = {
   gross_sales: number | string;
@@ -129,22 +129,22 @@ export async function getMetricBundle(
       try {
         const t = await getTodaySales(market);
         const todayOrders = t.totalOrders || 0;
-        // GROSS SALES e TOTAL SALES vêm do ShopifyQL `sales` (definição oficial Shopify = Triple Whale:
-        // total_sales = gross − descontos − returns + impostos + frete). getTodaySales segue p/ orders/units.
-        let todayGross = 0, todayTotal = 0;
+        // DTC (mesma regra do resto): GROSS = pré-desconto; TOTAL = receita do pedido (total_price,
+        // c/ imposto+frete, líquido de desconto) − refunds DTC criados hoje. Igual ao período do BQ
+        // (total_price − refunds), mas filtrado DTC (não a loja inteira do ShopifyQL/TW).
+        const todayGross = t.totalGrossRevenue || 0;
+        const todayOrderRev = t.totalRevenue || 0;
+        let todayRefunds = 0;
         try {
-          const ql = await getTodayShopifyQLSales(market);
-          todayGross = ql.grossSales;
-          todayTotal = ql.totalSales;
+          todayRefunds = await getTodayRefunds(market);
         } catch (e) {
-          console.warn(`[overview today] ShopifyQL sales ${market} falhou, usando soma de orders:`, (e as Error)?.message);
-          todayGross = t.totalGrossRevenue || 0;
-          todayTotal = t.totalNetRevenue || t.totalRevenue || 0;
+          console.warn(`[overview today] refunds ${market} falhou (total sem subtrair returns de hoje):`, (e as Error)?.message);
         }
-        if (todayOrders > 0 || todayTotal > 0 || todayGross > 0) dataAvailable = true; // dado live real de hoje
-        c.gross_sales = todayGross;     // GROSS SALES (oficial Shopify, pré-desconto)
-        c.order_revenue = todayTotal;
-        c.total_sales = todayTotal;     // TOTAL SALES (oficial Shopify = Triple Whale)
+        const todayTotal = Math.max(0, todayOrderRev - todayRefunds);
+        if (todayOrders > 0 || todayOrderRev > 0 || todayGross > 0) dataAvailable = true; // dado live real de hoje
+        c.gross_sales = todayGross;     // GROSS SALES = total_line_items_price (pré-desconto), DTC
+        c.order_revenue = todayOrderRev;
+        c.total_sales = todayTotal;     // TOTAL SALES = total_price − refunds (DTC), igual ao período
         c.orders = todayOrders;
         c.aov = todayOrders > 0 ? todayTotal / todayOrders : 0;
         // new_customers nao calculado D0 — manter o que BQ deu (provavelmente 0).

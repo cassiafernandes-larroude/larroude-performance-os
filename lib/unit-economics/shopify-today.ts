@@ -9,27 +9,56 @@
  */
 
 import type { Market } from './queries';
-import { runShopifyQL } from '@/lib/main-dashboard/shopify-admin';
 
 const API_VERSION = process.env.SHOPIFY_API_VERSION || '2025-01';
 
 /**
- * Cassia 2026-06-23: vendas OFICIAIS do Shopify de HOJE (D0) via ShopifyQL `sales` — mesma fonte/
- * definição do Triple Whale e do admin Shopify. gross_sales (pré-desconto) e total_sales (= net −
- * returns + impostos + frete). Near-real-time (não depende do pipeline BQ).
+ * Cassia 2026-06-23: refunds DTC criados HOJE (em qualquer pedido) — para o "today" do Overview
+ * subtrair returns igual ao período (BQ usa refund.created_at na janela). DTC-filtered (exclui B2B).
+ * Resolve o "today" no fuso do market e soma totalRefundedSet dos refunds com createdAt = hoje.
  */
-export async function getTodayShopifyQLSales(market: Market): Promise<{ grossSales: number; totalSales: number; netSales: number; discounts: number; returns: number }> {
-  const q = `FROM sales SHOW gross_sales, total_sales, net_sales, discounts, returns SINCE today UNTIL today`;
-  const { rows, error } = await runShopifyQL(market, q, 'unstable');
-  if (error) throw new Error(`ShopifyQL sales hoje: ${error}`);
-  const r = rows[0] || {};
-  return {
-    grossSales: Math.abs(Number(r.gross_sales) || 0),
-    totalSales: Number(r.total_sales) || 0,
-    netSales: Number(r.net_sales) || 0,
-    discounts: Math.abs(Number(r.discounts) || 0),
-    returns: Math.abs(Number(r.returns) || 0),
-  };
+export async function getTodayRefunds(market: Market, timeoutMs: number = 30_000): Promise<number> {
+  const { domain, token } = getConfig(market);
+  if (!token) return 0;
+  const tz = market === 'BR' ? 'America/Sao_Paulo' : 'America/New_York';
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  const offsetPart = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'shortOffset' }).formatToParts(new Date()).find((p) => p.type === 'timeZoneName')?.value ?? 'GMT-04';
+  const offset = offsetPart.replace('GMT', '') || '-04';
+  // Pedidos TOCADOS hoje (updated_at) — onde os refunds de hoje vivem (mesmo em orders antigas).
+  const queryFilter = `updated_at:>=${today}T00:00:00${offset} AND updated_at:<=${today}T23:59:59${offset} AND -tag:b2b AND -tag:wholesale AND -tag:marketplace AND -tag:redo AND -tag:influencer`;
+  const Q = `
+    query Refunds($cursor: String, $query: String!) {
+      orders(first: 250, after: $cursor, query: $query) {
+        edges { node { tags customer { tags } refunds { createdAt totalRefundedSet { shopMoney { amount } } } } }
+        pageInfo { hasNextPage endCursor }
+      }
+    }`;
+  const url = `https://${domain}/admin/api/${API_VERSION}/graphql.json`;
+  let cursor: string | null = null, hasNext = true, pages = 0, total = 0;
+  const t0 = Date.now();
+  while (hasNext && pages < 200) {
+    if (Date.now() - t0 > timeoutMs) break;
+    pages++;
+    const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token }, body: JSON.stringify({ query: Q, variables: { cursor, query: queryFilter } }), cache: 'no-store' });
+    if (!res.ok) break;
+    const json: any = await res.json();
+    const orders = json.data?.orders;
+    if (!orders) break;
+    for (const e of orders.edges) {
+      const o = e.node;
+      const tags = (o.tags || []).concat(o.customer?.tags || []).join(' ').toLowerCase();
+      if (EXCLUDED_TAGS.test(tags)) continue;
+      for (const rf of o.refunds || []) {
+        const created = String(rf.createdAt || '');
+        const createdDay = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(created));
+        if (createdDay !== today) continue;
+        total += parseFloat(rf.totalRefundedSet?.shopMoney?.amount || '0') || 0;
+      }
+    }
+    hasNext = orders.pageInfo.hasNextPage;
+    cursor = orders.pageInfo.endCursor;
+  }
+  return total;
 }
 
 function getConfig(market: Market) {
