@@ -10,8 +10,12 @@ import { runQuery } from '@/lib/ltv-dashboard/bigquery';
 import { canonicalSku } from '@/lib/calendar/ad-spend';
 import { extractAdRefFromName } from '@/lib/meta-ads-native/sku-extractor';
 import { getCogsBySku } from '@/lib/unit-economics/shopify-cogs';
+import { DEFAULT_ASSUMPTIONS } from '@/lib/unit-economics/cascade';
 
 export type Market = 'US' | 'BR';
+
+// Premissas de custo da margem líquida — MESMAS da aba Unit Economics (frete, fulfillment, taxa cartão).
+const ASSUMP = DEFAULT_ASSUMPTIONS as Record<Market, { fulfillmentPerUnit: number; shippingPerUnit: number; cardFeePct: number }>;
 
 const PREORDER_COLLECTION_ID: Record<Market, string> = { US: '310897770662', BR: '493998506298' };
 const ORDERS_TABLE: Record<Market, string> = {
@@ -265,6 +269,7 @@ export interface ProductFunnelRow {
   clicks: number; impressions: number; ctr: number; spend: number;
   units: number; revenue: number; returnRate: number;
   cogs: number; revMinusCost: number; contributionMargin: number; grossMargin: number;
+  netProfit: number; netMargin: number;
   recommendation: 'produce' | 'evaluate' | 'stop' | 'nodata';
 }
 export interface PreorderFunnelResult {
@@ -341,12 +346,18 @@ export async function getPreorderFunnel(market: Market): Promise<PreorderFunnelR
       const returnRate = s.grossUnits > 0 ? (s.refundedUnits / s.grossUnits) * 100 : 0;
       const contributionMargin = revMinusCost - a.spend;
       const grossMargin = revenue > 0 ? (revMinusCost / revenue) * 100 : 0;
+      // Margem líquida: contribuição − taxa de cartão − frete − fulfillment (premissas Unit Economics).
+      const cardFee = revenue * ASSUMP[market].cardFeePct;
+      const shipping = ASSUMP[market].shippingPerUnit * units;
+      const fulfillment = ASSUMP[market].fulfillmentPerUnit * units;
+      const netProfit = contributionMargin - cardFee - shipping - fulfillment;
+      const netMargin = revenue > 0 ? (netProfit / revenue) * 100 : 0;
       return {
         handle: p.handle, title: p.title, sku: p.sku, dropTag: p.dropTag, dropDate: p.dropDate,
         sessions: f.sessions, addToCart: f.atc, reachedCheckout: f.reached, completedCheckout: f.completed, convRate,
         clicks: a.clicks, impressions: a.impressions, ctr: a.impressions > 0 ? (a.clicks / a.impressions) * 100 : 0, spend: a.spend,
         units, revenue, returnRate,
-        cogs, revMinusCost, contributionMargin, grossMargin,
+        cogs, revMinusCost, contributionMargin, grossMargin, netProfit, netMargin,
         recommendation: produceRec({ contributionMargin, grossMargin, returnRate, units, convRate, sessions: f.sessions }),
       };
     }).sort((x, y) => y.revenue - x.revenue);

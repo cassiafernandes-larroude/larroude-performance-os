@@ -728,6 +728,7 @@ interface PFRow {
   clicks: number; impressions: number; ctr: number; spend: number;
   units: number; revenue: number; returnRate: number;
   cogs: number; revMinusCost: number; contributionMargin: number; grossMargin: number;
+  netProfit: number; netMargin: number;
   recommendation: 'produce' | 'evaluate' | 'stop' | 'nodata';
 }
 interface PFResult { available: boolean; reason?: string; error?: string; spendOk: boolean; drops: { drop: string; dropDate: string; windowComplete: boolean; rows: PFRow[] }[]; }
@@ -785,15 +786,16 @@ function PreorderFunnelTab({ market, cur, loc }: { market: 'US' | 'BR'; cur: str
     { key: 'revenue', label: 'Faturamento', fmt: (r) => money(r.revenue), grp: 'res' },
     { key: 'returnRate', label: 'Returns', fmt: (r) => pct(r.returnRate), grp: 'res' },
     { key: 'revMinusCost', label: 'Receita − custo', fmt: (r) => money(r.revMinusCost), grp: 'pl' },
-    { key: 'contributionMargin', label: 'M. contrib.', fmt: (r) => pct(r.revenue > 0 ? (r.contributionMargin / r.revenue) * 100 : 0), grp: 'pl' },
     { key: 'grossMargin', label: 'M. bruta', fmt: (r) => pct(r.grossMargin), grp: 'pl' },
+    { key: 'contributionMargin', label: 'M. contrib.', fmt: (r) => pct(r.revenue > 0 ? (r.contributionMargin / r.revenue) * 100 : 0), grp: 'pl' },
+    { key: 'netMargin', label: 'M. líquida', fmt: (r) => pct(r.netMargin), grp: 'pl' },
   ];
   const grpBg: Record<string, string> = { fun: '#f6f9ff', ads: '#fff7ed', res: '#f3fbf5', pl: '#faf5ff' };
 
   return (
     <div className="flex flex-col gap-6 mb-8">
       <div className="text-[12px] px-3 py-2 rounded-lg" style={{ color: '#4A4A4A', background: '#f6f4ef', border: '1px solid #e5e3de' }}>
-        <strong>Resultados medidos nos primeiros 14 dias a partir do lançamento de cada drop.</strong> Sessões/add-to-cart/conversão/returns/margens são do Shopify; cliques/CTR/investido são do Meta por SKU. A tag <strong>Produção</strong> é uma recomendação automática (demanda + margem + returns) por produto na janela de 14d — apoio à decisão, não substitui o julgamento.
+        <strong>Resultados medidos nos primeiros 14 dias a partir do lançamento de cada drop.</strong> Sessões/add-to-cart/conversão/returns/margens são do Shopify; cliques/CTR/investido são do Meta por SKU. A tag <strong>Produção</strong> é uma recomendação automática (demanda + margem + returns) por produto na janela de 14d — apoio à decisão, não substitui o julgamento. <strong>M. líquida</strong> = contribuição − taxa de cartão (2,5%) − frete − fulfillment (premissas da aba Unit Economics).
         {!data.spendOk && <span style={{ color: '#b45309' }}> · ⚠ spend Meta incompleto (token).</span>}
       </div>
 
@@ -859,7 +861,7 @@ function PreorderFunnelTab({ market, cur, loc }: { market: 'US' | 'BR'; cur: str
                         <span className="inline-block px-2 py-1 rounded-full text-[10px] font-bold" style={{ color: REC[r.recommendation].color, background: REC[r.recommendation].bg }}>{REC[r.recommendation].label}</span>
                       </td>
                     ) : (
-                      <td key={c.label} className="py-2 px-2 font-num whitespace-nowrap" style={{ textAlign: 'right', background: c.grp ? grpBg[c.grp] : undefined, color: (c.key === 'contributionMargin' && r.contributionMargin < 0) || (c.key === 'revMinusCost' && r.revMinusCost < 0) ? '#dc2626' : '#1A1A1A' }}>
+                      <td key={c.label} className="py-2 px-2 font-num whitespace-nowrap" style={{ textAlign: 'right', background: c.grp ? grpBg[c.grp] : undefined, color: (c.key === 'contributionMargin' && r.contributionMargin < 0) || (c.key === 'netMargin' && r.netMargin < 0) || (c.key === 'revMinusCost' && r.revMinusCost < 0) ? '#dc2626' : '#1A1A1A' }}>
                         {c.fmt!(r)}
                       </td>
                     ))}
