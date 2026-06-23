@@ -129,6 +129,7 @@ function mergeSeries(a: SeriesPoint[], b: SeriesPoint[]): SeriesPoint[] {
 
 export default function ProductPerformancePage() {
   const [market, setMarket] = useState<MarketSel>('US');
+  const [tab, setTab] = useState<'geral' | 'preorder'>('geral');
   const [period, setPeriod] = useState<PeriodKey>('28d');
   const [isCustom, setIsCustom] = useState(false);
   const [customStart, setCustomStart] = useState('');
@@ -454,6 +455,19 @@ export default function ProductPerformancePage() {
         <button onClick={() => setMarket('BR')} className={pillBtn(market === 'BR')}>BR</button>
       </div>
 
+      {/* Abas */}
+      <div className="flex items-center gap-1 border-b mb-5" style={{ borderColor: '#e5e3de' }}>
+        {([['geral', 'Geral'], ['preorder', 'Pré-Order · funil']] as const).map(([v, label]) => (
+          <button key={v} onClick={() => setTab(v)} className="px-3 py-2 text-[13px] font-semibold -mb-px border-b-2 transition-colors"
+            style={tab === v ? { color: '#1A1A1A', borderColor: '#ec4899' } : { color: '#9ca3af', borderColor: 'transparent' }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'preorder' && <PreorderFunnelTab market={market === 'BR' ? 'BR' : 'US'} cur={cur} loc={loc} />}
+
+      {tab === 'geral' && (<>
       {/* Filtro de período — idêntico ao Dashboard Principal */}
       <div className="px-5 py-3 rounded-2xl flex flex-wrap items-center gap-3 mb-6" style={{ background: 'white', border: '0.8px solid #e5e3de' }}>
         <span className="text-[11px] uppercase tracking-[0.12em] font-semibold mr-1" style={{ color: '#9ca3af' }}>PERÍODO</span>
@@ -700,7 +714,102 @@ export default function ProductPerformancePage() {
           )}
         </div>
       </div>
+      </>)}
 
     </main>
+  );
+}
+
+// ---------------- Aba Pré-Order · funil por produto ----------------
+interface PFRow {
+  handle: string; title: string; sku: string; dropTag: string; dropDate: string;
+  sessions: number; addToCart: number; reachedCheckout: number; completedCheckout: number; convRate: number;
+  clicks: number; impressions: number; ctr: number; spend: number;
+  units: number; revenue: number; returnRate: number;
+  cogs: number; revMinusCost: number; contributionMargin: number; grossMargin: number;
+}
+interface PFResult { available: boolean; reason?: string; error?: string; spendOk: boolean; drops: { drop: string; dropDate: string; rows: PFRow[] }[]; }
+
+function PreorderFunnelTab({ market, cur, loc }: { market: 'US' | 'BR'; cur: string; loc: string }) {
+  const [data, setData] = useState<PFResult | null>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetch(`/api/product-funnel/${market}`, { cache: 'no-store' })
+      .then((r) => r.json()).then((j: PFResult) => { if (!cancelled) { setData(j); setLoading(false); } })
+      .catch(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [market]);
+
+  const money = (v: number) => `${cur}${Math.round(v).toLocaleString(loc)}`;
+  const num = (v: number) => Math.round(v).toLocaleString(loc);
+  const pct = (v: number) => `${(v || 0).toFixed(1)}%`;
+
+  if (loading) return <div className="card p-8 text-center text-sm" style={{ color: '#6b7280' }}>Carregando funil pré-order…</div>;
+  if (!data || !data.available) return <div className="card p-6 text-sm" style={{ color: '#b45309', background: '#fffbe6', border: '1px solid #f0e3b0' }}>Não foi possível carregar. {data?.error}</div>;
+  if (data.drops.length === 0) return <div className="card p-8 text-center text-sm" style={{ color: '#6b7280' }}>Nenhum produto pré-order com tag de drop encontrado.</div>;
+
+  const COLS: { key: keyof PFRow | 'product'; label: string; fmt?: (r: PFRow) => string; align?: string; grp?: 'fun' | 'ads' | 'res' | 'pl' }[] = [
+    { key: 'product', label: 'Produto', align: 'left' },
+    { key: 'sessions', label: 'Sessões', fmt: (r) => num(r.sessions), grp: 'fun' },
+    { key: 'addToCart', label: 'Add carrinho', fmt: (r) => num(r.addToCart), grp: 'fun' },
+    { key: 'completedCheckout', label: 'Checkout', fmt: (r) => num(r.completedCheckout), grp: 'fun' },
+    { key: 'convRate', label: 'Conversão', fmt: (r) => pct(r.convRate), grp: 'fun' },
+    { key: 'clicks', label: 'Cliques', fmt: (r) => num(r.clicks), grp: 'ads' },
+    { key: 'ctr', label: 'CTR', fmt: (r) => pct(r.ctr), grp: 'ads' },
+    { key: 'spend', label: 'Investido', fmt: (r) => money(r.spend), grp: 'ads' },
+    { key: 'units', label: 'Unidades', fmt: (r) => num(r.units), grp: 'res' },
+    { key: 'revenue', label: 'Faturamento', fmt: (r) => money(r.revenue), grp: 'res' },
+    { key: 'returnRate', label: 'Returns', fmt: (r) => pct(r.returnRate), grp: 'res' },
+    { key: 'revMinusCost', label: 'Receita − custo', fmt: (r) => money(r.revMinusCost), grp: 'pl' },
+    { key: 'contributionMargin', label: 'M. contrib.', fmt: (r) => money(r.contributionMargin), grp: 'pl' },
+    { key: 'grossMargin', label: 'M. bruta', fmt: (r) => pct(r.grossMargin), grp: 'pl' },
+  ];
+  const grpBg: Record<string, string> = { fun: '#f6f9ff', ads: '#fff7ed', res: '#f3fbf5', pl: '#faf5ff' };
+
+  return (
+    <div className="flex flex-col gap-6 mb-8">
+      <div className="text-[12px]" style={{ color: '#6b7280' }}>
+        Funil por produto da coleção de pré-order, por drop · janela = desde a data do drop · mercado {market}.
+        {' '}Sessões/carrinho/checkout/conversão e returns/margens são do Shopify; cliques/CTR/investido são do Meta por SKU.
+        {!data.spendOk && <span style={{ color: '#b45309' }}> · ⚠ spend Meta incompleto (token).</span>}
+      </div>
+      {data.drops.map((d) => (
+        <div key={d.drop} className="card p-0 overflow-hidden">
+          <div className="px-4 py-2.5 flex items-center gap-2" style={{ borderBottom: '1px solid #f0ece4' }}>
+            <span className="text-[13px] font-bold" style={{ color: '#1A1A1A' }}>🗓️ {d.drop}</span>
+            <span className="text-[11px]" style={{ color: '#9ca3af' }}>{d.rows.length} produtos · desde {d.dropDate}</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12px]" style={{ minWidth: 1100 }}>
+              <thead>
+                <tr style={{ color: '#9ca3af', fontSize: 10, textTransform: 'uppercase' }}>
+                  {COLS.map((c) => (
+                    <th key={c.label} className="py-2 px-2 whitespace-nowrap" style={{ textAlign: (c.align as any) || 'right', background: c.grp ? grpBg[c.grp] : undefined }}>{c.label}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {d.rows.map((r) => (
+                  <tr key={r.sku} style={{ borderTop: '1px solid #f0ece4' }}>
+                    {COLS.map((c) => c.key === 'product' ? (
+                      <td key="p" className="py-2 px-2" style={{ textAlign: 'left' }}>
+                        <div style={{ fontWeight: 600, color: '#1A1A1A' }} className="truncate max-w-[220px]">{r.title}</div>
+                        <div className="font-mono" style={{ fontSize: 10, color: '#9ca3af' }}>{r.sku}</div>
+                      </td>
+                    ) : (
+                      <td key={c.label} className="py-2 px-2 font-num whitespace-nowrap" style={{ textAlign: 'right', background: c.grp ? grpBg[c.grp] : undefined, color: (c.key === 'contributionMargin' && r.contributionMargin < 0) || (c.key === 'revMinusCost' && r.revMinusCost < 0) ? '#dc2626' : '#1A1A1A' }}>
+                        {c.fmt!(r)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
