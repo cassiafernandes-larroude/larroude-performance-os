@@ -746,6 +746,8 @@ function PreorderFunnelTab({ market, cur, loc }: { market: 'US' | 'BR'; cur: str
   const [sel, setSel] = useState<string>(''); // "handle|sku|since|title"
   const [daily, setDaily] = useState<{ date: string; sessions: number; atc: number; units: number; revenue: number }[] | null>(null);
   const [loadingDaily, setLoadingDaily] = useState(false);
+  const [showAds, setShowAds] = useState(false);
+  const [showMargins, setShowMargins] = useState(false);
   useEffect(() => {
     let cancelled = false;
     setLoading(true); setSel('');
@@ -772,24 +774,27 @@ function PreorderFunnelTab({ market, cur, loc }: { market: 'US' | 'BR'; cur: str
   if (!data || !data.available) return <div className="card p-6 text-sm" style={{ color: '#b45309', background: '#fffbe6', border: '1px solid #f0e3b0' }}>Não foi possível carregar. {data?.error}</div>;
   if (data.drops.length === 0) return <div className="card p-8 text-center text-sm" style={{ color: '#6b7280' }}>Nenhum produto pré-order com tag de drop encontrado.</div>;
 
-  const COLS: { key: keyof PFRow | 'product' | 'rec'; label: string; fmt?: (r: PFRow) => string; align?: string; grp?: 'fun' | 'ads' | 'res' | 'pl' }[] = [
+  const ALL_COLS: { key: keyof PFRow | 'product' | 'rec'; label: string; fmt?: (r: PFRow) => string; align?: string; grp?: 'fun' | 'ads' | 'res' | 'pl'; tg?: 'ads' | 'margin' }[] = [
     { key: 'product', label: 'Produto', align: 'left' },
     { key: 'rec', label: 'Produção', align: 'left' },
     { key: 'sessions', label: 'Sessões', fmt: (r) => num(r.sessions), grp: 'fun' },
     { key: 'addToCart', label: 'Add carrinho', fmt: (r) => num(r.addToCart), grp: 'fun' },
     { key: 'completedCheckout', label: 'Checkout', fmt: (r) => num(r.completedCheckout), grp: 'fun' },
     { key: 'convRate', label: 'Conversão', fmt: (r) => pct(r.convRate), grp: 'fun' },
-    { key: 'clicks', label: 'Cliques', fmt: (r) => num(r.clicks), grp: 'ads' },
-    { key: 'ctr', label: 'CTR', fmt: (r) => pct(r.ctr), grp: 'ads' },
-    { key: 'spend', label: 'Investido', fmt: (r) => money(r.spend), grp: 'ads' },
+    { key: 'clicks', label: 'Cliques', fmt: (r) => num(r.clicks), grp: 'ads', tg: 'ads' },
+    { key: 'ctr', label: 'CTR', fmt: (r) => pct(r.ctr), grp: 'ads', tg: 'ads' },
+    { key: 'spend', label: 'Investido', fmt: (r) => money(r.spend), grp: 'ads', tg: 'ads' },
     { key: 'units', label: 'Unidades', fmt: (r) => num(r.units), grp: 'res' },
     { key: 'revenue', label: 'Faturamento', fmt: (r) => money(r.revenue), grp: 'res' },
     { key: 'returnRate', label: 'Returns', fmt: (r) => pct(r.returnRate), grp: 'res' },
     { key: 'revMinusCost', label: 'Receita − custo', fmt: (r) => money(r.revMinusCost), grp: 'pl' },
-    { key: 'grossMargin', label: 'M. bruta', fmt: (r) => pct(r.grossMargin), grp: 'pl' },
-    { key: 'contributionMargin', label: 'M. contrib.', fmt: (r) => pct(r.revenue > 0 ? (r.contributionMargin / r.revenue) * 100 : 0), grp: 'pl' },
-    { key: 'netMargin', label: 'M. líquida', fmt: (r) => pct(r.netMargin), grp: 'pl' },
+    { key: 'grossMargin', label: 'M. bruta', fmt: (r) => pct(r.grossMargin), grp: 'pl', tg: 'margin' },
+    { key: 'contributionMargin', label: 'M. contrib.', fmt: (r) => pct(r.revenue > 0 ? (r.contributionMargin / r.revenue) * 100 : 0), grp: 'pl', tg: 'margin' },
+    { key: 'netMargin', label: 'M. líquida', fmt: (r) => pct(r.netMargin), grp: 'pl', tg: 'margin' },
   ];
+  const COLS = ALL_COLS.filter((c) => !c.tg || (c.tg === 'ads' && showAds) || (c.tg === 'margin' && showMargins));
+  const EXCLUDED_DROPS = new Set(['DROP_06.02.26']);
+  const drops = data.drops.filter((d) => !EXCLUDED_DROPS.has(d.drop));
   const grpBg: Record<string, string> = { fun: '#f6f9ff', ads: '#fff7ed', res: '#f3fbf5', pl: '#faf5ff' };
 
   return (
@@ -799,9 +804,20 @@ function PreorderFunnelTab({ market, cur, loc }: { market: 'US' | 'BR'; cur: str
         {!data.spendOk && <span style={{ color: '#b45309' }}> · ⚠ spend Meta incompleto (token).</span>}
       </div>
 
+      {/* Toggles de colunas */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-[11px] font-semibold uppercase" style={{ color: '#9ca3af', letterSpacing: '0.06em' }}>Colunas</span>
+        <button onClick={() => setShowAds((v) => !v)} className="px-3 py-1.5 rounded-full text-[12px] font-semibold" style={showAds ? { background: '#f59e0b', color: '#fff' } : { background: '#ebe9e3', color: '#1a1a1a' }}>
+          {showAds ? '− Ads (cliques/CTR/investido)' : '+ Ads (cliques/CTR/investido)'}
+        </button>
+        <button onClick={() => setShowMargins((v) => !v)} className="px-3 py-1.5 rounded-full text-[12px] font-semibold" style={showMargins ? { background: '#7c3aed', color: '#fff' } : { background: '#ebe9e3', color: '#1a1a1a' }}>
+          {showMargins ? '− Margens (bruta/contrib/líquida)' : '+ Margens (bruta/contrib/líquida)'}
+        </button>
+      </div>
+
       {/* Seletor de produto + gráfico de série diária */}
       {(() => {
-        const allProds = data.drops.flatMap((d) => d.rows.map((r) => ({ handle: r.handle, sku: r.sku, title: r.title, dropDate: r.dropDate, drop: r.dropTag })));
+        const allProds = drops.flatMap((d) => d.rows.map((r) => ({ handle: r.handle, sku: r.sku, title: r.title, dropDate: r.dropDate, drop: r.dropTag })));
         const dates = (daily || []).map((p) => p.date);
         const countSeries: Series[] = [
           { label: 'Sessões', values: (daily || []).map((p) => p.sessions), color: '#5d4ec5' },
@@ -833,13 +849,13 @@ function PreorderFunnelTab({ market, cur, loc }: { market: 'US' | 'BR'; cur: str
         );
       })()}
 
-      {data.drops.map((d) => (
+      {drops.map((d) => (
         <div key={d.drop} className="card p-0 overflow-hidden">
           <div className="px-4 py-2.5 flex items-center gap-2" style={{ borderBottom: '1px solid #f0ece4' }}>
             <span className="text-[13px] font-bold" style={{ color: '#1A1A1A' }}>🗓️ {d.drop}</span>
             <span className="text-[11px]" style={{ color: '#9ca3af' }}>{d.rows.length} produtos · 14d desde {d.dropDate}{!d.windowComplete && <span style={{ color: '#b45309' }}> · janela parcial (drop &lt; 14 dias)</span>}</span>
           </div>
-          <div className="overflow-x-auto">
+          <DragScroll className="overflow-x-auto">
             <table className="w-full text-[12px]" style={{ minWidth: 1100 }}>
               <thead>
                 <tr style={{ color: '#9ca3af', fontSize: 10, textTransform: 'uppercase' }}>
@@ -869,9 +885,33 @@ function PreorderFunnelTab({ market, cur, loc }: { market: 'US' | 'BR'; cur: str
                 ))}
               </tbody>
             </table>
-          </div>
+          </DragScroll>
         </div>
       ))}
+    </div>
+  );
+}
+
+// Rolagem horizontal arrastando com o mouse (clica e arrasta o bloco pro lado).
+function DragScroll({ children, className }: { children: React.ReactNode; className?: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const st = useRef({ down: false, startX: 0, left: 0, moved: false });
+  const onDown = (e: React.MouseEvent) => {
+    const el = ref.current; if (!el) return;
+    st.current = { down: true, startX: e.pageX, left: el.scrollLeft, moved: false };
+    el.style.cursor = 'grabbing';
+  };
+  const onMove = (e: React.MouseEvent) => {
+    const el = ref.current; if (!el || !st.current.down) return;
+    const dx = e.pageX - st.current.startX;
+    if (Math.abs(dx) > 3) st.current.moved = true;
+    el.scrollLeft = st.current.left - dx;
+  };
+  const end = () => { const el = ref.current; st.current.down = false; if (el) el.style.cursor = 'grab'; };
+  return (
+    <div ref={ref} className={className} style={{ cursor: 'grab', userSelect: st.current.moved ? 'none' : undefined }}
+      onMouseDown={onDown} onMouseMove={onMove} onMouseUp={end} onMouseLeave={end}>
+      {children}
     </div>
   );
 }
