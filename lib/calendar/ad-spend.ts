@@ -83,6 +83,21 @@ export interface AdSpendResult { spend: number; ok: boolean; }
  * Soma o spend Meta na janela dos anúncios cujo nome carrega um SKU que casa com `targets`
  * (SKUs canônicos modelo+cor+estilo). `ok=false` quando o token Meta falta/expira (spend incompleto).
  */
+/** Spend TOTAL de mídia Meta na janela (todos os anúncios, sem filtro de SKU) — para campanhas sitewide. */
+export async function getTotalAdSpend(market: Market, since: string, until: string): Promise<AdSpendResult> {
+  const tk = token();
+  if (!tk) return { spend: 0, ok: false };
+  const fx = market === 'BR' ? await getFxUsdBrl(since.slice(0, 7)) : 1;
+  const results = await Promise.all(ACCOUNT_IDS[market].map((id) => fetchAccountRange(id, since, until, tk)));
+  let ok = true;
+  let spend = 0;
+  for (const res of results) {
+    if (!res.ok) ok = false;
+    for (const row of res.rows) spend += (Number(row.spend) || 0) * fx;
+  }
+  return { spend, ok };
+}
+
 export async function getAdSpendForSkus(market: Market, since: string, until: string, targets: string[]): Promise<AdSpendResult> {
   if (!targets.length) return { spend: 0, ok: true };
   const tk = token();

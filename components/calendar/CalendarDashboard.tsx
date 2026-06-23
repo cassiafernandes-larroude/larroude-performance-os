@@ -7,13 +7,13 @@ import { RefreshCw, ExternalLink, CalendarDays, ChevronRight, ChevronLeft, Chevr
 
 type Market = 'US' | 'BR';
 
-interface ActionResult { gmv: number; units: number; orders: number; basis: 'sku' | 'collection' | 'tag'; skuCount: number; tag?: string; window: { start: string; end: string }; partial?: boolean; }
+interface ActionResult { gmv: number; units: number; orders: number; basis: 'sku' | 'collection' | 'tag' | 'sitewide'; skuCount: number; tag?: string; window: { start: string; end: string }; partial?: boolean; }
 interface Action {
   gid: string; title: string; url: string; week: string; category: string[];
   market: 'US' | 'BR' | 'BOTH';
   assignee?: string | null;
   startOn: string | null; dueOn: string | null; completed: boolean;
-  skus: string[]; collectionId: string | null; dropTag: string | null;
+  skus: string[]; collectionId: string | null; dropTag: string | null; sitewide?: boolean;
   window: { start: string; end: string } | null;
   hasLink: boolean; result: ActionResult | null; resultError: string | null;
   status: 'no_link' | 'pending' | 'measured';
@@ -212,7 +212,7 @@ function ActionRow({ a, market }: { a: Action; market: Market }) {
   const isAds = a.category.includes('ADS');
   // Mostra SKUs ao clicar: drops (tag auto) e SKUs manuais. Collection ID NÃO lista SKUs
   // (a collection já é o identificador — não precisa puxar os produtos).
-  const skuMode = !isAds && !a.collectionId && (!!a.dropTag || a.skus.length > 0);
+  const skuMode = !isAds && !a.sitewide && !a.collectionId && (!!a.dropTag || a.skus.length > 0);
   const expandable = isAds || skuMode;
   const [open, setOpen] = useState(false);
   const [subs, setSubs] = useState<SubTask[] | null>(null);
@@ -311,11 +311,13 @@ function ActionRow({ a, market }: { a: Action; market: Market }) {
               {fmtN(a.result.orders)} pedidos
               {a.result.roas != null ? ` · ROAS ${a.result.roas.toFixed(1)}×` : ''}
               {' · '}
-              {a.result.basis === 'tag'
-                ? `tag ${a.result.tag} · ${a.result.skuCount} SKUs`
-                : a.result.basis === 'collection'
-                  ? `collection · ${a.result.skuCount} SKUs`
-                  : `${a.result.skuCount} SKU(s)`}
+              {a.result.basis === 'sitewide'
+                ? 'site inteiro (todas as vendas DTC)'
+                : a.result.basis === 'tag'
+                  ? `tag ${a.result.tag} · ${a.result.skuCount} SKUs`
+                  : a.result.basis === 'collection'
+                    ? `collection · ${a.result.skuCount} SKUs`
+                    : `${a.result.skuCount} SKU(s)`}
               {a.window ? ` · ${fmtDate(a.window.start)}–${fmtDate(a.window.end)}` : ''}
               {a.result.partial ? ' · ⚠ vendas parciais' : ''}
               {!a.result.spendOk ? ' · ⚠ investido indisponível (token Meta)' : ''}

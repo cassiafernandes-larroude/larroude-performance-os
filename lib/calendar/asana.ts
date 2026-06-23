@@ -23,6 +23,7 @@ export interface CalendarAction {
   skus: string[];                     // campo "SKUs"
   collectionId: string | null;        // campo "Collection ID"
   dropTag: string | null;             // tag de pedido do drop (auto: DROP_DD.MM.AA pela data)
+  sitewide: boolean;                  // campanha site inteiro → mede vendas DTC de todo o site na janela
 }
 
 export function asanaConfigured(): boolean {
@@ -147,6 +148,7 @@ export async function getMacroCalendar(): Promise<CalendarAction[]> {
         skus: splitSkus(cfValue(byName('SKUs'))),
         collectionId: (cfValue(byName('Collection ID')) || '').replace(/[^0-9]/g, '') || null,
         dropTag: isDrop ? dropTagFromDate(t.due_on) : null,
+        sitewide: /\bsite\s*-?wide\b/i.test(name),
       });
     }
     offset = json.next_page?.offset || null;

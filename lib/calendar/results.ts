@@ -8,7 +8,7 @@
 // compartilham período (ex.: ADS/CRM da mesma semana).
 
 import type { Market } from './asana';
-import { getAdSpendForSkus, canonicalSku, skuInTargets } from './ad-spend';
+import { getAdSpendForSkus, getTotalAdSpend, canonicalSku, skuInTargets } from './ad-spend';
 
 const SHOPIFY_API_VERSION = process.env.SHOPIFY_API_VERSION || '2025-01';
 function shopifyConfig(market: Market) {
@@ -40,8 +40,8 @@ export interface ActionResult {
   gmv: number;
   units: number;
   orders: number;
-  basis: 'sku' | 'collection' | 'tag';
-  skuCount: number;          // nº de SKUs-mãe (produtos) considerados
+  basis: 'sku' | 'collection' | 'tag' | 'sitewide';
+  skuCount: number;          // nº de SKUs-mãe (produtos) considerados (0 quando basis=sitewide)
   tag?: string;              // tag de produto usada quando basis=tag (ex.: DROP_17.06.26)
   spend: number;             // total investido (ads Meta cujo nome casa os SKUs)
   spendOk: boolean;          // false quando o token Meta falta/expira (investido incompleto)
@@ -158,6 +158,16 @@ async function salesByCanonical(market: Market, start: string, end: string, targ
     gmv += l.revenue;
     orderIds.add(l.orderId);
   }
+  return { gmv, units, orders: orderIds.size, partial };
+}
+
+/** Vendas DTC do SITE INTEIRO na janela (sem filtro de SKU) — para campanhas sitewide. */
+async function salesAllSite(market: Market, start: string, end: string): Promise<{ gmv: number; units: number; orders: number; partial: boolean }> {
+  const filter = `created_at:>=${start} created_at:<=${end} AND ${DTC_EXCLUSIONS}`;
+  const { lines, partial } = await fetchOrderLines(market, filter);
+  let gmv = 0, units = 0;
+  const orderIds = new Set<string>();
+  for (const l of lines) { units += l.qty; gmv += l.revenue; orderIds.add(l.orderId); }
   return { gmv, units, orders: orderIds.size, partial };
 }
 
@@ -361,8 +371,19 @@ export async function getActionResult(
   market: Market,
   start: string,
   end: string,
-  link: { skus: string[]; collectionId: string | null; dropTag?: string | null }
+  link: { skus: string[]; collectionId: string | null; dropTag?: string | null; sitewide?: boolean }
 ): Promise<ActionResult | null> {
+  // Campanha SITE INTEIRO: mede vendas DTC de todo o site na janela + spend total de mídia (ROAS).
+  if (link.sitewide) {
+    const sales = await salesAllSite(market, start, end);
+    const ad = await getTotalAdSpend(market, start, end).catch(() => ({ spend: 0, ok: false }));
+    return {
+      ...sales, basis: 'sitewide', skuCount: 0,
+      spend: ad.spend, spendOk: ad.ok,
+      roas: ad.spend > 0 ? sales.gmv / ad.spend : null,
+      window: { start, end },
+    };
+  }
   let basis: 'sku' | 'collection' | 'tag';
   let rawSkus: string[];
   let tag: string | undefined;
