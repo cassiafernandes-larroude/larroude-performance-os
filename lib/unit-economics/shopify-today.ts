@@ -38,6 +38,7 @@ const TODAY_QUERY = `
           tags
           customer { tags }
           totalPriceSet { shopMoney { amount currencyCode } }
+          totalDiscountsSet { shopMoney { amount } }
           lineItems(first: 50) {
             edges {
               node {
@@ -128,8 +129,8 @@ export async function getTodaySales(
   let totalRevenue = 0;
   // Cassia 2026-06-23: gross (pré-desconto) vs líquido (pós-desconto) por line item — p/ o Overview
   // separar GROSS SALES de TOTAL SALES no D0 (antes vinham iguais).
-  let totalGrossRevenue = 0; // Σ originalUnitPrice × qty
-  let totalNetRevenue = 0;   // Σ discountedUnitPrice × qty
+  let totalGrossRevenue = 0; // Σ originalUnitPrice × qty (pré-desconto, = total_line_items_price do BQ)
+  let totalDiscounts = 0;    // Σ order.totalDiscounts (inclui cupons/desconto de pedido, não só de linha)
 
   let cursor: string | null = null;
   let hasNext = true;
@@ -167,6 +168,7 @@ export async function getTodaySales(
       const orderId = o.id;
       totalOrdersSet.add(orderId);
       totalRevenue += parseFloat(o.totalPriceSet?.shopMoney?.amount || '0') || 0;
+      totalDiscounts += parseFloat(o.totalDiscountsSet?.shopMoney?.amount || '0') || 0;
 
       for (const li of o.lineItems.edges) {
         const qty = Number(li.node.quantity) || 0;
@@ -180,9 +182,10 @@ export async function getTodaySales(
         const effPrice = discPrice > 0 ? discPrice : origPrice;
         const lineRev = effPrice * qty;
 
-        // Totais gross/líquido sobre TODAS as line items DTC (independe de SKU-mãe reconhecido).
+        // Gross (pré-desconto) sobre TODAS as line items DTC (independe de SKU-mãe reconhecido).
+        // O líquido é gross − descontos do pedido (calculado no return) — discountedUnitPrice só pega
+        // desconto de LINHA, perde cupom/desconto de pedido.
         totalGrossRevenue += origPrice * qty;
-        totalNetRevenue += effPrice * qty;
 
         const sku = li.node.variant?.sku ?? li.node.sku;
         if (!sku) continue;
@@ -242,7 +245,7 @@ export async function getTodaySales(
     totalOrders: totalOrdersSet.size,
     totalRevenue,
     totalGrossRevenue,
-    totalNetRevenue,
+    totalNetRevenue: Math.max(0, totalGrossRevenue - totalDiscounts),
     pages,
     partial,
     generatedAt: new Date().toISOString(),
