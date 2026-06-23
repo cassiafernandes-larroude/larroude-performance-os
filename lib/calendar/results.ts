@@ -233,7 +233,25 @@ const DROP_PRODUCTS_QUERY = `
   }
 `;
 
-export interface DropProduct { title: string; sku: string; }
+export interface DropProduct { title: string; sku: string; units?: number; revenue?: number; }
+
+/** Vendas (unidades + faturamento) por SKU canônico numa janela — p/ detalhar a lista do drop. */
+export async function salesPerCanonicalSku(market: Market, start: string, end: string, targets: string[]): Promise<Map<string, { units: number; revenue: number }>> {
+  const out = new Map<string, { units: number; revenue: number }>();
+  if (!targets.length) return out;
+  const filter = `created_at:>=${start} created_at:<=${end} AND ${DTC_EXCLUSIONS}`;
+  const { lines } = await fetchOrderLines(market, filter);
+  for (const l of lines) {
+    if (!l.sku) continue;
+    const c = canonicalSku(l.sku);
+    if (!skuInTargets(c, targets)) continue;
+    const e = out.get(c) || { units: 0, revenue: 0 };
+    e.units += l.qty;
+    e.revenue += l.revenue;
+    out.set(c, e);
+  }
+  return out;
+}
 
 /** Lista os produtos de um drop (por tag de produto): título + SKU canônico (modelo+cor+estilo). */
 export async function getDropProducts(market: Market, tag: string): Promise<DropProduct[]> {

@@ -206,7 +206,7 @@ function Chip({ label, value }: { label: string; value: string }) {
 }
 
 interface SubTask { gid: string; name: string; completed: boolean; dueOn: string | null; }
-interface DropProduct { title: string; sku: string; }
+interface DropProduct { title: string; sku: string; units?: number; revenue?: number; }
 
 function ActionRow({ a, market }: { a: Action; market: Market }) {
   const isAds = a.category.includes('ADS');
@@ -221,10 +221,11 @@ function ActionRow({ a, market }: { a: Action; market: Market }) {
   const [detErr, setDetErr] = useState<string | null>(null);
 
   // SKUs manuais têm prioridade sobre a tag de drop. (Collection ID não entra — não lista SKUs.)
+  const win = a.window ? `&since=${a.window.start}&until=${a.window.end}` : '';
   const skuQuery = a.skus.length > 0
-    ? `skus=${encodeURIComponent(a.skus.join(','))}`
+    ? `skus=${encodeURIComponent(a.skus.join(','))}${win}`
     : a.dropTag
-      ? `tag=${encodeURIComponent(a.dropTag)}`
+      ? `tag=${encodeURIComponent(a.dropTag)}${win}`
       : null;
 
   const toggle = useCallback(async () => {
@@ -363,11 +364,19 @@ function ActionRow({ a, market }: { a: Action; market: Market }) {
               <div className="text-[10px] uppercase tracking-wider mb-1" style={{ color: 'var(--ink-muted)' }}>
                 {prods.length} SKUs{a.skus.length === 0 && a.dropTag ? ` · tag ${a.dropTag}` : ''}
               </div>
-              <div className="space-y-1">
+              <div>
+                <div className="flex items-center gap-3 text-[9px] uppercase tracking-wider pb-1" style={{ color: 'var(--ink-muted)', borderBottom: '1px solid var(--border)' }}>
+                  <span className="flex-1">Produto</span>
+                  <span className="w-[150px] shrink-0">SKU</span>
+                  <span className="w-[70px] shrink-0 text-right">Unid.</span>
+                  <span className="w-[90px] shrink-0 text-right">Faturamento</span>
+                </div>
                 {prods.map((p) => (
-                  <div key={p.sku || p.title} className="flex items-center justify-between gap-3 text-[12px]" style={{ color: 'var(--ink)' }}>
-                    <span className="truncate">{p.title}</span>
-                    <span className="font-num text-[11px] shrink-0" style={{ color: 'var(--ink-muted)' }}>{p.sku}</span>
+                  <div key={p.sku || p.title} className="flex items-center gap-3 text-[12px] py-0.5" style={{ color: 'var(--ink)' }}>
+                    <span className="flex-1 truncate">{p.title}</span>
+                    <span className="w-[150px] shrink-0 font-num text-[11px]" style={{ color: 'var(--ink-muted)' }}>{p.sku}</span>
+                    <span className="w-[70px] shrink-0 text-right font-num">{p.units != null ? fmtN(p.units) : '—'}</span>
+                    <span className="w-[90px] shrink-0 text-right font-num" style={{ color: '#10b981' }}>{p.revenue != null ? fmtMoney(p.revenue, market) : '—'}</span>
                   </div>
                 ))}
               </div>
