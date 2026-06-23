@@ -90,6 +90,8 @@ export async function getTodaySales(
   totalUnits: number;
   totalOrders: number;
   totalRevenue: number;
+  totalGrossRevenue: number;
+  totalNetRevenue: number;
   pages: number;
   partial: boolean;
   generatedAt: string;
@@ -124,6 +126,10 @@ export async function getTodaySales(
   let totalUnits = 0;
   let totalOrdersSet = new Set<string>();
   let totalRevenue = 0;
+  // Cassia 2026-06-23: gross (pré-desconto) vs líquido (pós-desconto) por line item — p/ o Overview
+  // separar GROSS SALES de TOTAL SALES no D0 (antes vinham iguais).
+  let totalGrossRevenue = 0; // Σ originalUnitPrice × qty
+  let totalNetRevenue = 0;   // Σ discountedUnitPrice × qty
 
   let cursor: string | null = null;
   let hasNext = true;
@@ -163,14 +169,8 @@ export async function getTodaySales(
       totalRevenue += parseFloat(o.totalPriceSet?.shopMoney?.amount || '0') || 0;
 
       for (const li of o.lineItems.edges) {
-        const sku = li.node.variant?.sku ?? li.node.sku;
-        if (!sku) continue;
         const qty = Number(li.node.quantity) || 0;
         if (qty <= 0) continue;
-        const mSku = motherSkuOf(sku);
-        if (!mSku) continue;
-        if (/^x-/i.test(mSku) || /^[0-9]+$/.test(mSku)) continue;
-
         // Revenue por line item: discounted (preço efetivo pago) × qty.
         // Se discounted vier 0/null, fallback pra original.
         const discPrice =
@@ -179,6 +179,16 @@ export async function getTodaySales(
           parseFloat(li.node.originalUnitPriceSet?.shopMoney?.amount || '0') || 0;
         const effPrice = discPrice > 0 ? discPrice : origPrice;
         const lineRev = effPrice * qty;
+
+        // Totais gross/líquido sobre TODAS as line items DTC (independe de SKU-mãe reconhecido).
+        totalGrossRevenue += origPrice * qty;
+        totalNetRevenue += effPrice * qty;
+
+        const sku = li.node.variant?.sku ?? li.node.sku;
+        if (!sku) continue;
+        const mSku = motherSkuOf(sku);
+        if (!mSku) continue;
+        if (/^x-/i.test(mSku) || /^[0-9]+$/.test(mSku)) continue;
 
         totalUnits += qty;
 
@@ -231,6 +241,8 @@ export async function getTodaySales(
     totalUnits,
     totalOrders: totalOrdersSet.size,
     totalRevenue,
+    totalGrossRevenue,
+    totalNetRevenue,
     pages,
     partial,
     generatedAt: new Date().toISOString(),

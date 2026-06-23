@@ -128,13 +128,15 @@ export async function getMetricBundle(
     if (isToday) {
       try {
         const t = await getTodaySales(market);
-        const todayRev = t.totalRevenue || 0;
         const todayOrders = t.totalOrders || 0;
-        if (todayOrders > 0 || todayRev > 0) dataAvailable = true; // dado live real de hoje
-        // Aproximacao: D0 = sem refunds ainda → total_sales ≈ order_revenue ≈ gross_sales.
-        c.gross_sales = todayRev;
+        // gross = pré-desconto (line items), líquido = pós-desconto. D0 sem refunds → total_sales ≈ líquido.
+        const todayGross = t.totalGrossRevenue || 0;
+        const todayNet = t.totalNetRevenue || 0;
+        const todayRev = todayNet || t.totalRevenue || 0; // fallback pro total da order se líquido vier 0
+        if (todayOrders > 0 || todayRev > 0 || todayGross > 0) dataAvailable = true; // dado live real de hoje
+        c.gross_sales = todayGross || todayRev; // GROSS SALES = antes do desconto
         c.order_revenue = todayRev;
-        c.total_sales = todayRev;
+        c.total_sales = todayRev;               // TOTAL SALES = líquido (pós-desconto, refunds≈0 no D0)
         c.orders = todayOrders;
         c.aov = todayOrders > 0 ? todayRev / todayOrders : 0;
         // new_customers nao calculado D0 — manter o que BQ deu (provavelmente 0).
