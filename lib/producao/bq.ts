@@ -104,12 +104,15 @@ const REMESSA_ROLLUP_CTE = `
     FROM \`${SILVER}.vpcp_remessa\`
     WHERE eh_encerrado = 'F'
   ),
+  -- Semi-join em rem (só ativas, ~1.5k remessas) ANTES de agregar: corta a varredura
+  -- da vw_baixa_par_saidas (360k) e principalmente da vpcp_baixas_op_setores (7,8M).
   mont AS (
     SELECT remessa,
            SUM(quant) AS baixados,
            COUNT(DISTINCT sku) AS qtd_skus,
            ARRAY_TO_STRING(ARRAY_AGG(DISTINCT sku IGNORE NULLS ORDER BY sku LIMIT 40), ',') AS skus_csv
     FROM \`${SILVER}.vw_baixa_par_saidas\`
+    WHERE remessa IN (SELECT remessa FROM rem)
     GROUP BY remessa
   ),
   op AS (
@@ -118,12 +121,14 @@ const REMESSA_ROLLUP_CTE = `
            ANY_VALUE(cod_ref) AS cod_ref,
            ARRAY_TO_STRING(ARRAY_AGG(DISTINCT cod_ref IGNORE NULLS ORDER BY cod_ref LIMIT 40), ',') AS refs_csv
     FROM \`${SILVER}.vpcp_op\`
+    WHERE remessa IN (SELECT remessa FROM rem)
     GROUP BY remessa
   ),
   cur AS (
     SELECT remessa,
            ARRAY_AGG(STRUCT(nome_setor, cod_setor) ORDER BY dt_baixa DESC, hora_baixa DESC LIMIT 1)[OFFSET(0)] AS ultimo
     FROM \`${SILVER}.vpcp_baixas_op_setores\`
+    WHERE remessa IN (SELECT remessa FROM rem)
     GROUP BY remessa
   ),
   base AS (
@@ -154,6 +159,22 @@ function bqDate(v: any): string | null {
   if (typeof v === 'string') return v;
   if (typeof v === 'object' && 'value' in v) return (v as { value: string }).value;
   return String(v);
+}
+
+// ISO week ('%G-W%V') + segunda-feira da semana (igual DATE_TRUNC ... WEEK(MONDAY)), em JS.
+function isoWeek(dateStr: string): { semana: string; data_inicio: string } {
+  const d = new Date(dateStr + 'T00:00:00Z');
+  const dow = d.getUTCDay() || 7; // Mon=1 .. Sun=7
+  const monday = new Date(d);
+  monday.setUTCDate(d.getUTCDate() - (dow - 1));
+  const thursday = new Date(d);
+  thursday.setUTCDate(d.getUTCDate() + 4 - dow);
+  const yearStart = new Date(Date.UTC(thursday.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((thursday.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  return {
+    semana: `${thursday.getUTCFullYear()}-W${String(week).padStart(2, '0')}`,
+    data_inicio: monday.toISOString().slice(0, 10),
+  };
 }
 
 function mapRemessaRow(r: any): RemessaRow {
@@ -189,32 +210,13 @@ function mapRemessaRow(r: any): RemessaRow {
 // /api/producao  — totais Senda 4 + breakdown todas fábricas + setores + diária
 // ---------------------------------------------------------------------------
 export async function getProducao(): Promise<ProducaoPayload> {
-  const [fabricaRows, totalRow, setorRows, semanaRows, diariaRows, topRows, gargaloRows] = await Promise.all([
-    // Fábricas (todas)
+  const [baseRows, setorRows, diariaRows] = await Promise.all([
+    // Fonte única: rollup por remessa (todas as fábricas, só ativas). Totais, fábricas,
+    // semanas, risco e TOC saem disto em JS (≤ ~1.5k linhas) — evita re-rodar o CTE pesado 6×.
     runQuery<any>(`
       WITH ${REMESSA_ROLLUP_CTE}
-      SELECT b.nome_fabrica,
-             COUNT(*) AS remessas,
-             SUM(b.pares_pendentes) AS pares_pendentes,
-             SUM(b.pares_baixados) AS pares_baixados,
-             ROUND(AVG(b.lead_time_dias), 1) AS avg_lead_time,
-             COUNTIF(${BOTTLENECK_EXPR}) AS remessas_em_gargalo
-      FROM base b
-      GROUP BY b.nome_fabrica
-      ORDER BY pares_pendentes DESC`),
-    // Totais Senda 4
-    runQuery<any>(`
-      WITH ${REMESSA_ROLLUP_CTE}
-      SELECT
-        SUM(b.pares_pendentes) AS pares_pendentes,
-        SUM(b.pares_baixados) AS pares_baixados,
-        COUNT(*) AS remessas_ativas,
-        COUNTIF(${BOTTLENECK_EXPR}) AS remessas_gargalo,
-        COUNTIF(b.dias_para_entrega < 0) AS remessas_atrasadas,
-        ROUND(AVG(b.lead_time_dias), 1) AS lead_time_medio,
-        MIN(IF(b.dias_para_entrega >= 0, b.dt_entrega, NULL)) AS proxima_entrega
-      FROM base b
-      WHERE b.cod_fabrica = '${SENDA4}'`),
+      SELECT * FROM base b
+      ORDER BY b.dias_para_entrega ASC`),
     // Setores Senda 4 — lote = remessa cujo setor atual = este setor; pendência = soma das pendências.
     // avg_dias_no_setor = dias desde a última baixa nesse setor (tempo parado). dias_espera não é
     // reconstituível das silver de forma confiável → null.
@@ -243,19 +245,6 @@ export async function getProducao(): Promise<ProducaoPayload> {
       LEFT JOIN ap ON ap.remessa = cs.remessa AND ap.nome_setor = cs.setor
       GROUP BY cs.setor
       ORDER BY sequencia`),
-    // Próximas semanas (Senda 4, dt_entrega futura — próximas 8 semanas)
-    runQuery<any>(`
-      WITH ${REMESSA_ROLLUP_CTE}
-      SELECT FORMAT_DATE('%G-W%V', b.dt_entrega) AS semana,
-             DATE_TRUNC(b.dt_entrega, WEEK(MONDAY)) AS data_inicio,
-             SUM(b.pares_pendentes) AS pares,
-             COUNT(*) AS remessas
-      FROM base b
-      WHERE b.cod_fabrica = '${SENDA4}'
-        AND b.dt_entrega >= CURRENT_DATE()
-        AND b.dt_entrega < DATE_ADD(CURRENT_DATE(), INTERVAL 56 DAY)
-      GROUP BY semana, data_inicio
-      ORDER BY data_inicio`),
     // Produção diária por setor (Senda 4, últimos 60 dias) — apontamento produtivo
     runQuery<any>(`
       SELECT FORMAT_DATE('%Y-%m-%d', dt_baixa) AS dia, nome_setor AS setor, SUM(quant) AS pares
@@ -265,44 +254,64 @@ export async function getProducao(): Promise<ProducaoPayload> {
       GROUP BY dia, setor
       HAVING pares > 0
       ORDER BY dia`),
-    // Risco crítico: Senda 4, atrasadas com pendente > 50, mais atrasadas primeiro
-    runQuery<any>(`
-      WITH ${REMESSA_ROLLUP_CTE}
-      SELECT * FROM base b
-      WHERE b.cod_fabrica = '${SENDA4}' AND b.dias_para_entrega < 0 AND b.pares_pendentes > 50
-      ORDER BY b.dias_para_entrega ASC
-      LIMIT 200`),
-    // TOC / gargalo: Senda 4, bottleneck heurístico, por volume
-    runQuery<any>(`
-      WITH ${REMESSA_ROLLUP_CTE}
-      SELECT * FROM base b
-      WHERE b.cod_fabrica = '${SENDA4}' AND ${BOTTLENECK_EXPR}
-      ORDER BY b.pares_pendentes DESC
-      LIMIT 200`),
   ]);
 
-  const t = totalRow[0] ?? {};
+  // Todas as fábricas, já mapeadas (≤ ~1.5k linhas → derivar em JS é trivial).
+  const rows = baseRows.map(mapRemessaRow);
+  const senda4 = rows.filter((r) => r.cod_fabrica === SENDA4);
+  const leadVals = senda4.map((r) => r.lead_time_dias).filter((v): v is number => v != null);
+  const futuras = senda4
+    .filter((r) => r.dt_entrega && r.dias_para_entrega != null && r.dias_para_entrega >= 0)
+    .map((r) => r.dt_entrega as string)
+    .sort();
+
+  // Fábricas (todas), ordenadas por pendência
+  const fabMap = new Map<string, { f: Fabrica; lead: number[] }>();
+  for (const r of rows) {
+    let e = fabMap.get(r.fabrica);
+    if (!e) {
+      e = { f: { nome_fabrica: r.fabrica, remessas: 0, pares_pendentes: 0, pares_baixados: 0, avg_lead_time: null, remessas_em_gargalo: 0 }, lead: [] };
+      fabMap.set(r.fabrica, e);
+    }
+    e.f.remessas += 1;
+    e.f.pares_pendentes += r.pares_pendentes;
+    e.f.pares_baixados += r.pares_baixados;
+    if (r.is_bottleneck) e.f.remessas_em_gargalo += 1;
+    if (r.lead_time_dias != null) e.lead.push(r.lead_time_dias);
+  }
+  const fabricas: Fabrica[] = Array.from(fabMap.values())
+    .map(({ f, lead }) => ({
+      ...f,
+      avg_lead_time: lead.length ? Math.round((lead.reduce((a, b) => a + b, 0) / lead.length) * 10) / 10 : null,
+    }))
+    .sort((a, b) => b.pares_pendentes - a.pares_pendentes);
+
+  // Próximas 8 semanas (Senda 4, dt_entrega entre hoje e +56d)
+  const semMap = new Map<string, SemanaEntrega>();
+  for (const r of senda4) {
+    if (r.dt_entrega == null || r.dias_para_entrega == null || r.dias_para_entrega < 0 || r.dias_para_entrega >= 56) continue;
+    const { semana, data_inicio } = isoWeek(r.dt_entrega);
+    let w = semMap.get(semana);
+    if (!w) { w = { semana, data_inicio, pares: 0, remessas: 0 }; semMap.set(semana, w); }
+    w.pares += r.pares_pendentes;
+    w.remessas += 1;
+  }
+  const semanasEntrega = Array.from(semMap.values()).sort((a, b) => a.data_inicio.localeCompare(b.data_inicio));
+
   return {
     generatedAt: new Date().toISOString(),
     source: `${SILVER}.vpcp_op + vpcp_baixas_op_setores + vw_baixa_par_saidas (+vpcp_remessa)`,
     totals: {
-      paresPendentes: Number(t.pares_pendentes ?? 0),
-      paresBaixados: Number(t.pares_baixados ?? 0),
-      remessasAtivas: Number(t.remessas_ativas ?? 0),
-      remessasGargalo: Number(t.remessas_gargalo ?? 0),
+      paresPendentes: senda4.reduce((s, r) => s + r.pares_pendentes, 0),
+      paresBaixados: senda4.reduce((s, r) => s + r.pares_baixados, 0),
+      remessasAtivas: senda4.length,
+      remessasGargalo: senda4.filter((r) => r.is_bottleneck).length,
       remessasBloqueadas: 0,
-      remessasAtrasadas: Number(t.remessas_atrasadas ?? 0),
-      leadTimeMedio: t.lead_time_medio != null ? Number(t.lead_time_medio) : null,
-      proximaEntrega: bqDate(t.proxima_entrega),
+      remessasAtrasadas: senda4.filter((r) => r.dias_para_entrega != null && r.dias_para_entrega < 0).length,
+      leadTimeMedio: leadVals.length ? Math.round((leadVals.reduce((a, b) => a + b, 0) / leadVals.length) * 10) / 10 : null,
+      proximaEntrega: futuras[0] ?? null,
     },
-    fabricas: fabricaRows.map((f) => ({
-      nome_fabrica: f.nome_fabrica ?? '—',
-      remessas: Number(f.remessas ?? 0),
-      pares_pendentes: Number(f.pares_pendentes ?? 0),
-      pares_baixados: Number(f.pares_baixados ?? 0),
-      avg_lead_time: f.avg_lead_time != null ? Number(f.avg_lead_time) : null,
-      remessas_em_gargalo: Number(f.remessas_em_gargalo ?? 0),
-    })),
+    fabricas,
     setores: setorRows.map((s) => ({
       nome_setor: s.nome_setor ?? '—',
       sequencia: s.sequencia != null ? Number(s.sequencia) : 999,
@@ -312,14 +321,15 @@ export async function getProducao(): Promise<ProducaoPayload> {
       avg_dias_espera: null,
       total_em_gargalo: Number(s.total_em_gargalo ?? 0),
     })),
-    remessasTop: topRows.map(mapRemessaRow),
-    remessasGargalo: gargaloRows.map(mapRemessaRow),
-    semanasEntrega: semanaRows.map((w) => ({
-      semana: w.semana,
-      data_inicio: bqDate(w.data_inicio) ?? '',
-      pares: Number(w.pares ?? 0),
-      remessas: Number(w.remessas ?? 0),
-    })),
+    remessasTop: senda4
+      .filter((r) => r.dias_para_entrega != null && r.dias_para_entrega < 0 && r.pares_pendentes > 50)
+      .sort((a, b) => (a.dias_para_entrega ?? 0) - (b.dias_para_entrega ?? 0))
+      .slice(0, 200),
+    remessasGargalo: senda4
+      .filter((r) => r.is_bottleneck)
+      .sort((a, b) => b.pares_pendentes - a.pares_pendentes)
+      .slice(0, 200),
+    semanasEntrega,
     producaoDiaria: diariaRows.map((d) => ({ dia: d.dia, setor: d.setor, pares: Number(d.pares ?? 0) })),
   };
 }
