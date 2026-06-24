@@ -201,7 +201,17 @@ export async function getMetricBundle(
       // intradiário (c.google_spend, já setado acima) ou o gold in-range se houver; senão 0.
       if (isToday) {
         if (gCur.inRange > 0) cGoogleSpend = gCur.inRange;
-        // senão mantém cGoogleSpend = Supermetrics de hoje (ou 0) — não cai pro latestSpend (ontem).
+        // D0 intradiário: Google Ads API DIRETA (fonte primária — não depende da quota do Supermetrics
+        // nem do lag do gold). Se vier > 0, prevalece sobre Supermetrics/gold.
+        try {
+          const { getGoogleAdsSpendByDay } = await import("@/lib/cac-dashboard/connectors/google-ads");
+          const gApi = await getGoogleAdsSpendByDay(market as "US" | "BR", range.from, range.to);
+          const apiToday = gApi.data.get(range.from) ?? 0;
+          if (apiToday > 0) cGoogleSpend = apiToday;
+        } catch (e) {
+          console.warn(`[overview google D0 API ${market}]`, (e as Error)?.message);
+        }
+        // senão mantém cGoogleSpend = Supermetrics de hoje (ou 0) — nunca o latestSpend (ontem).
       } else {
         cGoogleSpend = gCur.inRange > 0 ? gCur.inRange : gCur.latestSpend;
         if (gCur.inRange === 0 && gCur.latestSpend > 0) googleLatestDate = gCur.latestDate;
