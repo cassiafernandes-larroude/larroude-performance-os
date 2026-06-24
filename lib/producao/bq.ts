@@ -124,6 +124,17 @@ const REMESSA_ROLLUP_CTE = `
     WHERE remessa IN (SELECT remessa FROM rem)
     GROUP BY remessa
   ),
+  ref2sku AS (
+    -- Mapa cod_ref base → SKU canônico, do histórico de montagem.
+    -- referencia = 'codref-cor' (ex.: 100.0020-1); n_skus>1 = ref com várias cores (cor indefinida).
+    SELECT base_ref, ANY_VALUE(sku) AS any_sku, COUNT(DISTINCT sku) AS n_skus
+    FROM (
+      SELECT SPLIT(referencia, '-')[OFFSET(0)] AS base_ref, sku
+      FROM \`${SILVER}.vw_baixa_par_saidas\`
+      WHERE sku IS NOT NULL AND referencia IS NOT NULL
+    )
+    GROUP BY base_ref
+  ),
   cur AS (
     SELECT remessa,
            ARRAY_AGG(STRUCT(nome_setor, cod_setor) ORDER BY dt_baixa DESC, hora_baixa DESC LIMIT 1)[OFFSET(0)] AS ultimo
@@ -139,6 +150,7 @@ const REMESSA_ROLLUP_CTE = `
       GREATEST(rem.pares_totais - IFNULL(mont.baixados, 0), 0) AS pares_pendentes,
       mont.qtd_skus, mont.skus_csv,
       op.qtd_produtos, op.cod_ref, op.refs_csv,
+      ref2sku.any_sku AS ref_sku, ref2sku.n_skus AS ref_sku_n,
       cur.ultimo.nome_setor AS setor_atual,
       DATE_DIFF(rem.dt_entrega, CURRENT_DATE(), DAY) AS dias_para_entrega,
       DATE_DIFF(CURRENT_DATE(), rem.data_inclusao, DAY) AS lead_time_dias
@@ -146,6 +158,7 @@ const REMESSA_ROLLUP_CTE = `
     LEFT JOIN mont USING (remessa)
     LEFT JOIN op USING (remessa)
     LEFT JOIN cur USING (remessa)
+    LEFT JOIN ref2sku ON ref2sku.base_ref = op.cod_ref
   )`;
 
 // is_bottleneck (heurística transparente, já que o TOC/gargalo do mart não está nas silver):
@@ -177,6 +190,24 @@ function isoWeek(dateStr: string): { semana: string; data_inicio: string } {
   };
 }
 
+// SKU de exibição (Cassia 2026-06-24):
+//  1) SKU real da montagem da própria remessa (quando já produziu);
+//  2) histórico do cod_ref se ele só teve UMA cor (SKU canônico exato);
+//  3) modelo "L###-MODELO-…" se o ref já teve várias cores (cor ainda indefinida);
+//  4) cod_ref puro se não há histórico de montagem para o ref.
+function displaySku(r: any): string | undefined {
+  const own = r.skus_csv ? String(r.skus_csv).split(',')[0] : null;
+  if (own) return own;
+  const refSku: string | null = r.ref_sku ?? null;
+  const n = r.ref_sku_n != null ? Number(r.ref_sku_n) : 0;
+  if (refSku && n === 1) return refSku;
+  if (refSku && n > 1) {
+    const p = String(refSku).split('-');
+    return p.length >= 2 ? `${p[0]}-${p[1]}-…` : refSku;
+  }
+  return r.cod_ref ?? undefined;
+}
+
 function mapRemessaRow(r: any): RemessaRow {
   const dias = r.dias_para_entrega == null ? null : Number(r.dias_para_entrega);
   const isBottleneck = dias != null && dias < 0 && Number(r.pares_pendentes) > 0;
@@ -184,7 +215,7 @@ function mapRemessaRow(r: any): RemessaRow {
     remessa: r.remessa,
     fabrica: r.nome_fabrica ?? '—',
     cod_fabrica: r.cod_fabrica ?? '',
-    sku: r.skus_csv ? String(r.skus_csv).split(',')[0] : undefined,
+    sku: displaySku(r),
     cod_ref: r.cod_ref ?? undefined,
     pares_pendentes: Number(r.pares_pendentes ?? 0),
     pares_baixados: Number(r.pares_baixados ?? 0),
