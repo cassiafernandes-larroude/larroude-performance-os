@@ -147,6 +147,15 @@ const REMESSA_ROLLUP_CTE = `
 // remessa atrasada (dt_entrega passada) E ainda com pendência > 0.
 const BOTTLENECK_EXPR = `(b.dias_para_entrega < 0 AND b.pares_pendentes > 0)`;
 
+// O client @google-cloud/bigquery devolve DATE como objeto BigQueryDate ({ value: 'YYYY-MM-DD' }),
+// não string — então String() vira "[object Object]". Extrai o .value.
+function bqDate(v: any): string | null {
+  if (v == null) return null;
+  if (typeof v === 'string') return v;
+  if (typeof v === 'object' && 'value' in v) return (v as { value: string }).value;
+  return String(v);
+}
+
 function mapRemessaRow(r: any): RemessaRow {
   const dias = r.dias_para_entrega == null ? null : Number(r.dias_para_entrega);
   const isBottleneck = dias != null && dias < 0 && Number(r.pares_pendentes) > 0;
@@ -166,8 +175,8 @@ function mapRemessaRow(r: any): RemessaRow {
     setores: r.refs_csv ?? undefined,
     skus_csv: r.skus_csv ?? undefined,
     produtos_csv: r.refs_csv ?? undefined,
-    dt_entrega: r.dt_entrega ? String(r.dt_entrega) : null,
-    data_inclusao: r.data_inclusao ? String(r.data_inclusao) : null,
+    dt_entrega: bqDate(r.dt_entrega),
+    data_inclusao: bqDate(r.data_inclusao),
     is_bottleneck: isBottleneck,
     toc_status: isBottleneck ? 'GARGALO' : null,
     lead_time_dias: r.lead_time_dias != null ? Number(r.lead_time_dias) : null,
@@ -284,7 +293,7 @@ export async function getProducao(): Promise<ProducaoPayload> {
       remessasBloqueadas: 0,
       remessasAtrasadas: Number(t.remessas_atrasadas ?? 0),
       leadTimeMedio: t.lead_time_medio != null ? Number(t.lead_time_medio) : null,
-      proximaEntrega: t.proxima_entrega ? String(t.proxima_entrega) : null,
+      proximaEntrega: bqDate(t.proxima_entrega),
     },
     fabricas: fabricaRows.map((f) => ({
       nome_fabrica: f.nome_fabrica ?? '—',
@@ -307,7 +316,7 @@ export async function getProducao(): Promise<ProducaoPayload> {
     remessasGargalo: gargaloRows.map(mapRemessaRow),
     semanasEntrega: semanaRows.map((w) => ({
       semana: w.semana,
-      data_inicio: w.data_inicio ? String(w.data_inicio) : '',
+      data_inicio: bqDate(w.data_inicio) ?? '',
       pares: Number(w.pares ?? 0),
       remessas: Number(w.remessas ?? 0),
     })),
