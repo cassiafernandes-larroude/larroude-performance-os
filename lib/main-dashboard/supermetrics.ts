@@ -172,7 +172,11 @@ export async function queryGoogleCampaignsViaSupermetrics(market: Market, start:
 }
 
 export async function queryGoogleAdsTotalViaSupermetrics(market: Market, start: string, end: string) {
-  const daily = await queryGoogleAdsViaSupermetrics(market, start, end);
+  // Cassia 2026-06-23: o Supermetrics do Google Ads tem lag intradiário e, num pedido de hoje..hoje,
+  // às vezes devolve a última data disponível (ontem). Filtramos para somar SÓ as linhas DENTRO da
+  // janela pedida — assim o "Google de hoje" nunca puxa o custo de ontem (vem 0 se ainda não houver dado).
+  const daily = (await queryGoogleAdsViaSupermetrics(market, start, end))
+    .filter((r) => { const d = String(r.date).slice(0, 10); return d >= start && d <= end; });
   return daily.reduce(
     (acc, r) => ({
       spend: acc.spend + r.spend,
