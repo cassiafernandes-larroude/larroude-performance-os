@@ -196,9 +196,17 @@ export async function getMetricBundle(
         getGoogleSpendBQ(market, range.from, range.to),
         getGoogleSpendBQ(market, prevRange.from, prevRange.to),
       ]);
-      cGoogleSpend = gCur.inRange > 0 ? gCur.inRange : gCur.latestSpend;
+      // Cassia 2026-06-24: HOJE (D0) NUNCA usa o proxy do último dia do gold (= ontem) — o gold tem
+      // ~2d de lag e isso fazia o Google de hoje puxar o custo de ontem. No D0 mantém o Supermetrics
+      // intradiário (c.google_spend, já setado acima) ou o gold in-range se houver; senão 0.
+      if (isToday) {
+        if (gCur.inRange > 0) cGoogleSpend = gCur.inRange;
+        // senão mantém cGoogleSpend = Supermetrics de hoje (ou 0) — não cai pro latestSpend (ontem).
+      } else {
+        cGoogleSpend = gCur.inRange > 0 ? gCur.inRange : gCur.latestSpend;
+        if (gCur.inRange === 0 && gCur.latestSpend > 0) googleLatestDate = gCur.latestDate;
+      }
       pGoogleSpend = gPrev.inRange > 0 ? gPrev.inRange : gPrev.latestSpend;
-      if (gCur.inRange === 0 && gCur.latestSpend > 0) googleLatestDate = gCur.latestDate;
       console.log(`[overview google ${market} ${range.from}..${range.to}]`,
         `inRange=$${gCur.inRange.toFixed(0)} latest=$${gCur.latestSpend.toFixed(0)} (${gCur.latestDate})`,
         `FINAL=$${cGoogleSpend.toFixed(0)}`);
