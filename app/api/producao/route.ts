@@ -1,25 +1,21 @@
-// Cassia 2026-06-15: proxy aos dados de Produção 2.0.
-// Endpoint upstream: https://larroude-producao-dashboard.vercel.app/api/producao
-// Retorna KPIs + tabelas de fabricas/setores/produção diária (Senda 4).
-
+// Cassia 2026-06-24: Produção 2.0 interno ao OS — lê BigQuery silver direto
+// (silver.vpcp_op + vpcp_baixas_op_setores + vw_baixa_par_saidas, + header vpcp_remessa).
+// Antes era proxy ao app externo larroude-producao-dashboard — removido.
 import { NextResponse } from 'next/server';
+import { getProducao } from '@/lib/producao/bq';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 600; // 10 min
 export const maxDuration = 60;
 
-const UPSTREAM = 'https://larroude-producao-dashboard.vercel.app/api/producao';
-
 export async function GET() {
   try {
-    const r = await fetch(UPSTREAM, { next: { revalidate: 600 } });
-    if (!r.ok) return NextResponse.json({ error: `Upstream HTTP ${r.status}` }, { status: 502 });
-    const data = await r.json();
+    const data = await getProducao();
     return NextResponse.json(data, {
       headers: { 'Cache-Control': 's-maxage=600, stale-while-revalidate=3600, public' },
     });
   } catch (e: any) {
-    console.error('[producao proxy] error:', e);
+    console.error('[producao] BigQuery error:', e);
     return NextResponse.json({ error: e?.message || 'Internal error' }, { status: 500 });
   }
 }

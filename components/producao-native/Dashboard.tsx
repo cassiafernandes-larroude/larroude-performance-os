@@ -287,7 +287,7 @@ export default function ProducaoDashboard() {
           <p className="subtitle">
             Parque produtivo TOC · <b>LARROUDE FILIAL SAPIRANGA 4 - 1</b> (Senda 4)
             {data?.generatedAt && <> · dados de <b>{fmtDate(data.generatedAt)}</b></>}
-            {' · '}<span style={{ color: 'var(--p-ink-3)' }}>BigQuery DM_SUPPLY_CHAIN.fct_remessas_producao</span>
+            {' · '}<span style={{ color: 'var(--p-ink-3)' }}>BigQuery silver · vpcp_op · vpcp_baixas_op_setores · vw_baixa_par_saidas</span>
           </p>
 
           {/* Nav por abas (pills) — Cassia 2026-06-15 */}
@@ -1018,7 +1018,7 @@ export default function ProducaoDashboard() {
             })()}
 
             <div className="foot">
-              Larroudé Produção 2.0 · {data?.generatedAt ? `gerado em ${fmtDate(data.generatedAt)}` : '—'} · DM_SUPPLY_CHAIN.fct_remessas_producao
+              Larroudé Produção 2.0 · {data?.generatedAt ? `gerado em ${fmtDate(data.generatedAt)}` : '—'} · BigQuery silver (vpcp_op · vpcp_baixas_op_setores · vw_baixa_par_saidas)
             </div>
           </>
         )}
