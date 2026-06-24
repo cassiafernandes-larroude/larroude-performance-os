@@ -141,6 +141,21 @@ export default function ProducaoDashboard() {
   const [modalProducts, setModalProducts] = useState<Remessa[] | null>(null);
   const [modalLoading, setModalLoading] = useState(false);
 
+  // Cassia 2026-06-24: clicar numa fábrica abre modal com suas remessas (nº + data prometida).
+  // Lazy-load da lista completa de remessas (todas as fábricas) só na 1ª vez que abrir.
+  const [selectedFabrica, setSelectedFabrica] = useState<string | null>(null);
+  const [remessasAll, setRemessasAll] = useState<Remessa[] | null>(null);
+  const [remessasAllLoading, setRemessasAllLoading] = useState(false);
+  useEffect(() => {
+    if (!selectedFabrica || remessasAll) return;
+    setRemessasAllLoading(true);
+    fetch('/api/producao/remessas')
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => setRemessasAll(Array.isArray(d?.remessas) ? d.remessas : []))
+      .catch(() => setRemessasAll([]))
+      .finally(() => setRemessasAllLoading(false));
+  }, [selectedFabrica, remessasAll]);
+
   // Carrega produtos da remessa selecionada
   useEffect(() => {
     if (!selectedRemessa?.remessa) return;
@@ -364,7 +379,7 @@ export default function ProducaoDashboard() {
                         .slice()
                         .sort((a, b) => (b.pares_pendentes || 0) - (a.pares_pendentes || 0))
                         .map((f, i) => (
-                          <tr key={i}>
+                          <tr key={i} onClick={() => setSelectedFabrica(f.nome_fabrica || '—')} style={{ cursor: 'pointer' }} title="Ver remessas e datas prometidas">
                             <td style={{ fontWeight: 700 }}>{f.nome_fabrica || '—'}</td>
                             <td className="num">{fmtNum(f.remessas)}</td>
                             <td className="num"><b>{fmtNum(f.pares_pendentes)}</b></td>
@@ -1028,6 +1043,16 @@ export default function ProducaoDashboard() {
           onClose={() => setSelectedSku(null)}
         />
       )}
+
+      {/* Modal de remessas por fábrica (nº + data prometida) — Cassia 2026-06-24 */}
+      {selectedFabrica && (
+        <FabricaModal
+          fabrica={selectedFabrica}
+          remessas={(remessasAll || []).filter(r => (r.fabrica || '') === selectedFabrica)}
+          loading={remessasAllLoading && !remessasAll}
+          onClose={() => setSelectedFabrica(null)}
+        />
+      )}
     </div>
   );
 }
@@ -1548,6 +1573,74 @@ function OpenOrdersModal({ sku, nome, remessasInProd, onClose }: {
 }
 
 /* ============= Modal de detalhe da remessa ============= */
+// Cassia 2026-06-24: modal de remessas de uma fábrica — número + data prometida (dt_entrega).
+function FabricaModal({ fabrica, remessas, loading, onClose }: {
+  fabrica: string; remessas: Remessa[]; loading: boolean; onClose: () => void;
+}) {
+  const sorted = [...remessas].sort((a, b) => (a.dt_entrega || '9999-12-31').localeCompare(b.dt_entrega || '9999-12-31'));
+  const totalPendente = sorted.reduce((s, r) => s + (r.pares_pendentes || 0), 0);
+  const atrasadas = sorted.filter(r => r.dias_para_entrega != null && r.dias_para_entrega < 0).length;
+  return (
+    <div className="prod-modal-overlay" onClick={onClose}>
+      <div className="prod-modal-card" onClick={e => e.stopPropagation()}>
+        <button className="prod-modal-close" onClick={onClose} aria-label="Fechar">×</button>
+        <div className="prod-modal-label">FÁBRICA</div>
+        <h2 className="prod-modal-title">{fabrica.trim() || '—'}</h2>
+        <div className="prod-modal-meta">
+          <span><b>Remessas ativas:</b> {sorted.length}</span>
+          <span><b>Pendente:</b> {fmtNum(totalPendente)} pares</span>
+          {atrasadas > 0 && <span className="status-badge st-red">{atrasadas} atrasada{atrasadas > 1 ? 's' : ''}</span>}
+        </div>
+
+        {loading && (
+          <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--p-ink-3)', fontWeight: 600 }}>
+            ⏳ Carregando remessas…
+          </div>
+        )}
+        {!loading && sorted.length === 0 && (
+          <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--p-ink-3)' }}>
+            Nenhuma remessa ativa nesta fábrica.
+          </div>
+        )}
+        {!loading && sorted.length > 0 && (
+          <div className="prod-modal-table-wrap">
+            <table className="prod-modal-table">
+              <thead>
+                <tr>
+                  <th>Remessa</th>
+                  <th>Data prometida</th>
+                  <th>Produto</th>
+                  <th className="num">Pendente</th>
+                  <th className="num">Total</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sorted.map((r, i) => (
+                  <tr key={i}>
+                    <td style={{ fontFamily: 'ui-monospace, monospace', fontSize: 11, fontWeight: 700 }}>{r.remessa}</td>
+                    <td style={{ fontSize: 11.5 }}>{fmtDate(r.dt_entrega)}</td>
+                    <td style={{ fontSize: 11 }}>{r.nome?.trim() || r.sku || r.cod_ref || '—'}</td>
+                    <td className="num"><b>{fmtNum(r.pares_pendentes)}</b></td>
+                    <td className="num" style={{ color: 'var(--p-ink-3)' }}>{fmtNum(r.pares_totais)}</td>
+                    <td>
+                      {r.dias_para_entrega != null && r.dias_para_entrega < 0
+                        ? <span className="status-badge st-red">{Math.abs(r.dias_para_entrega)}d atraso</span>
+                        : r.dias_para_entrega != null
+                          ? <span style={{ fontSize: 11, color: 'var(--p-ink-3)' }}>em {r.dias_para_entrega}d</span>
+                          : <span style={{ fontSize: 11, color: 'var(--p-ink-3)' }}>—</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function RemessaModal({ remessa, products, loading, onClose }: {
   remessa: Remessa; products: Remessa[] | null; loading: boolean;
   onClose: () => void;
