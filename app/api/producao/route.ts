@@ -10,7 +10,7 @@ import { getProducao } from '@/lib/producao/bq';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const getProducaoCached = unstable_cache(getProducao, ['producao-v1'], {
+const getProducaoCached = unstable_cache(getProducao, ['producao-v2'], {
   revalidate: 900,
   tags: ['producao'],
 });

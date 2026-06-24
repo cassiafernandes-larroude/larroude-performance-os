@@ -7,7 +7,7 @@ import { getRemessas } from '@/lib/producao/bq';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const getRemessasCached = unstable_cache(getRemessas, ['producao-remessas-v1'], {
+const getRemessasCached = unstable_cache(getRemessas, ['producao-remessas-v2'], {
   revalidate: 900,
   tags: ['producao'],
 });
