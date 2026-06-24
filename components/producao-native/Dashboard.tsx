@@ -48,9 +48,10 @@ interface Setor {
   avg_dias_espera?: number | null; total_em_gargalo?: number;
 }
 interface Remessa {
-  remessa?: string; nome?: string; sku?: string; cod_ref?: string; fabrica?: string;
+  remessa?: string; nome?: string; sku?: string; cod_ref?: string; fabrica?: string; cod_fabrica?: string;
+  skus_csv?: string; produtos_csv?: string; qtd_skus?: number; qtd_produtos?: number; setor_predominante?: string | null;
   pares_pendentes?: number; pares_baixados?: number; pares_totais?: number;
-  dt_entrega?: string | null; data_inclusao?: string | null; setor_atual?: string;
+  dt_entrega?: string | null; data_inclusao?: string | null; setor_atual?: string | null;
   is_bottleneck?: boolean; toc_status?: string | null;
   dias_no_setor?: number; dias_espera_entre_setores?: number;
   dias_sem_movimentacao?: number;
@@ -144,17 +145,18 @@ export default function ProducaoDashboard() {
   // Cassia 2026-06-24: clicar numa fábrica abre modal com suas remessas (nº + data prometida).
   // Lazy-load da lista completa de remessas (todas as fábricas) só na 1ª vez que abrir.
   const [selectedFabrica, setSelectedFabrica] = useState<string | null>(null);
+  const [selectedSetor, setSelectedSetor] = useState<string | null>(null);
   const [remessasAll, setRemessasAll] = useState<Remessa[] | null>(null);
   const [remessasAllLoading, setRemessasAllLoading] = useState(false);
   useEffect(() => {
-    if (!selectedFabrica || remessasAll) return;
+    if ((!selectedFabrica && !selectedSetor) || remessasAll) return;
     setRemessasAllLoading(true);
     fetch('/api/producao/remessas')
       .then(r => (r.ok ? r.json() : null))
       .then(d => setRemessasAll(Array.isArray(d?.remessas) ? d.remessas : []))
       .catch(() => setRemessasAll([]))
       .finally(() => setRemessasAllLoading(false));
-  }, [selectedFabrica, remessasAll]);
+  }, [selectedFabrica, selectedSetor, remessasAll]);
 
   // Carrega produtos da remessa selecionada
   useEffect(() => {
@@ -435,7 +437,7 @@ export default function ProducaoDashboard() {
                             const espera = s.avg_dias_espera || 0;
                             const total = dentro + espera;
                             return (
-                              <tr key={i}>
+                              <tr key={i} onClick={() => setSelectedSetor(s.nome_setor || '—')} style={{ cursor: 'pointer' }} title="Ver remessas e SKUs deste setor">
                                 <td className="rank">{s.sequencia ?? '—'}</td>
                                 <td style={{ fontWeight: 700 }}>{s.nome_setor || '—'}</td>
                                 <td className="num">{fmtNum(s.lotes_no_setor)}</td>
@@ -1053,6 +1055,16 @@ export default function ProducaoDashboard() {
           onClose={() => setSelectedFabrica(null)}
         />
       )}
+
+      {/* Modal de remessas por setor (nº + sku) — Cassia 2026-06-24 */}
+      {selectedSetor && (
+        <SetorModal
+          setor={selectedSetor}
+          remessas={(remessasAll || []).filter(r => r.cod_fabrica === '40' && (r.setor_atual || 'ALMOXARIFADO') === selectedSetor)}
+          loading={remessasAllLoading && !remessasAll}
+          onClose={() => setSelectedSetor(null)}
+        />
+      )}
     </div>
   );
 }
@@ -1573,6 +1585,77 @@ function OpenOrdersModal({ sku, nome, remessasInProd, onClose }: {
 }
 
 /* ============= Modal de detalhe da remessa ============= */
+// Cassia 2026-06-24: modal de remessas de um setor (Senda 4) — número da remessa + SKU.
+function SetorModal({ setor, remessas, loading, onClose }: {
+  setor: string; remessas: Remessa[]; loading: boolean; onClose: () => void;
+}) {
+  const sorted = [...remessas].sort((a, b) => (b.pares_pendentes || 0) - (a.pares_pendentes || 0));
+  const totalPendente = sorted.reduce((s, r) => s + (r.pares_pendentes || 0), 0);
+  return (
+    <div className="prod-modal-overlay" onClick={onClose}>
+      <div className="prod-modal-card" onClick={e => e.stopPropagation()}>
+        <button className="prod-modal-close" onClick={onClose} aria-label="Fechar">×</button>
+        <div className="prod-modal-label">SETOR · SENDA 4</div>
+        <h2 className="prod-modal-title">{setor.trim() || '—'}</h2>
+        <div className="prod-modal-meta">
+          <span><b>Remessas no setor:</b> {sorted.length}</span>
+          <span><b>Pendente:</b> {fmtNum(totalPendente)} pares</span>
+        </div>
+
+        {loading && (
+          <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--p-ink-3)', fontWeight: 600 }}>
+            ⏳ Carregando remessas…
+          </div>
+        )}
+        {!loading && sorted.length === 0 && (
+          <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--p-ink-3)' }}>
+            Nenhuma remessa neste setor.
+          </div>
+        )}
+        {!loading && sorted.length > 0 && (
+          <div className="prod-modal-table-wrap">
+            <table className="prod-modal-table">
+              <thead>
+                <tr>
+                  <th>Remessa</th>
+                  <th>SKU</th>
+                  <th className="num">Pendente</th>
+                  <th>Data prometida</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sorted.map((r, i) => {
+                  const skus = (r.skus_csv || r.sku || '').split(',').map(s => s.trim()).filter(Boolean);
+                  const skuMain = skus[0] || r.cod_ref || '—';
+                  return (
+                    <tr key={i}>
+                      <td style={{ fontFamily: 'ui-monospace, monospace', fontSize: 11, fontWeight: 700 }}>{r.remessa}</td>
+                      <td style={{ fontFamily: 'ui-monospace, monospace', fontSize: 10.5 }} title={skus.join(', ')}>
+                        {skuMain}
+                        {skus.length > 1 && <span style={{ color: 'var(--p-ink-3)', fontWeight: 700 }}> +{skus.length - 1}</span>}
+                      </td>
+                      <td className="num"><b>{fmtNum(r.pares_pendentes)}</b></td>
+                      <td style={{ fontSize: 11.5 }}>{fmtDate(r.dt_entrega)}</td>
+                      <td>
+                        {r.dias_para_entrega != null && r.dias_para_entrega < 0
+                          ? <span className="status-badge st-red">{Math.abs(r.dias_para_entrega)}d atraso</span>
+                          : r.dias_para_entrega != null
+                            ? <span style={{ fontSize: 11, color: 'var(--p-ink-3)' }}>em {r.dias_para_entrega}d</span>
+                            : <span style={{ fontSize: 11, color: 'var(--p-ink-3)' }}>—</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // Cassia 2026-06-24: modal de remessas de uma fábrica — número + data prometida (dt_entrega).
 function FabricaModal({ fabrica, remessas, loading, onClose }: {
   fabrica: string; remessas: Remessa[]; loading: boolean; onClose: () => void;
