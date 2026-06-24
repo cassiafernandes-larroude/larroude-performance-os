@@ -36,7 +36,7 @@ export const FULFILLMENT_LOCATION_IDS = {
 // Pre-order é EXCLUSIVO: removido de In Stock e On-Demand (ver fulfillmentCategoryFilterSQL).
 export const FULFILLMENT_CATEGORY_GROUPS: { key: string; label: string; cats: FulfillmentCategory[] }[] = [
   { key: "in-stock", label: "In Stock", cats: ["in-stock"] },
-  { key: "on-demand", label: "On-Demand", cats: ["on-demand", "from-batch"] },
+  { key: "on-demand", label: "On-Demand + From-Batch", cats: ["on-demand", "from-batch"] },
   { key: "pre-order", label: "Pre-Order", cats: ["pre-order"] },
   // 'pending'/'other' continuam no enum/SQL, só não aparecem como pill.
 ];
