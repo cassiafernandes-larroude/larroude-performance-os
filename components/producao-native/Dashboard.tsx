@@ -16,7 +16,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 type ChartMode = 'diario' | 'semanal' | 'mensal';
-type PageTab = 'producao' | 'producao-realizada' | 'remessas' | 'open-orders' | 'demanda' | 'diagnostico';
+type PageTab = 'producao' | 'producao-realizada' | 'remessas' | 'open-orders' | 'diagnostico';
 // Mesmos presets do Main Dashboard (lpos/lib/main-dashboard/periods)
 type PeriodKey = '1d' | '7d' | '14d' | '28d' | '3M' | '6M' | '12M' | 'custom';
 const PERIOD_LABEL: Record<PeriodKey, string> = {
@@ -116,7 +116,8 @@ export default function ProducaoDashboard() {
   const [periodKey, setPeriodKey] = useState<PeriodKey>('28d');
   const [customStart, setCustomStart] = useState<string>('');
   const [customEnd, setCustomEnd] = useState<string>('');
-  // Cassia 2026-06-15: nav por abas no topo (Produção / Produção realizada / Remessas / Open Orders / Demanda / Diagnóstico)
+  // Cassia 2026-06-15: nav por abas no topo (Produção / Produção realizada / Remessas / Open Orders / Diagnóstico)
+  // Cassia 2026-06-24: aba "Demanda" removida (estava só com placeholder de IAM pendente).
   const [pageTab, setPageTab] = useState<PageTab>('producao');
   // Open Orders (lazy load)
   const [openOrders, setOpenOrders] = useState<any | null>(null);
@@ -297,7 +298,6 @@ export default function ProducaoDashboard() {
               { id: 'producao-realizada', label: '📊 Produção realizada' },
               { id: 'remessas', label: '📅 Remessas' },
               { id: 'open-orders', label: '🛍 Open Orders' },
-              { id: 'demanda', label: '📈 Demanda' },
               { id: 'diagnostico', label: '🩺 Diagnóstico' },
             ] as { id: PageTab; label: string }[]).map(t => (
               <button
@@ -763,21 +763,6 @@ export default function ProducaoDashboard() {
                 </>
               );
             })()}
-
-            {/* ====== ABA DEMANDA ====== */}
-            {pageTab === 'demanda' && (
-              <div className="list-card" style={{ padding: 60, textAlign: 'center', marginTop: 20 }}>
-                <div style={{ fontSize: 48, marginBottom: 12 }}>🔒</div>
-                <div style={{ fontWeight: 800, fontSize: 17, marginBottom: 6, color: 'var(--p-ink)' }}>
-                  Aguardando IAM <code style={{ fontSize: 13 }}>larroude-os</code>
-                </div>
-                <div style={{ fontSize: 13, color: 'var(--p-ink-2)', maxWidth: 540, margin: '0 auto', lineHeight: 1.5 }}>
-                  Quando a SA <code>power-bi@larroude-data-prod</code> for aprovada no projeto{' '}
-                  <code>larroude-os</code>, esta aba carrega o modelo de demanda{' '}
-                  <code>gold.demand_model_v2</code> com 500+ SKUs e seu health score.
-                </div>
-              </div>
-            )}
 
             {/* ====== ABA DIAGNÓSTICO ====== */}
             {pageTab === 'diagnostico' && (() => {
