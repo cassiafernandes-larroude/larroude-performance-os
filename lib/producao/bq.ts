@@ -193,19 +193,14 @@ function isoWeek(dateStr: string): { semana: string; data_inicio: string } {
 // SKU de exibição (Cassia 2026-06-24):
 //  1) SKU real da montagem da própria remessa (quando já produziu);
 //  2) histórico do cod_ref se ele só teve UMA cor (SKU canônico exato);
-//  3) modelo "L###-MODELO-…" se o ref já teve várias cores (cor ainda indefinida);
-//  4) cod_ref puro se não há histórico de montagem para o ref.
+//  3) caso contrário (ref multi-cor ou sem histórico) → número de referência (cod_ref).
 function displaySku(r: any): string | undefined {
   const own = r.skus_csv ? String(r.skus_csv).split(',')[0] : null;
   if (own) return own;
   const refSku: string | null = r.ref_sku ?? null;
   const n = r.ref_sku_n != null ? Number(r.ref_sku_n) : 0;
-  if (refSku && n === 1) return refSku;
-  if (refSku && n > 1) {
-    const p = String(refSku).split('-');
-    return p.length >= 2 ? `${p[0]}-${p[1]}-…` : refSku;
-  }
-  return r.cod_ref ?? undefined;
+  if (refSku && n === 1) return refSku; // cor única → SKU canônico exato
+  return r.cod_ref ?? undefined;        // multi-cor ou sem histórico → número de referência
 }
 
 function mapRemessaRow(r: any): RemessaRow {
