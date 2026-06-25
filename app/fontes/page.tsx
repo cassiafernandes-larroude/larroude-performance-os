@@ -585,14 +585,17 @@ const BUSINESS_RULES: Rule[] = [
     appliesTo: "All dashboards",
   },
   {
-    title: "Net Sales = Gross - Returns",
+    title: "Net Sales = Itens − Descontos − Returns",
     category: "metrics",
-    desc: "Returns are subtracted at the gold_sales layer.",
+    desc: "Receita líquida (SEM imposto e frete). Calculada sobre os pedidos via NET_SALES_EXPR — não usa gold_sales.returns_daily.",
     details: [
-      "Source: larroude-data-prod.gold_sales.returns_daily",
-      "Lag: D-2 (returns processed with delay)",
+      "net_sales = total_line_items_price − total_discounts − refunds",
+      "refunds = soma de refunds[].transactions[].amount (array embutido no próprio pedido)",
+      "Fonte: lib/ltv-dashboard/queries.ts → NET_SALES_EXPR",
+      "Atribui o refund à DATA DO PEDIDO (≠ Total Sales, que conta pela data do reembolso)",
+      "Diferença vs Total Sales: net_sales = total_sales − (imposto + frete)",
     ],
-    appliesTo: "Main (Net Sales card)",
+    appliesTo: "LTV, Clientes, Executive (diagnóstico)",
   },
   {
     title: "Total Sales = Order Revenue − Returns",
@@ -636,8 +639,21 @@ const BUSINESS_RULES: Rule[] = [
     desc: "All historical metrics use larroude-data-prod (not legacy data-platform).",
     details: [
       "Primary datasets: stg_shopify, stg_shopify_br, gold, gold_sales",
-      "Legacy data-platform: still used only for unite_economics_* (CAC legacy) and gold_marketing.fct_ads_spend_daily (Google spend)",
+      "data-platform: unite_economics_* (CAC legacy), gold_marketing.fct_ads_spend_daily (Google spend) e silver.* (Produção 2.0 — ver card abaixo)",
     ],
+  },
+  {
+    title: "Produção 2.0 — BigQuery silver (interno)",
+    category: "data",
+    desc: "A aba /producao lê o BigQuery silver direto. Cortou o app externo larroude-producao-dashboard e o mart DM_SUPPLY_CHAIN.",
+    details: [
+      "Fontes: larroude-data-platform.silver — vpcp_op (remessas/OP) + vpcp_baixas_op_setores (apontamento) + vw_baixa_par_saidas (montagem) + vpcp_remessa (header: fábrica, datas, flag ativa)",
+      "Remessa ativa = vpcp_remessa.eh_encerrado = 'F' · Senda 4 = cod_fabrica '40'",
+      "SKU canônico (L###) via histórico de montagem; ref multi-cor mostra o nº de referência (cod_ref)",
+      "Volumes ~99% do antigo mart DM_SUPPLY_CHAIN.fct_remessas_producao; setores/TOC são aproximações transparentes",
+      "Cache server-side 15min (unstable_cache, tag 'producao') · lib/producao/bq.ts",
+    ],
+    appliesTo: "Produção",
   },
   {
     title: "Cache strategy",
@@ -707,8 +723,9 @@ const CALC_GROUP_COLOR: Record<Calculation["group"], string> = {
 const CALCULATION_RULES: Calculation[] = [
   {
     metric: "Gross Sales",
-    formula: "SUM(total_price) where filters apply",
+    formula: "SUM(total_line_items_price) where filters apply",
     notes: [
+      "Preço cheio dos itens — ANTES de desconto, imposto, frete e returns",
       "Excludes B2B/wholesale/marketplace/redo/influencer",
       "Excludes orders > $30k US / R$25k BR",
       "Excludes PIX pending (BR)",
@@ -719,18 +736,23 @@ const CALCULATION_RULES: Calculation[] = [
   },
   {
     metric: "Net Sales",
-    formula: "Gross Sales − Returns",
+    formula: "total_line_items_price − total_discounts − refunds",
     notes: [
-      "Returns from larroude-data-prod.gold_sales.returns_daily",
-      "Lag: D-2 (returns processed with delay)",
+      "SEM imposto e frete (é o que difere do Total Sales)",
+      "refunds = refunds[].transactions[].amount (embutido no pedido), atribuído à data do pedido",
+      "Fonte: NET_SALES_EXPR (lib/ltv-dashboard/queries.ts) — NÃO usa gold_sales.returns_daily",
     ],
-    appliesTo: "Main Dashboard (Net Sales card)",
+    appliesTo: "LTV, Clientes, Executive",
     group: "revenue",
   },
   {
     metric: "Total Sales (for ROAS)",
-    formula: "Gross Sales + tax + shipping",
-    notes: ["Used as numerator in ROAS calculation (not Order Sales)"],
+    formula: "Order Revenue − Returns",
+    notes: [
+      "Order Revenue = SUM(total_price) = itens − descontos + imposto + frete",
+      "Returns = refunds (tabela order_refunds), contados pela data do reembolso",
+      "Numerador do ROAS (não 'Order Sales')",
+    ],
     appliesTo: "Overview, Main, CAC, Channel Share, Consolidated",
     group: "revenue",
   },
@@ -756,7 +778,7 @@ const CALCULATION_RULES: Calculation[] = [
   {
     metric: "ROAS",
     formula: "Total Sales ÷ Total Spend",
-    numerator: "Gross Sales + tax + shipping",
+    numerator: "Total Sales = Order Revenue − Returns",
     denominator: "Σ all paid + tools cost",
     notes: ["Changed 2026-05-25 from 'Order Sales' to 'Total Sales' base"],
     appliesTo: "Overview, Main, Channel Share, Consolidated",
