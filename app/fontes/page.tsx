@@ -595,6 +595,21 @@ const BUSINESS_RULES: Rule[] = [
     appliesTo: "Main (Net Sales card)",
   },
   {
+    title: "Total Sales = Order Revenue − Returns",
+    category: "metrics",
+    desc: "Receita oficial (mesmo conceito do Total Sales do Shopify/Triple Whale): líquida de desconto e de returns, COM imposto e frete. Calculada sobre os pedidos (não na camada gold_sales).",
+    details: [
+      "order_revenue = SUM(total_price) por pedido — líquido de desconto, INCLUI imposto + frete; ainda NÃO desconta returns",
+      "returns = refunds de larroude-data-prod.<dataset>.order_refunds (transações kind='refund'), contados pela DATA do reembolso (não a do pedido)",
+      "total_sales = order_revenue − refunds",
+      "gross_sales = SUM(total_line_items_price) — preço cheio dos itens, SEM desconto/imposto/frete/returns",
+      "Refund total (voided/refunded) já sai da base; refunds PARCIAIS entram via order_refunds",
+      "Só pedidos DTC válidos (sem b2b/wholesale/marketplace/redo, sem cancelados/teste; PIX não-pago excluído no BR)",
+      "D0 (hoje): mesmo conceito via Shopify Admin — total_price − refunds DTC (lib/unit-economics/shopify-today.ts)",
+    ],
+    appliesTo: "Overview, Dashboard Principal · ROAS = Total Sales ÷ Total Spend",
+  },
+  {
     title: "Today (D0) — Shopify Admin direct",
     category: "data",
     desc: "BigQuery pipeline has D-1 lag. Today's data fetched directly from Shopify Admin GraphQL.",
