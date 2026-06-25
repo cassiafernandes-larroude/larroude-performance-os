@@ -10,7 +10,7 @@ import Header from '@/components/main-dashboard/Header';
 import type { PeriodKey } from '@/lib/main-dashboard/types';
 import BarLineChart, { type BarPoint } from '@/components/shared/BarLineChart';
 import MultiLineChart, { type Series } from '@/components/klaviyo/MultiLineChart';
-import HourlyFunnelChart from '@/components/funnel/HourlyFunnelChart';
+import HourlyFunnelChart, { type HourSeries } from '@/components/funnel/HourlyFunnelChart';
 
 type Market = 'US' | 'BR';
 
@@ -140,11 +140,11 @@ export default function FunnelDashboard() {
   // Funil de HOJE por hora (mesmas 4 etapas do bloco "tempo real").
   const hourly = data?.hourlyToday ?? [];
   const hourLabels = hourly.map((h) => h.label);
-  const hourLines: Series[] = [
-    { label: 'Sessões', values: hourly.map((h) => h.sessions), color: '#5d4ec5' },
-    { label: 'Add ao carrinho', values: hourly.map((h) => h.addToCart), color: '#0ea5e9' },
-    { label: 'Checkout', values: hourly.map((h) => h.reachedCheckout), color: '#f59e0b' },
-    { label: 'Pedido concluído', values: hourly.map((h) => h.completed), color: '#10b981' },
+  const hourLines: HourSeries[] = [
+    { label: 'Sessões', values: hourly.map((h) => h.sessions), color: '#5d4ec5', axis: 'left' },
+    { label: 'Add ao carrinho', values: hourly.map((h) => h.addToCart), color: '#0ea5e9', axis: 'right' },
+    { label: 'Checkout', values: hourly.map((h) => h.reachedCheckout), color: '#f59e0b', axis: 'right' },
+    { label: 'Pedido concluído', values: hourly.map((h) => h.completed), color: '#10b981', axis: 'right' },
   ];
 
   const pay = data?.payment;
