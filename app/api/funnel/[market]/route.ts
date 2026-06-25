@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   getFunnelSeries, getFunnelTotals, getPaymentBreakdown, getSessionSplitByPeriod, getPaidOrdersDaily,
+  getHourlyFunnelToday,
   type Market, type Granularity,
 } from '@/lib/funnel/queries';
 import { memo } from '@/lib/ltv-dashboard/memo-cache';
@@ -38,13 +39,14 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
       // Cassia 2026-06-21: funil (ShopifyQL) é o core; pagamento (BQ) é não-fatal — se o BQ falhar,
       // o funil ainda aparece com o bloco de pagamento vazio.
       const emptyPay = { cards: [], cardTotal: 0, pixPaid: 0, pixPending: 0, other: 0, hasPix: market === 'BR' };
-      const [series, totals, payment, today, sessionSplit, paidDaily] = await Promise.all([
+      const [series, totals, payment, today, sessionSplit, paidDaily, hourlyToday] = await Promise.all([
         getFunnelSeries(market, since, until, gran),
         getFunnelTotals(market, since, until),
         getPaymentBreakdown(market, since, until).catch((e) => { console.warn('[funnel] payment failed:', e?.message); return emptyPay; }),
         getFunnelTotals(market, 'today', 'today').catch(() => null),
         getSessionSplitByPeriod(market, since, until, gran).catch((e) => { console.warn('[funnel] sessionSplit failed:', e?.message); return new Map<string, { media: number; crm: number; direct: number; organic: number }>(); }),
         getPaidOrdersDaily(market, since, until).catch((e) => { console.warn('[funnel] paidOrders failed:', e?.message); return []; }),
+        getHourlyFunnelToday(market).catch((e) => { console.warn('[funnel] hourly failed:', e?.message); return []; }),
       ]);
 
       // #1: share de cada etapa por ponto da série (overtime, em %).
@@ -119,7 +121,7 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
         .filter((s) => s.severity === 'critical' || s.severity === 'warning')
         .map((s) => ({ step: s.step, todayRate: s.todayRate, periodRate: s.periodRate, dropPct: -s.deltaPct, severity: s.severity }));
 
-      return { available: true, market, since, until, gran, series, totals, shares, payment, today, alerts, stepStatus, shareSeries, context, mediaSessTotal, crmSessTotal, directSessTotal, organicSessTotal, paidOrdersTotal };
+      return { available: true, market, since, until, gran, series, totals, shares, payment, today, hourlyToday, alerts, stepStatus, shareSeries, context, mediaSessTotal, crmSessTotal, directSessTotal, organicSessTotal, paidOrdersTotal };
     });
     return NextResponse.json(result, {
       headers: { 'Cache-Control': 'public, max-age=300, s-maxage=600, stale-while-revalidate=3600' },
@@ -130,7 +132,7 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
     return NextResponse.json({
       available: false, market, since, until, gran, error: msg,
       series: [], totals: null, shares: null,
-      payment: { cards: [], cardTotal: 0, pixPaid: 0, pixPending: 0, other: 0, hasPix: market === 'BR' }, today: null, alerts: [],
+      payment: { cards: [], cardTotal: 0, pixPaid: 0, pixPending: 0, other: 0, hasPix: market === 'BR' }, today: null, hourlyToday: [], alerts: [],
       stepStatus: [], shareSeries: [], context: [], mediaSessTotal: 0, crmSessTotal: 0, directSessTotal: 0, organicSessTotal: 0, paidOrdersTotal: 0,
     });
   }

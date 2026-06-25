@@ -10,6 +10,7 @@ import Header from '@/components/main-dashboard/Header';
 import type { PeriodKey } from '@/lib/main-dashboard/types';
 import BarLineChart, { type BarPoint } from '@/components/shared/BarLineChart';
 import MultiLineChart, { type Series } from '@/components/klaviyo/MultiLineChart';
+import HourlyFunnelChart from '@/components/funnel/HourlyFunnelChart';
 
 type Market = 'US' | 'BR';
 
@@ -21,6 +22,7 @@ interface Bundle {
   shares: { cartFromSessions: number; checkoutFromCart: number; completedFromCheckout: number; overallCvr: number } | null;
   payment: { cards: Array<{ brand: string; orders: number }>; cardTotal: number; pixPaid: number; pixPending: number; other: number; hasPix: boolean };
   today: { sessions: number; addToCart: number; reachedCheckout: number; completed: number } | null;
+  hourlyToday: Array<{ hour: number; label: string; sessions: number; addToCart: number; reachedCheckout: number; completed: number }>;
   alerts: Array<{ step: string; todayRate: number; periodRate: number; dropPct: number; severity: 'critical' | 'warning' }>;
   stepStatus: Array<{ step: string; todayRate: number; periodRate: number; deltaPct: number; severity: 'critical' | 'warning' | 'ok' | 'good' | 'insufficient' }>;
   shareSeries: Array<{ date: string; cart: number; checkout: number; pedido: number; cvr: number }>;
@@ -135,6 +137,16 @@ export default function FunnelDashboard() {
     { label: 'Pedidos pagos', values: ctx.map((p) => p.paidOrders), color: '#10b981' },
   ];
 
+  // Funil de HOJE por hora (mesmas 4 etapas do bloco "tempo real").
+  const hourly = data?.hourlyToday ?? [];
+  const hourLabels = hourly.map((h) => h.label);
+  const hourLines: Series[] = [
+    { label: 'Sessões', values: hourly.map((h) => h.sessions), color: '#5d4ec5' },
+    { label: 'Add ao carrinho', values: hourly.map((h) => h.addToCart), color: '#0ea5e9' },
+    { label: 'Checkout', values: hourly.map((h) => h.reachedCheckout), color: '#f59e0b' },
+    { label: 'Pedido concluído', values: hourly.map((h) => h.completed), color: '#10b981' },
+  ];
+
   const pay = data?.payment;
 
   // Cassia 2026-06-22: bloco de tempo real (alerta + funil de HOJE) renderizado dentro do Header,
@@ -217,6 +229,17 @@ export default function FunnelDashboard() {
           </div>
         )}
       </div>
+
+      {/* Funil de HOJE por hora — abaixo do bloco "tempo real" */}
+      {hourly.length > 0 && (
+        <div className="card">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-[14px] font-semibold" style={{ color: 'var(--ink)' }}>Funil por hora · hoje</h3>
+            <span className="text-[11px]" style={{ color: 'var(--ink-muted)' }}>Sessões → Carrinho → Checkout → Pedido</span>
+          </div>
+          <HourlyFunnelChart labels={hourLabels} series={hourLines} height={280} />
+        </div>
+      )}
     </div>
   ) : null;
 

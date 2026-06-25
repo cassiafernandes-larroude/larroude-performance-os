@@ -75,6 +75,45 @@ export async function getFunnelSeries(market: Market, since: string, until: stri
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
+export interface FunnelHourPoint {
+  hour: number;   // 0-23 na timezone do mercado
+  label: string;  // "HH:00"
+  sessions: number;
+  addToCart: number;
+  reachedCheckout: number;
+  completed: number;
+}
+
+/**
+ * Funil de HOJE por hora (ShopifyQL GROUP BY hour). O ShopifyQL devolve o bucket `hour` como
+ * timestamp UTC; convertemos pra hora local do mercado (TZ) p/ o eixo X (00:00–23:00).
+ * Mesmas 4 métricas do bloco "Hoje · tempo real" (sessões→carrinho→checkout→pedido).
+ */
+export async function getHourlyFunnelToday(market: Market): Promise<FunnelHourPoint[]> {
+  const q = `FROM sessions SHOW ${FUNNEL_COLS} GROUP BY hour SINCE today UNTIL today`;
+  const { rows, error } = await runShopifyQL(market, q, 'unstable');
+  if (error) throw new Error(`ShopifyQL hourly funnel: ${error}`);
+  const hourFmt = new Intl.DateTimeFormat('en-US', { timeZone: TZ[market], hour: '2-digit', hour12: false });
+  const byHour = new Map<number, FunnelHourPoint>();
+  for (const r of rows) {
+    const ts = r.hour ? new Date(String(r.hour)) : null;
+    if (!ts || isNaN(ts.getTime())) continue;
+    let h = Number(hourFmt.format(ts));
+    if (!Number.isFinite(h)) continue;
+    if (h === 24) h = 0; // Intl às vezes devolve "24" para meia-noite
+    let e = byHour.get(h);
+    if (!e) {
+      e = { hour: h, label: String(h).padStart(2, '0') + ':00', sessions: 0, addToCart: 0, reachedCheckout: 0, completed: 0 };
+      byHour.set(h, e);
+    }
+    e.sessions += Number(r.sessions) || 0;
+    e.addToCart += Number(r.sessions_with_cart_additions) || 0;
+    e.reachedCheckout += Number(r.sessions_that_reached_checkout) || 0;
+    e.completed += Number(r.sessions_that_completed_checkout) || 0;
+  }
+  return Array.from(byHour.values()).sort((a, b) => a.hour - b.hour);
+}
+
 /** Totais do funil no período (sem GROUP BY). */
 export async function getFunnelTotals(market: Market, since: string, until: string): Promise<FunnelTotals> {
   const q = `FROM sessions SHOW ${FUNNEL_COLS} SINCE ${since} UNTIL ${until}`;
