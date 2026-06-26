@@ -335,6 +335,7 @@ export async function queryDailyAds(market: Market, start: string, end: string, 
     SELECT
       FORMAT_DATE('%Y-%m-%d', ${bucket}) AS date,
       SUM(${spendExpr}) AS spend,
+      SUM(IF(LOWER(ad.channel) LIKE 'google%', ad.spend, 0)) AS google_spend,
       SUM(ad.impressions) AS impressions,
       SUM(ad.clicks) AS clicks,
       SUM(ad.reach) AS reach,

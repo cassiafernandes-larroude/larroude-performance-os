@@ -549,7 +549,10 @@ export async function getDashboardPayload(
     if (d < period.start || d > period.end) continue;
     const a = adsMap.get(d) ?? {};
     const sup = supermetricsSpendDaily.get(d);
-    const base = sup != null && sup > 0 ? sup : num(a.spend);
+    // Cassia 2026-06-26: Google diário REAL do BQ (gold.all_channels_daily) somado ao Meta diário
+    // (Supermetrics), porque o Google diário do Supermetrics vem vazio. Assim a barra do dia reflete
+    // o Google real (não distribuído linear) e bate com o Overview D-1. Fallback BQ total se Meta vazio.
+    const base = sup != null && sup > 0 ? sup + num(a.google_spend) : num(a.spend);
     baseSpendInPeriod += (base + (metaAdjByBucket.get(d) ?? 0)) * _fulFactor;
   }
   const spendGapPerDay = period.days > 0 ? Math.max(0, spend - baseSpendInPeriod) / period.days : 0;
@@ -631,7 +634,8 @@ export async function getDashboardPayload(
     const dTotal = dOrderRev - dRefund;
     // Spend diário: prefere Supermetrics (Meta + Google completo) sobre BQ (com gaps)
     const dSpendSuper = supermetricsSpendDaily.get(d);
-    const dSpendBase = dSpendSuper != null && dSpendSuper > 0 ? dSpendSuper : num(a.spend);
+    // Google diário REAL do BQ somado ao Meta diário (Supermetrics diário do Google vem vazio).
+    const dSpendBase = dSpendSuper != null && dSpendSuper > 0 ? dSpendSuper + num(a.google_spend) : num(a.spend);
     // Aplica ajuste manual Set/25 ao bucket atual (regra Cassia, REGRAS-LARROUDE-OS.md 3.3)
     // Cassia 2026-06-17: filtro de origem -> escala o spend diario pelo fator pre-order do periodo
     // (spend nao tem split por origem por dia; aproximacao consistente com os KPIs).
