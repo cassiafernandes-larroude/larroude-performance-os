@@ -41,15 +41,37 @@ export interface ForecastResult {
   generatedAt: string;
 }
 
+// Pareto: modelos (mother-SKU) que acumulam >50% da receita nos últimos 12 meses.
+// Filtro aplicado em todos os níveis — só consideramos os SKUs que puxam o faturamento.
+function paretoCTE(market: Market): string {
+  const ds = DS[market], tz = TZ[market], fin = finFilter(market);
+  return `rev AS (
+  SELECT REGEXP_EXTRACT(JSON_VALUE(li,'$.sku'),r'^[A-Z]?\\d+') root,
+    SUM(CAST(JSON_VALUE(li,'$.quantity') AS INT64) * SAFE_CAST(JSON_VALUE(li,'$.price') AS NUMERIC)) rv
+  FROM \`${PROJ}.${ds}.orders\` o, UNNEST(JSON_QUERY_ARRAY(line_items)) li
+  WHERE DATE(o.created_at,'${tz}') BETWEEN DATE_SUB(DATE(@from), INTERVAL 12 MONTH) AND DATE_SUB(DATE(@from), INTERVAL 1 DAY)
+    AND ${fin}
+  GROUP BY 1
+),
+pareto AS (
+  SELECT root FROM (
+    SELECT root, rv, SUM(rv) OVER() tot, SUM(rv) OVER(ORDER BY rv DESC) cum
+    FROM rev WHERE root IS NOT NULL AND rv > 0
+  ) WHERE cum - rv < tot * 0.5
+)`;
+}
+const PARETO_FILTER = `REGEXP_EXTRACT(JSON_VALUE(li,'$.sku'),r'^[A-Z]?\\d+') IN (SELECT root FROM pareto)`;
+
 // SQL para sku/modelo (dimensão derivada direto do SKU)
 function sqlSkuModelo(market: Market, dim: string): string {
   const ds = DS[market], tz = TZ[market], fin = finFilter(market);
   return `
-WITH s25 AS (
+WITH ${paretoCTE(market)},
+s25 AS (
   SELECT ${dim} AS k, DATE(o.created_at,'${tz}') d, CAST(JSON_VALUE(li,'$.quantity') AS INT64) qty
   FROM \`${PROJ}.${ds}.orders\` o, UNNEST(JSON_QUERY_ARRAY(line_items)) li
   WHERE DATE(o.created_at,'${tz}') BETWEEN DATE_SUB(DATE(@from), INTERVAL 364 DAY) AND DATE_SUB(DATE(@to), INTERVAL 364 DAY)
-    AND ${fin} AND ${dim} IS NOT NULL
+    AND ${fin} AND ${dim} IS NOT NULL AND ${PARETO_FILTER}
 ),
 s25d AS (SELECT k, d, SUM(qty) q FROM s25 GROUP BY 1,2),
 has25 AS (SELECT DISTINCT k FROM s25),
@@ -57,7 +79,7 @@ rr AS (
   SELECT ${dim} AS k, SUM(CAST(JSON_VALUE(li,'$.quantity') AS INT64))/92 daily
   FROM \`${PROJ}.${ds}.orders\` o, UNNEST(JSON_QUERY_ARRAY(line_items)) li
   WHERE DATE(o.created_at,'${tz}') BETWEEN DATE_SUB(DATE(@from), INTERVAL 92 DAY) AND DATE_SUB(DATE(@from), INTERVAL 1 DAY)
-    AND ${fin} AND ${dim} IS NOT NULL
+    AND ${fin} AND ${dim} IS NOT NULL AND ${PARETO_FILTER}
   GROUP BY 1
 ),
 allk AS (SELECT k FROM has25 UNION DISTINCT SELECT k FROM rr),
@@ -85,7 +107,8 @@ function sqlCategoria(market: Market): string {
       WHEN REGEXP_CONTAINS(LOWER(COALESCE(m.categoria,'')), r'flat.*sandal') THEN 'Flat-Sandal'
       ELSE COALESCE(m.categoria, '(outros)') END`;
   return `
-WITH cat_src AS (
+WITH ${paretoCTE(market)},
+cat_src AS (
   SELECT REGEXP_EXTRACT(v.sku,r'^[A-Z]?\\d+') root, p.product_type categoria, COUNT(*) c
   FROM \`${PROJ}.stg_shopify.product_variants\` v JOIN \`${PROJ}.stg_shopify.products\` p ON p.id=v.product_id
   WHERE v.sku IS NOT NULL AND COALESCE(p.product_type,'')!='' GROUP BY 1,2
@@ -102,7 +125,7 @@ s25 AS (
   FROM \`${PROJ}.${ds}.orders\` o, UNNEST(JSON_QUERY_ARRAY(line_items)) li
   LEFT JOIN map m ON m.root = REGEXP_EXTRACT(JSON_VALUE(li,'$.sku'),r'^[A-Z]?\\d+')
   WHERE DATE(o.created_at,'${tz}') BETWEEN DATE_SUB(DATE(@from), INTERVAL 364 DAY) AND DATE_SUB(DATE(@to), INTERVAL 364 DAY)
-    AND ${fin}
+    AND ${fin} AND ${PARETO_FILTER}
 ),
 s25d AS (SELECT k, d, SUM(qty) q FROM s25 GROUP BY 1,2),
 has25 AS (SELECT DISTINCT k FROM s25),
@@ -111,7 +134,7 @@ rr AS (
   FROM \`${PROJ}.${ds}.orders\` o, UNNEST(JSON_QUERY_ARRAY(line_items)) li
   LEFT JOIN map m ON m.root = REGEXP_EXTRACT(JSON_VALUE(li,'$.sku'),r'^[A-Z]?\\d+')
   WHERE DATE(o.created_at,'${tz}') BETWEEN DATE_SUB(DATE(@from), INTERVAL 92 DAY) AND DATE_SUB(DATE(@from), INTERVAL 1 DAY)
-    AND ${fin}
+    AND ${fin} AND ${PARETO_FILTER}
   GROUP BY 1
 ),
 allk AS (SELECT k FROM has25 UNION DISTINCT SELECT k FROM rr),
