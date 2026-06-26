@@ -28,7 +28,7 @@ const nf = new Intl.NumberFormat("pt-BR");
 
 export default function ForecastView() {
   const [market, setMarket] = useState<Market>("US");
-  const [level, setLevel] = useState<Level>("sku");
+  const [level, setLevel] = useState<Level>("categoria");
   const [q, setQ] = useState("");
   const [data, setData] = useState<Result | null>(null);
   const [loading, setLoading] = useState(true);
