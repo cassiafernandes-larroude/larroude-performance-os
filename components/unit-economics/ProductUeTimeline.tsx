@@ -81,20 +81,25 @@ export default function ProductUeTimeline({ market, product, assumptions, market
   // marketing/un seguem estruturais (snapshot) — abordagem híbrida.
   const points: BarPoint[] = useMemo(() => {
     const returnRate = product.returnRate30d ?? 0;
+    // Cassia 2026-06-26: BASE = preço REAL de hoje (product.unitGrossRevenue já é o listPrice atual
+    // do catálogo — mesma âncora da cascata detalhada). DESCONTO = markdown do preço de hoje até o
+    // valor efetivamente vendido no período (preço bruto − desconto das orders). Efetivo = valor vendido.
+    const todayPrice = product.unitGrossRevenue;
     return buckets
       .filter((b) => b.units > 0)
       .map((b) => {
-        const soldPricePerUnit = b.grossRevenue / b.units; // preço bruto real do período
-        const realDiscountPerUnit = b.discount / b.units;  // desconto real aplicado no período
+        const grossSoldPerUnit = b.grossRevenue / b.units;             // preço bruto real do período
+        const netSoldPerUnit = (b.grossRevenue - b.discount) / b.units; // valor efetivamente vendido/un
+        const markdownPerUnit = Math.max(0, todayPrice - netSoldPerUnit);
         const bucketProduct: ProductUnitEconomics = {
           ...product,
           totalUnits: b.units,
           totalOrders: 0,
-          unitGrossRevenue: soldPricePerUnit,
-          unitDiscount: realDiscountPerUnit,
+          unitGrossRevenue: todayPrice,           // base = preço de hoje
+          unitDiscount: markdownPerUnit,          // desconto = markdown até o valor vendido no período
           unitTax: b.tax / b.units,
           unitDuties: b.duties / b.units,
-          unitRefund: soldPricePerUnit * returnRate, // taxa 30d estrutural × preço real
+          unitRefund: grossSoldPerUnit * returnRate, // taxa 30d × preço real vendido
         };
         const c = computeCascade(bucketProduct, assumptions, market, marketingPerUnit);
         return {
@@ -193,11 +198,11 @@ export default function ProductUeTimeline({ market, product, assumptions, market
             bare
           />
           <div className="text-[11px] mt-2" style={{ color: '#9ca3af' }}>
-            Preço, desconto, tax, duties e unidades: reais de cada período (orders Shopify).
-            COGS (inventoryItem.unitCost) e taxas de devolução/troca/PIX: valores reais do Shopify
-            — valor atual aplicado em todo o período, pois o Shopify não mantém série histórica
-            desses. Único dado estimado: marketing por unidade (rateio a nível de mercado, não
-            atribuível por produto/período). Barras verdes = MCL positiva, vermelhas = negativa.
+            Base = preço ATUAL (hoje, catálogo Shopify); desconto = markdown até o valor efetivamente
+            vendido no período (preço bruto − desconto das orders). Tax, duties e unidades: reais do
+            período. COGS (inventoryItem.unitCost) e taxas de devolução/troca/PIX: snapshot atual
+            (Shopify não mantém série histórica). Marketing por unidade: rateio a nível de mercado.
+            Barras verdes = MCL positiva, vermelhas = negativa.
           </div>
         </>
       )}

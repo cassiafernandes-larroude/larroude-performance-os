@@ -40,16 +40,18 @@ export default function OverallUeTimeline({ market, products, returnRate30d, exc
 
   // Snapshots BLENDED (média ponderada por unidade) dos produtos do período.
   const blended = useMemo(() => {
-    let units = 0, cogs = 0, pix = 0;
+    let units = 0, cogs = 0, pix = 0, todayPrice = 0;
     for (const p of products) {
       const u = p.totalUnits || 0;
       units += u;
       cogs += (p.unitCogs || 0) * u;
       pix += (p.pixShare || 0) * u;
+      todayPrice += (p.unitGrossRevenue || 0) * u; // unitGrossRevenue = listPrice atual (catálogo)
     }
     return {
       unitCogs: units > 0 ? cogs / units : 0,
       pixShare: units > 0 ? pix / units : 0,
+      todayPrice: units > 0 ? todayPrice / units : 0, // preço de hoje blended (ponderado por unidade)
     };
   }, [products]);
 
@@ -76,16 +78,19 @@ export default function OverallUeTimeline({ market, products, returnRate30d, exc
     return buckets
       .filter((b) => b.units > 0)
       .map((b) => {
-        const soldPricePerUnit = b.grossRevenue / b.units;
+        const grossSoldPerUnit = b.grossRevenue / b.units;             // preço bruto real do período
+        const netSoldPerUnit = (b.grossRevenue - b.discount) / b.units; // valor efetivamente vendido/un
+        // Base = preço de hoje blended; desconto = markdown até o valor vendido no período (igual à cascata).
+        const markdownPerUnit = Math.max(0, blended.todayPrice - netSoldPerUnit);
         const bucketProduct: ProductUnitEconomics = {
           motherSku: '__ALL__', variantSku: null, productName: 'Geral',
           totalUnits: b.units, totalOrders: 0,
-          unitGrossRevenue: soldPricePerUnit,
-          unitDiscount: b.discount / b.units,
+          unitGrossRevenue: blended.todayPrice,
+          unitDiscount: markdownPerUnit,
           unitTax: b.tax / b.units,
           unitDuties: b.duties / b.units,
           unitCogs: blended.unitCogs,
-          unitRefund: soldPricePerUnit * (returnRate30d || 0),
+          unitRefund: grossSoldPerUnit * (returnRate30d || 0),
           exchangeRate: exchangeRate30d || 0,
           returnRate30d: returnRate30d || 0,
           pixShare: blended.pixShare,
@@ -170,10 +175,10 @@ export default function OverallUeTimeline({ market, products, returnRate30d, exc
             bare
           />
           <div className="text-[11px] mt-2" style={{ color: '#9ca3af' }}>
-            Média ponderada por unidade de TODOS os SKUs. Preço, desconto, tax, duties e unidades:
-            reais de cada período (orders Shopify, todos os produtos). COGS, devolução/troca/PIX:
-            snapshot blended (média ponderada atual aplicada em todo o período). Marketing por unidade:
-            rateio a nível de mercado. Barras verdes = MCL positiva, vermelhas = negativa.
+            Média ponderada por unidade de TODOS os SKUs. Base = preço ATUAL (hoje, catálogo) blended;
+            desconto = markdown até o valor efetivamente vendido no período. Tax, duties e unidades:
+            reais do período (orders Shopify, todos os produtos). COGS, devolução/troca/PIX: snapshot
+            blended atual. Marketing por unidade: rateio de mercado. Verdes = MCL positiva, vermelhas = negativa.
           </div>
         </>
       )}
