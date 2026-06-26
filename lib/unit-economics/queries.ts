@@ -436,6 +436,89 @@ export async function getProductUeTimeseries(
   }));
 }
 
+// Cassia 2026-06-26: série temporal de unit economics GERAL (todos os SKUs agregados) — igual ao
+// getProductUeTimeseries mas SEM o filtro de mother SKU. Preço/desconto/tax/duties/unidades reais
+// por bucket; COGS/retorno/marketing são aplicados no cliente como snapshot blended (mesma
+// metodologia híbrida do gráfico por SKU).
+export async function getOverallUeTimeseries(
+  market: Market,
+  startDate: string,
+  endDate: string,
+  granularity: UeBucketGranularity,
+  fulCats?: FulfillmentCategory[] | null
+): Promise<UeTimeseriesBucket[]> {
+  const dataset = ordersDataset(market);
+  const cap = MAX_ORDER_VALUE[market];
+  const bucketExpr = bucketDateExpr(granularity);
+  const fulFilter = fulfillmentCategoryFilterSQL(fulCats, 'o', dataset);
+
+  const sql = `
+    WITH
+    valid_orders AS (
+      SELECT
+        o.id AS order_id,
+        DATE(o.created_at) AS order_date,
+        o.line_items
+      FROM \`larroude-data-prod.${dataset}.orders\` o
+      WHERE DATE(o.created_at) BETWEEN @start AND @end
+        AND o.cancelled_at IS NULL
+        AND o.test = FALSE
+        AND o.financial_status NOT IN ('voided', 'refunded')
+        AND NOT REGEXP_CONTAINS(LOWER(IFNULL(o.tags, '')), r'${EXCLUDED_TAGS_REGEX}')
+        AND (JSON_VALUE(o.customer, '$.tags') IS NULL OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(o.customer, '$.tags')), r'${EXCLUDED_TAGS_REGEX}'))
+        AND CAST(o.total_price AS NUMERIC) < ${cap}
+        AND (o.source_name IS NULL OR LOWER(o.source_name) NOT IN ('amazon_marketplace_web', 'mercado_livre', 'mercado_libre'))
+        ${fulFilter}
+    ),
+    items_raw AS (
+      SELECT
+        o.order_date,
+        CAST(JSON_VALUE(li, '$.quantity') AS NUMERIC) AS qty,
+        CAST(JSON_VALUE(li, '$.price') AS NUMERIC) AS unit_price,
+        CAST(JSON_VALUE(li, '$.total_discount') AS NUMERIC) AS line_discount,
+        (
+          SELECT IFNULL(SUM(CAST(JSON_VALUE(t, '$.price') AS NUMERIC)), 0)
+          FROM UNNEST(JSON_QUERY_ARRAY(li, '$.tax_lines')) AS t
+        ) AS line_tax,
+        (
+          SELECT IFNULL(SUM(CAST(JSON_VALUE(d, '$.harmonized_system_journal_line.price_set.shop_money.amount') AS NUMERIC)), 0)
+          FROM UNNEST(JSON_QUERY_ARRAY(li, '$.duties')) AS d
+        ) AS line_duties
+      FROM valid_orders o,
+        UNNEST(JSON_QUERY_ARRAY(o.line_items)) AS li
+    )
+    SELECT
+      ${bucketExpr.replace(/i\.order_date/g, 'order_date')} AS bucket,
+      SUM(qty) AS units,
+      SUM(unit_price * qty) AS gross_revenue,
+      SUM(line_discount) AS total_discount,
+      SUM(line_tax) AS total_tax,
+      SUM(line_duties) AS total_duties
+    FROM items_raw
+    WHERE qty > 0
+    GROUP BY bucket
+    ORDER BY bucket
+  `;
+
+  const rows = await runQuery<{
+    bucket: string;
+    units: number;
+    gross_revenue: number;
+    total_discount: number;
+    total_tax: number;
+    total_duties: number;
+  }>(sql, { start: startDate, end: endDate });
+
+  return rows.map((r) => ({
+    date: r.bucket,
+    units: Number(r.units) || 0,
+    grossRevenue: Number(r.gross_revenue) || 0,
+    discount: Number(r.total_discount) || 0,
+    tax: Number(r.total_tax) || 0,
+    duties: Number(r.total_duties) || 0,
+  }));
+}
+
 // ---------------------------------------------------------------------------
 // Performance de Produto (robusto) — ranking por mother SKU + categoria (product_type).
 // Cassia 2026-06-17: alimenta a aba Performance de Produto (KPIs + ranking + categorias).
