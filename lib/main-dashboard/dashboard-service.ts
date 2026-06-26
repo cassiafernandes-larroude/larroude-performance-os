@@ -278,6 +278,10 @@ export async function getDashboardPayload(
   let spend = finalMetaSpend + finalGoogleSpend + fixedToolsCost + agentShopCost;
   spend *= _fulFactor;
   finalMetaSpend *= _fulFactor; finalGoogleSpend *= _fulFactor;
+  // Cassia 2026-06-26: a série DIÁRIA de spend (barras) só tinha Meta+Google. Distribui os demais
+  // canais — tools fixos (Klaviyo/Attentive/Criteo) + % receita (Agent.shop/Awin/ShopMy) — linearmente
+  // por dia, p/ as barras "Amount Spent" refletirem o TOTAL (mesma base do KPI AMOUNT SPENT). × _fulFactor.
+  const extraChannelsPerDay = period.days > 0 ? ((fixedToolsCost + agentShopCost) * _fulFactor) / period.days : 0;
   // Debug log (visível em vercel logs)
   console.log(`[spend ${market} ${period.start}..${period.end}]`,
     `meta_supermetrics=${supermetricsMetaSpend.toFixed(2)}`,
@@ -481,6 +485,17 @@ export async function getDashboardPayload(
     return d.toISOString().slice(0, 10);
   }
 
+  // Dias por bucket (chartStart..period.end) — p/ distribuir os custos de canais não-diários no spend diário.
+  const bucketDayCount = new Map<string, number>();
+  {
+    const s = Date.parse(chartStart + 'T00:00:00Z');
+    const e = Date.parse(period.end + 'T00:00:00Z');
+    for (let t = s; t <= e; t += 86400000) {
+      const b = bucketDate(new Date(t).toISOString().slice(0, 10));
+      bucketDayCount.set(b, (bucketDayCount.get(b) ?? 0) + 1);
+    }
+  }
+
   // Normaliza qualquer formato de data pra ISO YYYY-MM-DD (Supermetrics as vezes
   // retorna M/D/YYYY, ISO, ou outros formatos dependendo da config da conta).
   function normalizeISODate(raw: any): string | null {
@@ -610,7 +625,8 @@ export async function getDashboardPayload(
     // Aplica ajuste manual Set/25 ao bucket atual (regra Cassia, REGRAS-LARROUDE-OS.md 3.3)
     // Cassia 2026-06-17: filtro de origem -> escala o spend diario pelo fator pre-order do periodo
     // (spend nao tem split por origem por dia; aproximacao consistente com os KPIs).
-    let dSpend = (dSpendBase + (metaAdjByBucket.get(d) ?? 0)) * _fulFactor;
+    let dSpend = (dSpendBase + (metaAdjByBucket.get(d) ?? 0)) * _fulFactor
+      + extraChannelsPerDay * (bucketDayCount.get(d) ?? 1);
     const dOrders = num(s.orders);
     // Pixel purchases: prefere Meta Graph API direto (sempre atualizado) sobre BQ
     // (BQ gold.all_channels_daily pode estar com gap de ingest do Meta).
