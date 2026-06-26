@@ -41,6 +41,7 @@ function buildSQL(market: Market, level: Level): string {
       WHEN REGEXP_CONTAINS(LOWER(COALESCE(m.cat,'')), r'flat.*sandal') THEN 'Flat-Sandal'
       ELSE COALESCE(m.cat, '(outros)') END`;
   const keyexpr = level === 'sku' ? DIM_SKU : level === 'modelo' ? DIM_MODELO : classify;
+  const gdim = level === 'categoria' ? classify : ROOT; // crescimento real medido por modelo (ou categoria)
   const D = (n: number) => `DATE_SUB(DATE(@from), INTERVAL ${n} DAY)`;
   const Dt = (n: number) => `DATE_SUB(DATE(@to), INTERVAL ${n} DAY)`;
 
@@ -61,6 +62,18 @@ csrc AS (
   WHERE v.sku IS NOT NULL AND COALESCE(p.product_type,'')!='' GROUP BY 1,2
 ),
 map AS (SELECT root,cat FROM (SELECT root,cat,ROW_NUMBER() OVER(PARTITION BY root ORDER BY SUM(c) DESC) rn FROM csrc GROUP BY root,cat) WHERE rn=1),
+-- crescimento REAL por modelo: últimos 6 meses (2026) vs mesmos 6 meses do ano anterior
+gsrc AS (
+  SELECT ${gdim} gd,
+    SUM(IF(DATE(o.created_at,'${tz}') BETWEEN DATE_SUB(DATE(@from),INTERVAL 6 MONTH) AND ${D(1)}, CAST(JSON_VALUE(li,'$.quantity') AS INT64), 0)) cur,
+    SUM(IF(DATE(o.created_at,'${tz}') BETWEEN DATE_SUB(DATE(@from),INTERVAL 18 MONTH) AND DATE_SUB(DATE_SUB(DATE(@from),INTERVAL 12 MONTH),INTERVAL 1 DAY), CAST(JSON_VALUE(li,'$.quantity') AS INT64), 0)) prev
+  FROM \`${PROJ}.${ds}.orders\` o, UNNEST(JSON_QUERY_ARRAY(line_items)) li
+  LEFT JOIN map m ON m.root=${ROOT}
+  WHERE ${fin} AND ${ROOT} IN (SELECT root FROM pareto)
+    AND DATE(o.created_at,'${tz}') BETWEEN DATE_SUB(DATE(@from),INTERVAL 18 MONTH) AND ${D(1)}
+  GROUP BY gd
+),
+gcol AS (SELECT gd, IF(prev>=30, SAFE_DIVIDE(cur,prev), NULL) g FROM gsrc),
 days AS (
   SELECT d, EXTRACT(MONTH FROM d) mnum,
     DATE_DIFF(DATE_TRUNC(d,WEEK(MONDAY)), DATE_TRUNC(DATE(@from),WEEK(MONDAY)), WEEK)+1 widx,
@@ -88,13 +101,14 @@ psm AS (SELECT cat, widx, AVG(u) OVER(PARTITION BY cat ORDER BY widx ROWS BETWEE
 profile AS (SELECT cat, widx, SAFE_DIVIDE(us, SUM(us) OVER(PARTITION BY cat)) share FROM psm),
 -- volume YoY por chave (mês 2025 × crescimento, proporcional aos dias no horizonte)
 src25 AS (
-  SELECT ${keyexpr} k, ${classify} cat, EXTRACT(MONTH FROM DATE(o.created_at,'${tz}')) mnum, CAST(JSON_VALUE(li,'$.quantity') AS INT64) qty
+  SELECT ${keyexpr} k, ${classify} cat, ${gdim} gd, EXTRACT(MONTH FROM DATE(o.created_at,'${tz}')) mnum, CAST(JSON_VALUE(li,'$.quantity') AS INT64) qty
   FROM \`${PROJ}.${ds}.orders\` o, UNNEST(JSON_QUERY_ARRAY(line_items)) li
   LEFT JOIN map m ON m.root=${ROOT}
   WHERE DATE(o.created_at,'${tz}') BETWEEN DATE_TRUNC(${D(364)},MONTH) AND LAST_DAY(${Dt(364)})
     AND ${fin} AND ${ROOT} IN (SELECT root FROM pareto)
 ),
-yoy AS (SELECT k, ANY_VALUE(cat) cat, SUM(qty*@growth*mfrac.dih/mfrac.md) tot FROM src25 JOIN mfrac USING(mnum) GROUP BY k),
+yoyb AS (SELECT k, ANY_VALUE(cat) cat, ANY_VALUE(gd) gd, SUM(qty*mfrac.dih/mfrac.md) base FROM src25 JOIN mfrac USING(mnum) GROUP BY k),
+yoy AS (SELECT yb.k, yb.cat, yb.base*@growth*COALESCE(gc.g,1) tot FROM yoyb yb LEFT JOIN gcol gc ON gc.gd=yb.gd),
 -- run-rate p/ lançamentos sem 2025
 rrsrc AS (
   SELECT ${keyexpr} k, ${classify} cat, CAST(JSON_VALUE(li,'$.quantity') AS INT64) qty
@@ -103,8 +117,12 @@ rrsrc AS (
   WHERE DATE(o.created_at,'${tz}') BETWEEN ${D(92)} AND ${D(1)} AND ${fin} AND ${ROOT} IN (SELECT root FROM pareto)
 ),
 rr AS (SELECT k, ANY_VALUE(cat) cat, SUM(qty)/92*@growth*(SELECT n FROM hz) tot FROM rrsrc GROUP BY k),
+-- volume = MAIOR( YoY 2025 x crescimento real do modelo ; run-rate recente real ) — piso de run-rate p/ quem explodiu vs 2025
 seas AS (
-  SELECT COALESCE(y.k,r.k) k, IF(y.k IS NOT NULL,'YoY','run-rate') metodo, COALESCE(y.cat,r.cat) cat, COALESCE(y.tot,r.tot) tot
+  SELECT COALESCE(y.k,r.k) k,
+    IF(IFNULL(y.tot,0) >= IFNULL(r.tot,0), 'YoY', 'run-rate') metodo,
+    COALESCE(y.cat,r.cat) cat,
+    GREATEST(IFNULL(y.tot,0), IFNULL(r.tot,0)) tot
   FROM yoy y FULL OUTER JOIN rr r ON r.k=y.k
 ),
 wkmap AS (SELECT widx, DATE_ADD(DATE_TRUNC(DATE(@from),WEEK(MONDAY)), INTERVAL widx-1 WEEK) wkm FROM dayswk)
@@ -130,7 +148,7 @@ export async function getForecast(
 ): Promise<ForecastResult> {
   const from = opts?.from ?? '2026-06-29';
   const to = opts?.to ?? '2026-09-11';
-  const growth = opts?.growth ?? 1.3;
+  const growth = opts?.growth ?? 1.0; // crescimento agora é REAL por modelo (calc. no SQL); este é só override manual opcional
 
   const raw = await runQuery<{ dim_key: string; metodo: string; wk: string; f: number }>(buildSQL(market, level), { from, to, growth });
 

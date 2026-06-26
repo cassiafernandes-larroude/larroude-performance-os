@@ -80,9 +80,9 @@ export default function ForecastView() {
             Forecast de Produção
           </h1>
           <p className="text-[13px]" style={{ color: "var(--ink-soft)" }}>
-            Projeção semanal de unidades = venda real da <b>mesma estação de 2025</b> ×{" "}
-            {data ? `${Math.round((data.growth - 1) * 100)}%` : "30%"} de crescimento.
-            Lançamentos sem base 2025 usam run-rate recente (badge <i>run-rate</i>).
+            Só dados reais. Volume por SKU = <b>maior</b> entre (venda da mesma estação de 2025 ×{" "}
+            <b>crescimento real do modelo</b>) e o <b>run-rate recente</b>; distribuído pela{" "}
+            <b>sazonalidade semanal real da categoria</b> (2024+2025). Só SKUs ≥100 un. que somam &gt;50% do faturamento.
           </p>
         </div>
       </div>

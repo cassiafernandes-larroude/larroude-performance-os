@@ -26,11 +26,11 @@ export async function GET(req: Request) {
     const cached = unstable_cache(
       () => getForecast(market, level, { from, to, growth }),
       [key],
-      { revalidate: 3600, tags: ['forecast'] }
+      { revalidate: 300, tags: ['forecast'] }
     );
     const data = await cached();
     return NextResponse.json(data, {
-      headers: { 'Cache-Control': 's-maxage=3600, stale-while-revalidate=86400, public' },
+      headers: { 'Cache-Control': 's-maxage=300, stale-while-revalidate=600, public' },
     });
   } catch (e: any) {
     console.error('[forecast] BigQuery error:', e);
