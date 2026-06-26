@@ -278,10 +278,6 @@ export async function getDashboardPayload(
   let spend = finalMetaSpend + finalGoogleSpend + fixedToolsCost + agentShopCost;
   spend *= _fulFactor;
   finalMetaSpend *= _fulFactor; finalGoogleSpend *= _fulFactor;
-  // Cassia 2026-06-26: a série DIÁRIA de spend (barras) só tinha Meta+Google. Distribui os demais
-  // canais — tools fixos (Klaviyo/Attentive/Criteo) + % receita (Agent.shop/Awin/ShopMy) — linearmente
-  // por dia, p/ as barras "Amount Spent" refletirem o TOTAL (mesma base do KPI AMOUNT SPENT). × _fulFactor.
-  const extraChannelsPerDay = period.days > 0 ? ((fixedToolsCost + agentShopCost) * _fulFactor) / period.days : 0;
   // Debug log (visível em vercel logs)
   console.log(`[spend ${market} ${period.start}..${period.end}]`,
     `meta_supermetrics=${supermetricsMetaSpend.toFixed(2)}`,
@@ -544,6 +540,20 @@ export async function getDashboardPayload(
   for (const d of supermetricsSpendDaily.keys()) allDates.add(d);
   const dateList = Array.from(allDates).sort();
 
+  // Cassia 2026-06-26: a série DIÁRIA só captura Meta+Google (e o Google diário via Supermetrics
+  // costuma vir vazio). Pra as barras "Amount Spent" refletirem o TOTAL (Meta+Google+tools fixos+%
+  // receita = KPI AMOUNT SPENT), distribui linearmente por dia TODA a diferença entre o KPI e a base
+  // diária. Cobre Google ausente + Klaviyo/Attentive/Criteo + Agent.shop/Awin/ShopMy e mantém paridade.
+  let baseSpendInPeriod = 0;
+  for (const d of dateList) {
+    if (d < period.start || d > period.end) continue;
+    const a = adsMap.get(d) ?? {};
+    const sup = supermetricsSpendDaily.get(d);
+    const base = sup != null && sup > 0 ? sup : num(a.spend);
+    baseSpendInPeriod += (base + (metaAdjByBucket.get(d) ?? 0)) * _fulFactor;
+  }
+  const spendGapPerDay = period.days > 0 ? Math.max(0, spend - baseSpendInPeriod) / period.days : 0;
+
   const daily: Record<string, DailyPoint[]> = {
     gross_sales: [], total_sales: [], order_revenue: [],
     margin_total_sales: [], margin_order_revenue: [], // Total/Order Revenue − Spend (lucro pós-mídia)
@@ -626,7 +636,7 @@ export async function getDashboardPayload(
     // Cassia 2026-06-17: filtro de origem -> escala o spend diario pelo fator pre-order do periodo
     // (spend nao tem split por origem por dia; aproximacao consistente com os KPIs).
     let dSpend = (dSpendBase + (metaAdjByBucket.get(d) ?? 0)) * _fulFactor
-      + extraChannelsPerDay * (bucketDayCount.get(d) ?? 1);
+      + spendGapPerDay * (bucketDayCount.get(d) ?? 1);
     const dOrders = num(s.orders);
     // Pixel purchases: prefere Meta Graph API direto (sempre atualizado) sobre BQ
     // (BQ gold.all_channels_daily pode estar com gap de ingest do Meta).
