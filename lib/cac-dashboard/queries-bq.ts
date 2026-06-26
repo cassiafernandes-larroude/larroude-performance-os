@@ -22,7 +22,8 @@ import { getMetaSpendAdjustmentByDay } from '@/lib/shared/meta-adjustments';
 // Cassia 2026-06-17: filtros DTC vem da fonte unica (regra de ouro)
 import { EXCLUDED_TAGS_REGEX, DTC_MAX_ORDER_VALUE as MAX_ORDER_VALUE, excludeExchangesSQL } from '@/lib/shared/dtc-filters';
 // Cassia 2026-06-14: REGRA — spend total = Meta+Google+Klaviyo+Attentive+Criteo+Agent.shop+Awin+ShopMy
-import { computeTotalSpend } from '@/lib/channel-costs-bq';
+import { computeTotalSpend, getPercentRevenueCostsFromBQ } from '@/lib/channel-costs-bq';
+import { getFixedToolsCostInRange } from '@/lib/channel-costs';
 import type {
   DailyPoint,
   DataSourceMeta,
@@ -186,10 +187,14 @@ export async function getDailySeries(
   ]);
 
   // bqDaily: [{date, spend, orders, new_customers, cac, cpo}]
-  // Substitui o spend (BQ all_channels_daily) pelo merged Meta API + Supermetrics
+  // Cassia 2026-06-26: spend/CAC diário = TODOS os canais. A base diária só tem Meta+Google;
+  // distribui linearmente por dia o gap pros demais canais (tools fixos + % receita), igual ao KPI.
+  const breakdown = await computeTotalSpend(market as MainMarket, startDate, endDate, spend.meta, spend.google);
+  const baseSum = Array.from(spend.total.values()).reduce((a, b) => a + b, 0);
+  const gapPerDay = bqDaily.length > 0 ? Math.max(0, breakdown.total - baseSum) / bqDaily.length : 0;
   return bqDaily.map((r: any) => {
     const date = String(r.date);
-    const totalSpend = spend.total.get(date) || 0;
+    const totalSpend = (spend.total.get(date) || 0) + gapPerDay;
     const newCustomers = Number(r.new_customers) || 0;
     return {
       date,
@@ -261,16 +266,29 @@ export async function getMonthlySeries(market: Market): Promise<MonthlyPoint[]> 
     getSpendByDay(market, startISO, endISO),
   ]);
 
-  // Agregar spend daily -> monthly
+  // Agregar spend daily (Meta+Google) -> monthly
   const monthlySpend = new Map<string, number>();
   spend.total.forEach((v, date) => {
     const m = date.slice(0, 7);
     monthlySpend.set(m, (monthlySpend.get(m) || 0) + v);
   });
 
+  // Cassia 2026-06-26: adiciona os canais não-diários por mês (tools fixos + % receita) p/ o spend/CAC
+  // mensal refletir TODOS os canais, igual ao KPI. tools = CHANNEL_COSTS (sem BQ); %rev = 1 query BQ/mês.
+  const extras = await Promise.all(bqMonthly.map(async (r: any) => {
+    const m = String(r.date).slice(0, 7);
+    const d = new Date(m + '-01T00:00:00Z');
+    const mStart = m + '-01';
+    const mEnd = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).toISOString().slice(0, 10);
+    const tools = getFixedToolsCostInRange(market as MainMarket, mStart, mEnd);
+    const pct = await getPercentRevenueCostsFromBQ(market as MainMarket, mStart, mEnd).then((x) => x.total).catch(() => 0);
+    return [m, tools + pct] as const;
+  }));
+  const extraByMonth = new Map<string, number>(extras);
+
   return bqMonthly.map((r: any) => {
     const month = String(r.date).slice(0, 7); // queryDailyCac retorna primeiro dia do mes
-    const spendMonth = monthlySpend.get(month) || 0;
+    const spendMonth = (monthlySpend.get(month) || 0) + (extraByMonth.get(month) || 0);
     const newCustomers = Number(r.new_customers) || 0;
     return {
       month,

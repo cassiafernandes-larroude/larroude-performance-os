@@ -429,7 +429,7 @@ export async function getDashboardPayload(
   );
 
   const kpis: KpiValue[] = [
-    { label: 'AMOUNT SPENT', value: fmtCurrency(spend, market, { compact: true }), raw: spend, delta: pctChange(spend, pSpend), hint: market === 'US' ? 'Meta + Google + Klaviyo + Attentive + Criteo' : 'Meta + Google + Klaviyo + Criteo + Agent.shop (10% rev)', tone: 'default' },
+    { label: 'AMOUNT SPENT', value: fmtCurrency(spend, market, { compact: true }), raw: spend, delta: pctChange(spend, pSpend), hint: market === 'US' ? 'Meta + Google + Klaviyo + Attentive + Criteo + Awin + ShopMy + Agent.shop' : 'Meta + Google + Klaviyo + Criteo + Agent.shop (10% rev) + Awin', tone: 'default' },
     { label: 'META SPEND', value: fmtCurrency(finalMetaSpend, market, { compact: true }), raw: finalMetaSpend, delta: pctChange(finalMetaSpend, finalMetaSpendPrev), hint: market === 'US' ? 'Larroude US + Pre-Order US' : 'Larroude BR + Pre-Order BR + Brand BR (USD→BRL)', tone: 'default' },
     { label: 'GOOGLE SPEND', value: fmtCurrency(finalGoogleSpend, market, { compact: true }), raw: finalGoogleSpend, delta: pctChange(finalGoogleSpend, finalGoogleSpendPrev), hint: market === 'US' ? 'Google Ads US' : 'Google Ads BR (native BRL)', tone: 'default' },
     { label: 'ROAS GROSS SALES', value: fmtMultiple(roasGross), raw: roasGross, delta: pctChange(roasGross, pRoasGross), tone: 'default' },
