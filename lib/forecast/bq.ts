@@ -1,8 +1,10 @@
 // Cassia 2026-06-26: aba Forecast de produção — projeção de unidades por SKU/modelo/categoria.
 // REGRA CANÔNICA (definida pela Cássia, sem hipótese):
 //   previsão = venda real da MESMA ESTAÇÃO do ano anterior (2025) × crescimento (default 1,30).
-//   - semanal: cada dia 2026 casa com o dia equivalente de 2025 via -364 dias (preserva dia da semana).
+//   - SUAVIZADO: âncora no TOTAL DO MÊS de 2025 distribuído igual pelos dias do mês (remove picos
+//     pontuais de uma semana específica, ex.: reposição/drop). Mantém sazonalidade mensal + crescimento.
 //   - lançamentos sem venda na mesma estação de 2025 → run-rate dos últimos 92 dias × crescimento.
+//   - considera apenas os SKUs do Pareto: modelos que somam >50% da receita nos últimos 12 meses.
 //   - categoria: classifica BOTA por título (product_type do Shopify tem erro: Dani Flatform Boot e
 //     Dolly Verona Low Boot vinham como "Pump"); consolida Flat-Sandal.
 //   - SKU completo = referência MODELO-FORMA-COR-CÓDIGO (sem tamanho).
@@ -42,7 +44,6 @@ export interface ForecastResult {
 }
 
 // Pareto: modelos (mother-SKU) que acumulam >50% da receita nos últimos 12 meses.
-// Filtro aplicado em todos os níveis — só consideramos os SKUs que puxam o faturamento.
 function paretoCTE(market: Market): string {
   const ds = DS[market], tz = TZ[market], fin = finFilter(market);
   return `rev AS (
@@ -62,40 +63,49 @@ pareto AS (
 }
 const PARETO_FILTER = `REGEXP_EXTRACT(JSON_VALUE(li,'$.sku'),r'^[A-Z]?\\d+') IN (SELECT root FROM pareto)`;
 
+// CTEs comuns: dias do horizonte (com dias-do-mês p/ distribuir) e o cálculo diário suavizado.
+// s25m = total por chave por MÊS-calendário de 2025 (mês cheio); has25; rr (run-rate p/ lançamentos).
+const DAYS_AND_DAILY = `
+days AS (
+  SELECT d AS d26, EXTRACT(MONTH FROM d) mnum, DATE_TRUNC(d, WEEK(MONDAY)) wk,
+    DATE_DIFF(DATE_ADD(DATE_TRUNC(d, MONTH), INTERVAL 1 MONTH), DATE_TRUNC(d, MONTH), DAY) month_days
+  FROM UNNEST(GENERATE_DATE_ARRAY(DATE(@from), DATE(@to))) d
+),
+allk AS (SELECT k FROM has25 UNION DISTINCT SELECT k FROM rr),
+daily AS (
+  SELECT a.k, days.wk,
+    (CASE WHEN h.k IS NOT NULL THEN IFNULL(sm.q,0) * @growth / days.month_days
+          ELSE IFNULL(rr.daily,0) * @growth END) f,
+    (h.k IS NOT NULL) is_yoy
+  FROM allk a
+  CROSS JOIN days
+  LEFT JOIN has25 h ON h.k = a.k
+  LEFT JOIN s25m sm ON sm.k = a.k AND sm.mnum = days.mnum
+  LEFT JOIN rr ON rr.k = a.k
+)
+SELECT k AS dim_key, IF(LOGICAL_OR(is_yoy),'YoY','run-rate') metodo, FORMAT_DATE('%Y-%m-%d', wk) wk, ROUND(SUM(f)) f
+FROM daily GROUP BY k, wk ORDER BY k, wk`;
+
 // SQL para sku/modelo (dimensão derivada direto do SKU)
 function sqlSkuModelo(market: Market, dim: string): string {
   const ds = DS[market], tz = TZ[market], fin = finFilter(market);
   return `
 WITH ${paretoCTE(market)},
-s25 AS (
-  SELECT ${dim} AS k, DATE(o.created_at,'${tz}') d, CAST(JSON_VALUE(li,'$.quantity') AS INT64) qty
+s25m AS (
+  SELECT ${dim} AS k, EXTRACT(MONTH FROM DATE(o.created_at,'${tz}')) mnum, SUM(CAST(JSON_VALUE(li,'$.quantity') AS INT64)) q
   FROM \`${PROJ}.${ds}.orders\` o, UNNEST(JSON_QUERY_ARRAY(line_items)) li
-  WHERE DATE(o.created_at,'${tz}') BETWEEN DATE_SUB(DATE(@from), INTERVAL 364 DAY) AND DATE_SUB(DATE(@to), INTERVAL 364 DAY)
+  WHERE DATE(o.created_at,'${tz}') BETWEEN DATE_TRUNC(DATE_SUB(DATE(@from), INTERVAL 364 DAY), MONTH) AND LAST_DAY(DATE_SUB(DATE(@to), INTERVAL 364 DAY))
     AND ${fin} AND ${dim} IS NOT NULL AND ${PARETO_FILTER}
+  GROUP BY 1, 2
 ),
-s25d AS (SELECT k, d, SUM(qty) q FROM s25 GROUP BY 1,2),
-has25 AS (SELECT DISTINCT k FROM s25),
+has25 AS (SELECT DISTINCT k FROM s25m),
 rr AS (
   SELECT ${dim} AS k, SUM(CAST(JSON_VALUE(li,'$.quantity') AS INT64))/92 daily
   FROM \`${PROJ}.${ds}.orders\` o, UNNEST(JSON_QUERY_ARRAY(line_items)) li
   WHERE DATE(o.created_at,'${tz}') BETWEEN DATE_SUB(DATE(@from), INTERVAL 92 DAY) AND DATE_SUB(DATE(@from), INTERVAL 1 DAY)
     AND ${fin} AND ${dim} IS NOT NULL AND ${PARETO_FILTER}
   GROUP BY 1
-),
-allk AS (SELECT k FROM has25 UNION DISTINCT SELECT k FROM rr),
-days AS (SELECT d AS d26, DATE_SUB(d, INTERVAL 364 DAY) d25, DATE_TRUNC(d, WEEK(MONDAY)) wk
-         FROM UNNEST(GENERATE_DATE_ARRAY(DATE(@from), DATE(@to))) d),
-daily AS (
-  SELECT a.k, days.wk,
-    (CASE WHEN h.k IS NOT NULL THEN IFNULL(s.q,0) ELSE IFNULL(rr.daily,0) END) * @growth f,
-    (h.k IS NOT NULL) is_yoy
-  FROM allk a CROSS JOIN days
-  LEFT JOIN has25 h ON h.k = a.k
-  LEFT JOIN s25d s ON s.k = a.k AND s.d = days.d25
-  LEFT JOIN rr ON rr.k = a.k
-)
-SELECT k AS dim_key, IF(LOGICAL_OR(is_yoy),'YoY','run-rate') metodo, FORMAT_DATE('%Y-%m-%d', wk) wk, ROUND(SUM(f)) f
-FROM daily GROUP BY k, wk ORDER BY k, wk`;
+),${DAYS_AND_DAILY}`;
 }
 
 // SQL para categoria (classifica bota por título + consolida Flat-Sandal, via map root->product_type)
@@ -120,15 +130,15 @@ cat_src AS (
 map AS (SELECT root, categoria FROM (
   SELECT root, categoria, ROW_NUMBER() OVER(PARTITION BY root ORDER BY SUM(c) DESC) rn FROM cat_src GROUP BY root,categoria
 ) WHERE rn=1),
-s25 AS (
-  SELECT ${classify} AS k, DATE(o.created_at,'${tz}') d, CAST(JSON_VALUE(li,'$.quantity') AS INT64) qty
+s25m AS (
+  SELECT ${classify} AS k, EXTRACT(MONTH FROM DATE(o.created_at,'${tz}')) mnum, SUM(CAST(JSON_VALUE(li,'$.quantity') AS INT64)) q
   FROM \`${PROJ}.${ds}.orders\` o, UNNEST(JSON_QUERY_ARRAY(line_items)) li
   LEFT JOIN map m ON m.root = REGEXP_EXTRACT(JSON_VALUE(li,'$.sku'),r'^[A-Z]?\\d+')
-  WHERE DATE(o.created_at,'${tz}') BETWEEN DATE_SUB(DATE(@from), INTERVAL 364 DAY) AND DATE_SUB(DATE(@to), INTERVAL 364 DAY)
+  WHERE DATE(o.created_at,'${tz}') BETWEEN DATE_TRUNC(DATE_SUB(DATE(@from), INTERVAL 364 DAY), MONTH) AND LAST_DAY(DATE_SUB(DATE(@to), INTERVAL 364 DAY))
     AND ${fin} AND ${PARETO_FILTER}
+  GROUP BY 1, 2
 ),
-s25d AS (SELECT k, d, SUM(qty) q FROM s25 GROUP BY 1,2),
-has25 AS (SELECT DISTINCT k FROM s25),
+has25 AS (SELECT DISTINCT k FROM s25m),
 rr AS (
   SELECT ${classify} AS k, SUM(CAST(JSON_VALUE(li,'$.quantity') AS INT64))/92 daily
   FROM \`${PROJ}.${ds}.orders\` o, UNNEST(JSON_QUERY_ARRAY(line_items)) li
@@ -136,27 +146,12 @@ rr AS (
   WHERE DATE(o.created_at,'${tz}') BETWEEN DATE_SUB(DATE(@from), INTERVAL 92 DAY) AND DATE_SUB(DATE(@from), INTERVAL 1 DAY)
     AND ${fin} AND ${PARETO_FILTER}
   GROUP BY 1
-),
-allk AS (SELECT k FROM has25 UNION DISTINCT SELECT k FROM rr),
-days AS (SELECT d AS d26, DATE_SUB(d, INTERVAL 364 DAY) d25, DATE_TRUNC(d, WEEK(MONDAY)) wk
-         FROM UNNEST(GENERATE_DATE_ARRAY(DATE(@from), DATE(@to))) d),
-daily AS (
-  SELECT a.k, days.wk,
-    (CASE WHEN h.k IS NOT NULL THEN IFNULL(s.q,0) ELSE IFNULL(rr.daily,0) END) * @growth f,
-    (h.k IS NOT NULL) is_yoy
-  FROM allk a CROSS JOIN days
-  LEFT JOIN has25 h ON h.k = a.k
-  LEFT JOIN s25d s ON s.k = a.k AND s.d = days.d25
-  LEFT JOIN rr ON rr.k = a.k
-)
-SELECT k AS dim_key, IF(LOGICAL_OR(is_yoy),'YoY','run-rate') metodo, FORMAT_DATE('%Y-%m-%d', wk) wk, ROUND(SUM(f)) f
-FROM daily GROUP BY k, wk ORDER BY k, wk`;
+),${DAYS_AND_DAILY}`;
 }
 
 // Lista de segundas-feiras (ISO) de from..to
 function mondays(from: string, to: string): string[] {
   const start = new Date(from + 'T00:00:00Z');
-  // recua até segunda-feira
   const dow = (start.getUTCDay() + 6) % 7; // 0 = segunda
   start.setUTCDate(start.getUTCDate() - dow);
   const end = new Date(to + 'T00:00:00Z');
