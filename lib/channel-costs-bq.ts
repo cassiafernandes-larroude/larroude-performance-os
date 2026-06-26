@@ -15,7 +15,8 @@
 // =====================================================================
 
 import { runQuery, hasBigQueryCredentials } from "@/lib/bigquery/client";
-import { CHANNEL_COSTS, getFixedToolsCostInRange, type Market } from "@/lib/channel-costs";
+import { CHANNEL_COSTS, getFixedToolsCostInRange, monthlyCostForMonth } from "@/lib/channel-costs";
+import type { Market } from "@/types/metric";
 
 // Patterns vindos do helper central lib/shared/channel-utms.ts (UTMs reais do Shopify)
 import { CHANNEL_UTM_PATTERNS } from "@/lib/shared/channel-utms";
@@ -107,17 +108,21 @@ export async function computeTotalSpend(
   const ed = new Date(end + "T00:00:00Z");
   for (const entry of CHANNEL_COSTS[market] || []) {
     if (entry.percentOfRevenue != null) continue;
+    const monthlyMap = entry.costsByMonth || {};
+    if (!Object.keys(monthlyMap).length) continue;
     let cost = 0;
-    for (const [yyyymm, monthlyCost] of Object.entries(entry.costsByMonth || {})) {
-      const [y, m] = yyyymm.split("-").map(Number);
+    let y = sd.getUTCFullYear(), m = sd.getUTCMonth() + 1;
+    const endY = ed.getUTCFullYear(), endM = ed.getUTCMonth() + 1;
+    while (y < endY || (y === endY && m <= endM)) {
       const monthStart = new Date(Date.UTC(y, m - 1, 1));
       const monthEnd = new Date(Date.UTC(y, m, 0));
-      const totalDaysInMonth = monthEnd.getUTCDate();
       const iStart = sd > monthStart ? sd : monthStart;
       const iEnd = ed < monthEnd ? ed : monthEnd;
-      if (iStart > iEnd) continue;
-      const days = Math.round((iEnd.getTime() - iStart.getTime()) / 86400000) + 1;
-      cost += (monthlyCost / totalDaysInMonth) * days;
+      if (iStart <= iEnd) {
+        const days = Math.round((iEnd.getTime() - iStart.getTime()) / 86400000) + 1;
+        cost += (monthlyCostForMonth(monthlyMap, y, m) / monthEnd.getUTCDate()) * days;
+      }
+      m++; if (m > 12) { m = 1; y++; }
     }
     if (cost > 0) fixedToolsByChannel[entry.channel] = cost;
   }

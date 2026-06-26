@@ -124,6 +124,20 @@ export const CHANNEL_COSTS: Record<Market, ChannelCostEntry[]> = {
  * Distribui linearmente o custo mensal pelos dias do mes.
  * NAO inclui custos % de receita (Agent.shop) â esses precisam de revenue passado a parte.
  */
+/**
+ * Cassia 2026-06-26: custo mensal de uma ferramenta com CARRY-FORWARD — se o mês não está na
+ * tabela e é POSTERIOR ao último mês conhecido, usa o último (evita zerar os tools no mês corrente,
+ * que derrubava o AMOUNT SPENT/ROAS/CAC pra só Meta+Google). Antes do primeiro mês conhecido = 0.
+ */
+export function monthlyCostForMonth(monthlyMap: ChannelCostMonthly, y: number, m: number): number {
+  const key = `${y}-${String(m).padStart(2, "0")}`;
+  if (monthlyMap[key] != null) return monthlyMap[key];
+  const keys = Object.keys(monthlyMap).sort();
+  if (!keys.length) return 0;
+  const latest = keys[keys.length - 1];
+  return key > latest ? monthlyMap[latest] : 0;
+}
+
 export function getFixedToolsCostInRange(market: Market, start: string, end: string): number {
   const entries = CHANNEL_COSTS[market] || [];
   const startDate = new Date(start + "T00:00:00Z");
@@ -132,16 +146,19 @@ export function getFixedToolsCostInRange(market: Market, start: string, end: str
   for (const entry of entries) {
     if (entry.percentOfRevenue != null) continue; // pulado â calculo separado
     const monthlyMap = entry.costsByMonth || {};
-    for (const [yyyymm, monthlyCost] of Object.entries(monthlyMap)) {
-      const [y, m] = yyyymm.split("-").map(Number);
+    if (!Object.keys(monthlyMap).length) continue;
+    let y = startDate.getUTCFullYear(), m = startDate.getUTCMonth() + 1;
+    const endY = endDate.getUTCFullYear(), endM = endDate.getUTCMonth() + 1;
+    while (y < endY || (y === endY && m <= endM)) {
       const monthStart = new Date(Date.UTC(y, m - 1, 1));
       const monthEnd = new Date(Date.UTC(y, m, 0));
-      const totalDaysInMonth = monthEnd.getUTCDate();
       const iStart = startDate > monthStart ? startDate : monthStart;
       const iEnd = endDate < monthEnd ? endDate : monthEnd;
-      if (iStart > iEnd) continue;
-      const daysInRange = Math.round((iEnd.getTime() - iStart.getTime()) / 86400000) + 1;
-      total += (monthlyCost / totalDaysInMonth) * daysInRange;
+      if (iStart <= iEnd) {
+        const days = Math.round((iEnd.getTime() - iStart.getTime()) / 86400000) + 1;
+        total += (monthlyCostForMonth(monthlyMap, y, m) / monthEnd.getUTCDate()) * days;
+      }
+      m++; if (m > 12) { m = 1; y++; }
     }
   }
   return total;
@@ -208,16 +225,18 @@ export function getAllChannelExtraCosts(
     let cost = 0;
     const sd = new Date(start + "T00:00:00Z");
     const ed = new Date(end + "T00:00:00Z");
-    for (const [yyyymm, monthlyCost] of Object.entries(monthlyMap)) {
-      const [y, m] = yyyymm.split("-").map(Number);
+    let y = sd.getUTCFullYear(), m = sd.getUTCMonth() + 1;
+    const endY = ed.getUTCFullYear(), endM = ed.getUTCMonth() + 1;
+    while (y < endY || (y === endY && m <= endM)) {
       const monthStart = new Date(Date.UTC(y, m - 1, 1));
       const monthEnd = new Date(Date.UTC(y, m, 0));
-      const totalDaysInMonth = monthEnd.getUTCDate();
       const iStart = sd > monthStart ? sd : monthStart;
       const iEnd = ed < monthEnd ? ed : monthEnd;
-      if (iStart > iEnd) continue;
-      const days = Math.round((iEnd.getTime() - iStart.getTime()) / 86400000) + 1;
-      cost += (monthlyCost / totalDaysInMonth) * days;
+      if (iStart <= iEnd) {
+        const days = Math.round((iEnd.getTime() - iStart.getTime()) / 86400000) + 1;
+        cost += (monthlyCostForMonth(monthlyMap, y, m) / monthEnd.getUTCDate()) * days;
+      }
+      m++; if (m > 12) { m = 1; y++; }
     }
     if (cost > 0) byChannel[entry.channel] = cost;
   }
