@@ -22,6 +22,7 @@ import {
   Bell,
   PieChart,
   CalendarDays,
+  TrendingUp,
   X,
 } from "lucide-react";
 
@@ -56,6 +57,7 @@ const navSections: NavSection[] = [
       { href: "/unit-economics", label: "Unit Economics", icon: Microscope },
       { href: "/product-performance", label: "Product Performance", icon: BarChart3 },
       { href: "/produtos-apostar", label: "Products to Bet On", icon: Target },
+      { href: "/forecast", label: "Forecast Produção", icon: TrendingUp },
       { href: "/klaviyo", label: "Klaviyo Journey", icon: Mail },
       { href: "/klaviyo-crm", label: "Klaviyo CRM", icon: Mail, badge: "AI" },
       { href: "/meta-ads", label: "Meta Ads", icon: Megaphone },
