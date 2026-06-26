@@ -196,7 +196,7 @@ export async function getForecast(
       weekly: v.weekly,
       total: v.weekly.reduce((s, n) => s + n, 0),
     }))
-    .filter((r) => r.total > 0)
+    .filter((r) => r.total >= 100) // só produtos com >= 100 un. no horizonte (mínimo p/ abrir produção)
     .sort((a, b) => b.total - a.total);
 
   return { market, level, growth, from, to, weeks, rows, generatedAt: new Date().toISOString() };
