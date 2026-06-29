@@ -10,6 +10,7 @@
 import type { Market } from './asana';
 import { getAdSpendForSkus, getTotalAdSpend, canonicalSku, skuInTargets } from './ad-spend';
 import { runShopifyQL } from '@/lib/main-dashboard/shopify-admin';
+import { getFrozenCollectionSkus } from './collection-snapshots';
 
 const SHOPIFY_API_VERSION = process.env.SHOPIFY_API_VERSION || '2025-01';
 function shopifyConfig(market: Market) {
@@ -49,6 +50,8 @@ export interface ActionResult {
   roas: number | null;       // faturamento / investido (null se sem spend)
   window: { start: string; end: string };
   partial: boolean;          // true se o scan do Shopify bateu no limite de tempo/páginas
+  frozen?: boolean;          // basis=collection: true se usou a composição congelada da janela;
+                             // false = caiu no membership ATUAL (sem snapshot p/ a janela)
 }
 
 // ---------- line items da janela (escaneados do Shopify, cacheados) ----------
@@ -347,8 +350,8 @@ export async function getCollectionProducts(market: Market, collectionId: string
   return out.sort((a, b) => a.title.localeCompare(b.title));
 }
 
-/** Resolve uma collection Shopify → lista de SKUs das variações. */
-async function collectionSkus(market: Market, collectionId: string): Promise<string[]> {
+/** Resolve uma collection Shopify → lista de SKUs das variações (composição ATUAL, ao vivo). */
+export async function collectionSkus(market: Market, collectionId: string): Promise<string[]> {
   const url = shopUrl(market);
   const token = shopToken(market);
   const gid = `gid://shopify/Collection/${collectionId}`;
@@ -382,7 +385,7 @@ async function collectionSkus(market: Market, collectionId: string): Promise<str
 }
 
 /** Reduz uma lista de SKUs (variantes/mães) a SKUs canônicos distintos (modelo+cor+estilo, sem tamanho). */
-function toCanonical(skus: string[]): string[] {
+export function toCanonical(skus: string[]): string[] {
   const out = new Set<string>();
   for (const s of skus) { const c = canonicalSku(s); if (c) out.add(c); }
   return [...out];
@@ -414,9 +417,20 @@ export async function getActionResult(
   let basis: 'sku' | 'collection' | 'tag';
   let rawSkus: string[];
   let tag: string | undefined;
+  let frozen: boolean | undefined;
   if (link.collectionId) {
     basis = 'collection';
-    rawSkus = await collectionSkus(market, link.collectionId);
+    // Cassia 2026-06-29: composição da collection NA JANELA da campanha (congelada no BQ pelo cron),
+    // não a de hoje — uma collection editada depois mudaria os SKUs medidos. Sem snapshot p/ a janela
+    // (campanha antiga), cai no membership ATUAL e marca frozen=false para a UI sinalizar.
+    const frozenSkus = await getFrozenCollectionSkus(market, link.collectionId, end).catch(() => [] as string[]);
+    if (frozenSkus.length) {
+      rawSkus = frozenSkus;
+      frozen = true;
+    } else {
+      rawSkus = await collectionSkus(market, link.collectionId);
+      frozen = false;
+    }
   } else if (link.skus.length) {
     basis = 'sku';
     rawSkus = link.skus;
@@ -443,6 +457,7 @@ export async function getActionResult(
     spendOk: ad.ok,
     roas: ad.spend > 0 ? sales.gmv / ad.spend : null,
     window: { start, end },
+    frozen,
   };
 }
 
