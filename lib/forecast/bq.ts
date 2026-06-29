@@ -73,7 +73,16 @@ gsrc AS (
     AND DATE(o.created_at,'${tz}') BETWEEN DATE_SUB(DATE(@from),INTERVAL 18 MONTH) AND ${D(1)}
   GROUP BY gd
 ),
-gcol AS (SELECT gd, IF(prev>=30, SAFE_DIVIDE(cur,prev), NULL) g FROM gsrc),
+-- Cassia 2026-06-29: o crescimento YoY só é confiável com base anterior significativa.
+-- prev minúsculo = modelo recém-lançado (não existia no ano anterior) → cur/prev explode e infla o
+-- forecast (ex.: bota US tinha prev=86 vs cur=892 → g≈10x → ~12k un projetadas vs ~850 reais).
+-- Regra: piso absoluto prev>=150 (abaixo disso é lançamento → g=NULL, cai p/ 1,0 via COALESCE) e
+-- clamp em [0,5;2,5] (crescimento real de categoria estabelecida não é 5x/10x; ex.: Sneaker cresceu
+-- 2,78x com base sólida → mantém, só limita a 2,5 — não zera).
+gcol AS (
+  SELECT gd,
+    IF(prev>=150, LEAST(GREATEST(SAFE_DIVIDE(cur,prev), 0.5), 2.5), NULL) g
+  FROM gsrc),
 days AS (
   SELECT d, EXTRACT(MONTH FROM d) mnum,
     DATE_DIFF(DATE_TRUNC(d,WEEK(MONDAY)), DATE_TRUNC(DATE(@from),WEEK(MONDAY)), WEEK)+1 widx,
