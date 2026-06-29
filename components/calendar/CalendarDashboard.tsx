@@ -7,7 +7,7 @@ import { RefreshCw, ExternalLink, CalendarDays, ChevronRight, ChevronLeft, Chevr
 
 type Market = 'US' | 'BR';
 
-interface ActionResult { gmv: number; units: number; orders: number; basis: 'sku' | 'collection' | 'tag' | 'sitewide'; skuCount: number; tag?: string; window: { start: string; end: string }; partial?: boolean; }
+interface ActionResult { gmv: number; units: number; orders: number; basis: 'sku' | 'collection' | 'tag' | 'sitewide'; skuCount: number; tag?: string; spend: number; spendOk: boolean; roas: number | null; window: { start: string; end: string }; partial?: boolean; frozen?: boolean; }
 interface Action {
   gid: string; title: string; url: string; week: string; category: string[];
   market: 'US' | 'BR' | 'BOTH';
@@ -323,6 +323,19 @@ function ActionRow({ a, market }: { a: Action; market: Market }) {
               {a.result.partial ? ' · ⚠ vendas parciais' : ''}
               {!a.result.spendOk ? ' · ⚠ investido indisponível (token Meta)' : ''}
             </div>
+            {a.result.basis === 'collection' && (
+              <div className="mt-1">
+                {a.result.frozen ? (
+                  <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded inline-flex items-center gap-1" style={{ color: '#0f6e56', background: 'rgba(29,158,117,0.12)' }} title="SKUs congelados: composição que a collection tinha durante a janela da campanha.">
+                    🔒 composição da janela
+                  </span>
+                ) : (
+                  <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded inline-flex items-center gap-1" style={{ color: '#b45309', background: 'rgba(245,158,11,0.14)' }} title="Sem snapshot para esta janela — usando a composição ATUAL da collection, que pode divergir da que rodou na campanha.">
+                    ⚠ composição atual
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
