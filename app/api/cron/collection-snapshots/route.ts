@@ -5,7 +5,7 @@
 import { NextResponse } from 'next/server';
 import { getMacroCalendar, asanaConfigured, type Market } from '@/lib/calendar/asana';
 import { collectionSkus, toCanonical } from '@/lib/calendar/results';
-import { ensureSnapshotTable, writeSnapshot } from '@/lib/calendar/collection-snapshots';
+import { writeSnapshot } from '@/lib/calendar/collection-snapshots';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -29,8 +29,6 @@ export async function GET(req: Request) {
       const markets: Market[] = a.market === 'BOTH' ? ['US', 'BR'] : [a.market];
       for (const m of markets) targets.set(`${m}:${a.collectionId}`, { market: m, collectionId: a.collectionId });
     }
-
-    if (targets.size) await ensureSnapshotTable();
 
     const snapshotted: { market: Market; collectionId: string; skus: number }[] = [];
     const errors: { market: Market; collectionId: string; error: string }[] = [];
