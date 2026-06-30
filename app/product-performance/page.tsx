@@ -49,6 +49,7 @@ interface ProductRow {
   units: number; revenue: number; prevUnits: number; prevRevenue: number;
   group: ProductGroup; isB2B: boolean; isCollab: boolean; isNew: boolean;
   materials: string[]; colors: string[]; collab: string | null; drop: string | null;
+  fisico: number | null; remessa: number | null; d2d: number | null;
 }
 type CatKey = 'all' | 'collab' | 'b2b' | 'tenis' | 'bolsas' | 'vestuario' | 'material' | 'cor';
 const CAT_TABS: { key: CatKey; label: string }[] = [
@@ -386,6 +387,22 @@ export default function ProductPerformancePage() {
           <div style={{ fontSize: 10.5, color: '#9ca3af' }}>{sortBy === 'units' ? `${fmtMoney(avgPrice)} preço médio` : `${fmtNum(p.units)} un · ${fmtMoney(avgPrice)} médio`}</div>
           <div className="mt-1" style={{ fontSize: 10.5, fontWeight: 600, color: up ? '#16A34A' : '#dc2626' }}>{up ? '↑' : '↓'} {deltaPct}% vs período ant.</div>
           <div className="mt-1 inline-block px-1.5 py-0.5 rounded" style={{ fontSize: 9.5, color: '#7c3aed', background: '#f3effc' }}>{shareTotal.toFixed(1)}% do total</div>
+          {(p.fisico != null || p.remessa != null || p.d2d != null) && (
+            <div className="mt-2 pt-2" style={{ borderTop: '1px dashed #ece9e2' }}>
+              <div style={{ fontSize: 8.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#9ca3af', marginBottom: 2 }}>Estoque</div>
+              <div className="flex items-center gap-2 flex-wrap" style={{ fontSize: 10.5 }}>
+                <span title="Físico — armazém (US: RS + Ship Essential · BR: RS)" style={{ color: '#0f6e56', fontWeight: 600 }}>
+                  Físico {p.fisico != null ? fmtNum(p.fisico) : '—'}
+                </span>
+                <span title="Remessa — lote em produção (Senda Factory)" style={{ color: '#b45309', fontWeight: 600 }}>
+                  Remessa {p.remessa != null ? fmtNum(p.remessa) : '—'}
+                </span>
+                <span title="D2D — produção sob demanda (Possibility Factory)" style={{ color: '#6b7280', fontWeight: 600 }}>
+                  D2D {p.d2d == null ? '—' : p.d2d >= 9999 ? '∞' : fmtNum(p.d2d)}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );

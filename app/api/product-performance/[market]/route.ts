@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getProductPerformance, type Market } from '@/lib/unit-economics/queries';
 import { getProductImages, type ProductGroup } from '@/lib/unit-economics/product-images';
+import { getStockByMother } from '@/lib/product-performance/stock';
 import { runQuery } from '@/lib/bigquery/client';
 import { memo, TTL_30M } from '@/lib/ltv-dashboard/memo-cache';
 import { dateRangeForPeriod, dateRangeCompleted, previousRangeOf } from '@/lib/utils/periods';
@@ -33,6 +34,9 @@ interface PerfRow {
   colors: string[];
   collab: string | null;
   drop: string | null;
+  fisico: number | null;   // estoque real (RS + Ship Essential US / RS BR)
+  remessa: number | null;  // lote em produção (Senda)
+  d2d: number | null;      // produção sob demanda (Possibility; sentinela ~9999/tamanho)
 }
 
 function resolveRange(sp: URLSearchParams): { start: string; end: string } {
@@ -62,15 +66,17 @@ async function rankingForMarket(market: Market, start: string, end: string, fulC
   const fulKey = fulCats && fulCats.length ? fulCats.slice().sort().join('+') : 'all';
   return memo(`pp-rank:${market}:${start}:${end}:${fulKey}:v9`, TTL_30M, async () => {
     const { from: pStart, to: pEnd } = previousRangeOf(start, end);
-    const [cur, prev, imgs] = await Promise.all([
+    const [cur, prev, imgs, stock] = await Promise.all([
       getProductPerformance(market, start, end, fulCats),
       getProductPerformance(market, pStart, pEnd, fulCats),
       memo(`pp-img:${market}:v7`, TTL_6H, () => getProductImages(market)),
+      getStockByMother(market),
     ]);
     const prevMap = new Map(prev.map((r) => [r.motherSku, r]));
     return cur.map((r) => {
       const p = prevMap.get(r.motherSku);
       const m = imgs[r.motherSku];
+      const st = stock[r.motherSku];
       return {
         motherSku: r.motherSku,
         name: m?.name || r.name,
@@ -88,6 +94,9 @@ async function rankingForMarket(market: Market, start: string, end: string, fulC
         colors: m?.colors ?? [],
         collab: m?.collab ?? null,
         drop: m?.drop ?? null,
+        fisico: st ? st.fisico : null,
+        remessa: st ? st.remessa : null,
+        d2d: st ? st.d2d : null,
       };
     });
   });
@@ -115,11 +124,14 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
       const merged = new Map<string, PerfRow>();
       const add = (rows: PerfRow[], toUsd: number) => {
         for (const r of rows) {
-          const e = merged.get(r.motherSku) || { ...r, units: 0, revenue: 0, prevUnits: 0, prevRevenue: 0 };
+          const e = merged.get(r.motherSku) || { ...r, units: 0, revenue: 0, prevUnits: 0, prevRevenue: 0, fisico: 0, remessa: 0, d2d: 0 };
           e.units += r.units;
           e.revenue += r.revenue * toUsd;
           e.prevUnits += r.prevUnits;
           e.prevRevenue += r.prevRevenue * toUsd;
+          e.fisico = (e.fisico || 0) + (r.fisico || 0);
+          e.remessa = (e.remessa || 0) + (r.remessa || 0);
+          e.d2d = (e.d2d || 0) + (r.d2d || 0);
           if (!e.image && r.image) e.image = r.image;
           if (e.group === 'outros' && r.group !== 'outros') e.group = r.group;
           e.isB2B = e.isB2B || r.isB2B;
