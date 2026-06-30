@@ -237,12 +237,22 @@ function ChannelShare({ data }: { data: { total: number; channels: ChannelRow[] 
 
 const CH_SHORT: Record<string, string> = { 'Meta Ads': 'Meta', 'Google Ads': 'Google', 'Orgânico': 'Orgân.', 'Klaviyo Email': 'Klaviyo', 'Direto': 'Direto', 'SMS Attentive': 'SMS', 'Criteo': 'Criteo', 'ShopMy': 'ShopMy', 'Awin Affiliate': 'Awin', 'Agent.shop': 'Agent' };
 
-// Oportunidade = página que CONVERTE BEM (>= média do site) mas tem POUCAS sessões → vale impulsionar
-// nos canais p/ trazer mais tráfego. "Já escala" = boa conversão + muito tráfego. "Baixa conv." =
-// abaixo da média. "Pouco sinal" = sessões insuficientes p/ confiar na conversão.
-function oppTag(sessions: number, convRate: number, avgConv: number, minSignal: number, fewCeiling: number) {
+// Dois tipos de oportunidade:
+//  1) CANAIS — página converte bem (>= média do site) com POUCAS sessões → impulsionar nos canais.
+//  2) PDP — página de produto (/products/*) com MUITAS sessões e conversão BAIXA → otimizar a PDP.
+// Senão: "Já escala" (boa conversão + muito tráfego), "Baixa conv." (abaixo da média, fora de PDP),
+// "Pouco sinal" (sessões insuficientes p/ confiar na conversão).
+function oppTag(path: string, sessions: number, convRate: number, avgConv: number, minSignal: number, fewCeiling: number) {
   if (sessions < minSignal) return { label: '⚪ Pouco sinal', color: '#6b7280', bg: '#f1efe8' };
+  const isPdp = path.startsWith('/products/');
   const goodConv = avgConv > 0 && convRate >= avgConv;
+  const lowConv = avgConv > 0 && convRate < avgConv;
+  // PDP com sessões altas e conversão baixa → oportunidade NA PDP (diagnosticar/otimizar a página)
+  if (isPdp && sessions >= fewCeiling && lowConv) {
+    const strong = convRate < avgConv * 0.6;
+    return { label: 'Oportunidade PDP', color: strong ? '#b91c1c' : '#b45309', bg: strong ? '#fde2e0' : '#fdebcf' };
+  }
+  // Converte bem + poucas sessões → impulsionar nos canais
   if (goodConv && sessions < fewCeiling) {
     const strong = convRate >= avgConv * 2;
     return { label: strong ? '🟢 Oportunidade ⤴' : '🟢 Oportunidade', color: '#0f6e56', bg: '#dcf3ea' };
@@ -257,7 +267,7 @@ function PagesChannelTable({ rows, channelOrder, total, avgConv, totalSessions }
   return (
     <div className="rounded-2xl p-4" style={{ background: '#fff', border: '0.8px solid #e5e3de' }}>
       <div className="text-[12px] font-semibold uppercase tracking-wide mb-1" style={{ color: '#6b7280' }}>Todas as páginas com sessões · {fmtN(total)} páginas · share por canal</div>
-      <div className="text-[11px] mb-2" style={{ color: '#9ca3af' }}>🟢 Oportunidade = converte bem (≥ média {fmtP(avgConv, 2)}) com poucas sessões ({fmtN(minSignal)}–{fmtN(fewCeiling)}) → impulsionar nos canais (⤴ = ≥ 2× a média). 🔵 Já escala = boa conversão + muito tráfego. 🟠 Baixa conv. = abaixo da média. ⚪ Pouco sinal = poucas sessões p/ confiar.</div>
+      <div className="text-[11px] mb-2" style={{ color: '#9ca3af' }}>🟢 Oportunidade = converte bem (≥ média {fmtP(avgConv, 2)}) com poucas sessões ({fmtN(minSignal)}–{fmtN(fewCeiling)}) → impulsionar nos canais (⤴ = ≥ 2× a média). 🔴 Oportunidade PDP = página de produto com muitas sessões (≥ {fmtN(fewCeiling)}) e conversão abaixo da média → otimizar a PDP. 🔵 Já escala = boa conversão + muito tráfego. ⚪ Pouco sinal = poucas sessões.</div>
       <div className="overflow-x-auto">
         <table style={{ borderCollapse: 'collapse', fontSize: 12, minWidth: 1020 }}>
           <thead>
@@ -272,7 +282,7 @@ function PagesChannelTable({ rows, channelOrder, total, avgConv, totalSessions }
           </thead>
           <tbody>
             {rows.map((r) => {
-              const tag = oppTag(r.sessions, r.convRate, avgConv, minSignal, fewCeiling);
+              const tag = oppTag(r.path, r.sessions, r.convRate, avgConv, minSignal, fewCeiling);
               return (
                 <tr key={r.path} style={{ borderTop: '1px solid #f1efe8' }}>
                   <td style={{ padding: '6px 8px', maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.path}>{r.path}</td>
