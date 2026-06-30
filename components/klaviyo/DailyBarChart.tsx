@@ -14,7 +14,7 @@ import {
 } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
 import {
-  fmtCurrency, fmtPercent, fmtNumber, fmtMultiple, fmtAxisDate,
+  fmtCurrency, fmtPercent, fmtNumber, fmtMultiple, fmtRpr, fmtAxisDate,
   type Granularity
 } from '@/lib/klaviyo/utils';
 import type { Market } from '@/types/klaviyo/models';
@@ -23,7 +23,7 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
 export interface DailyPoint { date: string; value: number; inPeriod?: boolean; }
 
-type Unit = 'currency' | 'number' | 'percent' | 'multiple';
+type Unit = 'currency' | 'number' | 'percent' | 'multiple' | 'rpr';
 
 interface Props {
   title: string;
@@ -37,6 +37,7 @@ interface Props {
 
 function formatValue(v: number, unit: Unit, market: Market): string {
   if (unit === 'currency') return fmtCurrency(v, market, { compact: true });
+  if (unit === 'rpr') return fmtRpr(v, market); // RPR: 3 casas quando < 1 (não arredonda p/ $0)
   if (unit === 'percent') return fmtPercent(v);
   if (unit === 'multiple') return fmtMultiple(v);
   return fmtNumber(v);
@@ -122,7 +123,7 @@ export default function DailyBarChart({ title, data, color, unit, market, height
       legend: { display: false },
       tooltip: {
         callbacks: {
-          label: (ctx) => formatValue(ctx.parsed.y, unit, market)
+          label: (ctx) => formatValue(Number(ctx.parsed.y) || 0, unit, market)
         }
       },
       // @ts-expect-error custom plugin

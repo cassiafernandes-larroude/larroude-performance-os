@@ -55,6 +55,12 @@ export function isCsFlow(name: string): boolean {
   return /\bcs\b|customer\s*service|order\s*follow\s*up\s*-\s*cs/i.test(name || '');
 }
 
+// Cassia 2026-06-29: campanhas do time de CS (Customer Success/Service) — a conta usa o prefixo CS_
+// (ex.: 20260617_CS_OrderUpdate). Excluídas de TODAS as métricas (inflam os números).
+export function isCsCampaign(name: string): boolean {
+  return /(^|[_\s-])CS([_\s-]|$)|customer\s*success|customer\s*service/i.test(name || '');
+}
+
 // Classifica flows nas 6 categorias top-level (sub-abas).
 // Ordem de avaliação importa — categorias mais específicas primeiro.
 export function classifyFlowCategory(name: string): FlowCategory {

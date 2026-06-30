@@ -53,7 +53,7 @@ async function load(market: Market, period: Period, custom?: { start: string; en
 export async function GET(req: NextRequest) {
   try {
     const { market, period, custom } = readParams(req.nextUrl.searchParams);
-    const fetcher = unstable_cache(() => load(market, period, custom), ['benchmarks-v2', market, period, custom?.start || '', custom?.end || ''], { tags: [tag(market, 'benchmarks')], revalidate: 43200 });
+    const fetcher = unstable_cache(() => load(market, period, custom), ['benchmarks-v3', market, period, custom?.start || '', custom?.end || ''], { tags: [tag(market, 'benchmarks')], revalidate: 43200 });
     return NextResponse.json(await fetcher(), { headers: { 'Cache-Control': 's-maxage=43200, stale-while-revalidate=300' } });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });

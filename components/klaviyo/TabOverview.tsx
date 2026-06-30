@@ -1,8 +1,9 @@
 ﻿'use client';
 import React, { useEffect, useState } from 'react';
 import { api } from './fetcher';
-import { Kpi, SectionHead, HBar, CompareCard, fmtMoney, fmtInt, fmtPct, fmtMoneyCents, fmtMoneyCompact } from './ui';
+import { Kpi, SectionHead, HBar, CompareCard, fmtMoney, fmtInt, fmtPct, fmtMoneyCents, fmtMoneyCompact, fmtRpr } from './ui';
 import DailyBarChart from './DailyBarChart';
+import RevenueVolumeChart from './RevenueVolumeChart';
 import type { Market, Period, CustomRange } from '@/types/klaviyo/models';
 import GenericDiagnosticsPanel from '@/components/shared/GenericDiagnosticsPanel';
 import { computeGenericDiagnostics } from '@/lib/data/generic-diagnostics';
@@ -105,12 +106,13 @@ export default function TabOverview({ market, period, custom }: { market: Market
         <Kpi color="gold" label="Recipients (Camp)" value={fmtInt(c.recipients)} />
         <Kpi label="Open Rate" value={fmtPct(c.openRate)} sub="campaign avg" />
         <Kpi label="Click Rate" value={fmtPct(c.clickRate, 2)} sub="campaign avg" />
-        <Kpi label="RPR" value={fmtMoneyCents(c.rpr, market)} sub="per recipient" />
+        <Kpi label="RPR" value={fmtRpr(c.rpr, market)} sub="per recipient" />
         <Kpi label="Conversions" value={fmtInt(c.conversions)} sub="campaigns" />
       </div>
 
       <SectionHead pill="Daily KPIs" pillVariant="pink" title={<><b>Email performance by day</b> &middot; bars with labeled values</>} />
       <div className={stacked}>
+        <RevenueVolumeChart title="Receita × Volume (eficiência)" data={cmp.map(p => ({ date: p.date, revenue: (p.campRevenue || 0) + (p.flowRevenue || 0), volume: (p.campRecipients || 0) + (p.flowRecipients || 0) }))} market={market} />
         <DailyBarChart title="Daily Email Revenue" data={revPts} color={PINK} unit="currency" market={market} />
         <DailyBarChart title="Daily Send Volume" data={sendPts} color={NAVY} unit="number" market={market} />
         <DailyBarChart title="Daily Conversions" data={convPts} color={PURPLE} unit="number" market={market} />
@@ -120,14 +122,14 @@ export default function TabOverview({ market, period, custom }: { market: Market
       <div className={stacked}>
         <DailyBarChart title="Campaign Open Rate %" data={campOrPts} color={TEAL} unit="percent" market={market} />
         <DailyBarChart title="Campaign Click Rate %" data={campCtrPts} color={BLUE} unit="percent" market={market} />
-        <DailyBarChart title="Campaign RPR ($)" data={campRprPts} color={GOLD} unit="currency" market={market} />
+        <DailyBarChart title="Campaign RPR ($)" data={campRprPts} color={GOLD} unit="rpr" market={market} />
       </div>
 
       <SectionHead pill="Engagement — Flows" pillVariant="purple" title={<><b>Flow Open Rate, Click Rate, RPR</b> &middot; daily</>} />
       <div className={stacked}>
         <DailyBarChart title="Flow Open Rate %" data={flowOrPts} color={TEAL} unit="percent" market={market} />
         <DailyBarChart title="Flow Click Rate %" data={flowCtrPts} color={BLUE} unit="percent" market={market} />
-        <DailyBarChart title="Flow RPR ($)" data={flowRprPts} color={GOLD} unit="currency" market={market} />
+        <DailyBarChart title="Flow RPR ($)" data={flowRprPts} color={GOLD} unit="rpr" market={market} />
       </div>
 
       <SectionHead pill="Revenue — Email vs Shopify" pillVariant="blue" title={<><b>Shopify Last-Click attribution</b> &middot; orders where Shopify's last-touch source = Klaviyo</>} right={shopifyAttr ? '' : 'Loading attribution...'} />
@@ -158,7 +160,7 @@ export default function TabOverview({ market, period, custom }: { market: Market
       {!timing && <div className="loading">Loading timing...</div>}
       {timing && byDay.length > 0 && <>
         <div className="kpi-grid kpi-grid-4">
-          <Kpi color="orange" label="Best day (RPR)" value={bestDay?.dayName || '-'} sub={bestDay ? <>RPR <b>{fmtMoneyCents(bestDay.avgRpr, market)}</b></> : ''} />
+          <Kpi color="orange" label="Best day (RPR)" value={bestDay?.dayName || '-'} sub={bestDay ? <>RPR <b>{fmtRpr(bestDay.avgRpr, market)}</b></> : ''} />
           <Kpi label="Total campaigns" value={byDay.reduce((s, d) => s + d.campaigns, 0)} />
           <Kpi label="Avg Revenue / day" value={fmtMoney(byDay.reduce((s, d) => s + d.avgRevenue, 0) / 7)} />
           <Kpi label="Avg OR / day" value={fmtPct(byDay.reduce((s, d) => s + d.avgOpenRate, 0) / 7)} />
@@ -187,7 +189,7 @@ export default function TabOverview({ market, period, custom }: { market: Market
                   <td className="bar"><HBar value={d.avgOpenRate} max={maxDayOR} color="teal" label={fmtPct(d.avgOpenRate)} /></td>
                   <td className="num">{fmtPct(d.avgCtr, 2)}</td>
                   <td className="bar"><HBar value={d.avgCtr} max={maxDayCTR} color="pink" label={fmtPct(d.avgCtr, 2)} /></td>
-                  <td className="num"><b>{fmtMoneyCents(d.avgRpr, market)}</b></td>
+                  <td className="num"><b>{fmtRpr(d.avgRpr, market)}</b></td>
                 </tr>
               ))}
             </tbody>
@@ -280,7 +282,7 @@ export default function TabOverview({ market, period, custom }: { market: Market
             <CompareCard label="Click Rate (CTR)" camp={fmtPct(c.clickRate, 2)} flow={fmtPct(f.clickRate, 2)} note="bm: camp.>1,5% · flows>3%" warn={c.clickRate < 1.5 || f.clickRate < 3} />
             <CompareCard label="CTOR" camp={fmtPct(cCtor, 1)} flow={fmtPct(fCtor, 1)} note="click-to-open rate" />
             <CompareCard label="Conv. Rate" camp={fmtPct(cConvRate, 2)} flow={fmtPct(fConvRate, 2)} note="bm: >0,2%" warn={cConvRate < 0.2 || fConvRate < 0.2} />
-            <CompareCard label={market === 'BR' ? 'R$/envio (RPR)' : '$/send (RPR)'} camp={fmtMoneyCents(c.rpr, market)} flow={fmtMoneyCents(f.rpr, market)} note={flowsEfficiency > 0 ? `flows ${flowsEfficiency.toFixed(1)}x more efficient` : 'per recipient'} />
+            <CompareCard label={market === 'BR' ? 'R$/envio (RPR)' : '$/send (RPR)'} camp={fmtRpr(c.rpr, market)} flow={fmtRpr(f.rpr, market)} note={flowsEfficiency > 0 ? `flows ${flowsEfficiency.toFixed(1)}x more efficient` : 'per recipient'} />
             <CompareCard label="Revenue" camp={fmtMoneyCompact(c.revenue, market)} flow={fmtMoneyCompact(f.revenue, market)} note={totalRev > 0 ? `total ${fmtMoneyCompact(totalRev, market)} · camp ${campRevPct.toFixed(0)}% · flows ${flowRevPct.toFixed(0)}%` : 'total revenue'} />
             <CompareCard label="Sales (conversions)" camp={fmtInt(c.conversions)} flow={fmtInt(f.conversions)} note={`total: ${fmtInt(totalConv)} orders`} />
             <CompareCard label="Avg AOV" camp={fmtMoney(cAov, market)} flow={fmtMoney(fAov, market)} note={totalAov > 0 ? `combined: ${fmtMoney(totalAov, market)}` : 'avg order value'} />

@@ -1,7 +1,7 @@
 ﻿'use client';
 import React, { useEffect, useMemo, useState } from 'react';
 import { api } from './fetcher';
-import { Kpi, SectionHead, HBar, StatusBadge, Pagination, Modal, fmtMoney, fmtMoneyCents, fmtInt, fmtPct } from './ui';
+import { Kpi, SectionHead, HBar, StatusBadge, Pagination, Modal, fmtMoney, fmtMoneyCents, fmtRpr, fmtInt, fmtPct } from './ui';
 import DailyBarChart from './DailyBarChart';
 import MultiLineChart from './MultiLineChart';
 import { KpiDelta, fmtCompact } from './KpiDelta';
@@ -70,8 +70,8 @@ function BenchmarkRowCard({ r, color }: { r: BenchmarkRow; color: string }) {
       <div className="bm-row">
         <div className="bm-label">RPR</div>
         <div><div className="bar-track" style={{ height: 6 }}><div className={`bar-fill b-${color}`} style={{ width: Math.min(100, (r.rpr/r.rprTarget)*100) + '%' }} /></div></div>
-        <div className="bm-val">{fmtMoneyCents(r.rpr)}</div>
-        <div className="bm-bench">b: {fmtMoneyCents(r.rprBaseline)} · t: {fmtMoneyCents(r.rprTarget)} · <span style={{ color: dRPR >= 0 ? 'var(--green)' : 'var(--red)' }}>{dRPR >= 0 ? '+' : ''}${dRPR.toFixed(2)}</span></div>
+        <div className="bm-val">{fmtRpr(r.rpr)}</div>
+        <div className="bm-bench">b: {fmtRpr(r.rprBaseline)} · t: {fmtRpr(r.rprTarget)} · <span style={{ color: dRPR >= 0 ? 'var(--green)' : 'var(--red)' }}>{dRPR >= 0 ? '+' : ''}${dRPR.toFixed(2)}</span></div>
       </div>
     </div>
   );
@@ -278,13 +278,13 @@ export default function TabFlows({ market, period, custom }: { market: Market; p
 
       <SectionHead pill="Flows KPIs" pillVariant="purple" title={<><b>{selectedFlowId ? rows.find(r => r.id === selectedFlowId)?.name : (category === 'ALL' ? 'Todos os flows' : cat?.label)}</b> · {selectedFlowId ? 'performance individual do flow' : (category === 'ALL' ? 'deltas vs prior + YoY' : 'agregado da categoria')}</>} right={`${selectedFlowId ? 1 : rows.length} ${selectedFlowId ? 'flow' : 'flows'}`} />
       <div className="kpi-grid kpi-grid-8" style={{ marginBottom: 20 }}>
-        <KpiDelta label="Flow Revenue" value={sym + fmtCompact(t.revenue || 0)} prior={d.revenue?.prior} yoy={d.revenue?.yoy} sub={`${selectedFlowId ? 1 : rows.length} flows · RPR ${sym}${(t.rpr || 0).toFixed(4)}`} accent={ACC} />
+        <KpiDelta label="Flow Revenue" value={sym + fmtCompact(t.revenue || 0)} prior={d.revenue?.prior} yoy={d.revenue?.yoy} sub={`${selectedFlowId ? 1 : rows.length} flows · RPR ${fmtRpr(t.rpr || 0, market)}`} accent={ACC} />
         <KpiDelta label="Conversions" value={fmtCompact(t.conversions || 0)} prior={d.conversions?.prior} yoy={d.conversions?.yoy} sub={`Conv. rate ${convRate.toFixed(3)}%`} accent={ACC} />
         <KpiDelta label="Total Clicks" value={fmtCompact(t.clicks || 0)} prior={d.clicks?.prior} yoy={d.clicks?.yoy} sub="unique clicks" accent={ACC} />
         <KpiDelta label="Open Rate" value={fmtPct(t.openRate || 0)} prior={d.openRate?.prior} yoy={d.openRate?.yoy} sub="all flows · deliv-based" accent={ACC} />
         <KpiDelta label="Click Rate (CTR)" value={fmtPct(t.clickRate || 0, 2)} prior={d.clickRate?.prior} yoy={d.clickRate?.yoy} sub="all flows · deliv-based" accent={ACC} />
         <KpiDelta label="Send Volume" value={fmtCompact(t.recipients || 0)} prior={d.recipients?.prior} yoy={d.recipients?.yoy} sub="total recipients" accent={ACC} />
-        <KpiDelta label="Avg RPR" value={sym + (t.rpr || 0).toFixed(4)} prior={d.rpr?.prior} yoy={d.rpr?.yoy} sub="rev per recipient" accent={ACC} />
+        <KpiDelta label="Avg RPR" value={fmtRpr(t.rpr || 0, market)} prior={d.rpr?.prior} yoy={d.rpr?.yoy} sub="rev per recipient" accent={ACC} />
       </div>
 
       {/* STEP VIEW — 3 multi-line charts (Receita / Open Rate / Unsub) por step */}
@@ -338,7 +338,7 @@ export default function TabFlows({ market, period, custom }: { market: Market; p
                         <td className="num">{fmtInt(s.totals?.recipients || 0)}</td>
                         <td className="num">{fmtPct(s.totals?.openRate || 0)}</td>
                         <td className="num">{fmtPct(s.totals?.clickRate || 0, 2)}</td>
-                        <td className="num">{fmtMoneyCents(s.totals?.rpr || 0, market)}</td>
+                        <td className="num">{fmtRpr(s.totals?.rpr || 0, market)}</td>
                         <td className="num">{fmtInt(s.totals?.conversions || 0)}</td>
                         <td className="num"><b>{fmtMoney(s.totals?.revenue || 0, market)}</b></td>
                         <td className="num">{fmtPct(s.totals?.unsubRate || 0, 2)}</td>
@@ -363,7 +363,7 @@ export default function TabFlows({ market, period, custom }: { market: Market; p
             <DailyBarChart title="Flow Send Volume" data={flowSendPts} color="#1e3a8a" unit="number" market={market} />
             <DailyBarChart title="Flow Open Rate %" data={flowOrPts} color="#0d9488" unit="percent" market={market} />
             <DailyBarChart title="Flow Click Rate %" data={flowCtrPts} color="#3b82f6" unit="percent" market={market} />
-            <DailyBarChart title="Flow RPR" data={flowRprPts} color="#B8861F" unit="currency" market={market} />
+            <DailyBarChart title="Flow RPR" data={flowRprPts} color="#B8861F" unit="rpr" market={market} />
           </div>
         )}
       </>}
@@ -413,7 +413,7 @@ export default function TabFlows({ market, period, custom }: { market: Market; p
                   <td className="num">{fmtInt(r.recipients)}</td>
                   <td className="num">{fmtPct(r.openRate)}</td>
                   <td className="num">{fmtPct(r.clickRate, 2)}</td>
-                  <td className="num">{fmtMoneyCents(r.rpr, market)}</td>
+                  <td className="num">{fmtRpr(r.rpr, market)}</td>
                   <td className="num"><b>{fmtMoney(r.revenue, market)}</b></td>
                   <td className="bar"><HBar value={r.revenue} max={maxRev} color="purple" label={fmtMoney(r.revenue, market)} /></td>
                   <td><StatusBadge kind={kind as any} label={sig} /></td>
@@ -431,7 +431,7 @@ export default function TabFlows({ market, period, custom }: { market: Market; p
           <Kpi label="Recipients" value={fmtInt(drill.recipients)} />
           <Kpi label="Open Rate" value={fmtPct(drill.openRate)} />
           <Kpi label="Click Rate" value={fmtPct(drill.clickRate, 2)} />
-          <Kpi label="RPR" value={fmtMoneyCents(drill.rpr, market)} />
+          <Kpi label="RPR" value={fmtRpr(drill.rpr, market)} />
           <Kpi label="Conversions" value={fmtInt(drill.conversions)} />
           <Kpi label="Bounce%" value={fmtPct(drill.bounceRate, 2)} color={drill.bounceRate > 0.5 ? 'red' : undefined} />
           <Kpi label="Unsub%" value={fmtPct(drill.unsubRate, 2)} color={drill.unsubRate > 1 ? 'red' : undefined} />

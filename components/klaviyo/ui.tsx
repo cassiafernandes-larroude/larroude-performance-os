@@ -1,5 +1,6 @@
 'use client';
 import React from 'react';
+export { fmtRpr } from '@/lib/klaviyo/utils';
 
 // fmtUsd / fmtUsdCents mantidos por compatibilidade — sempre $
 export const fmtUsd = (n: number) => '$' + Math.round(n).toLocaleString('en-US');

@@ -14,6 +14,15 @@ export function fmtCurrency(v: number, market: Market, opts?: { compact?: boolea
   return symbol + Math.round(v).toLocaleString(market === 'BR' ? 'pt-BR' : 'en-US');
 }
 
+// Cassia 2026-06-29: RPR (revenue per recipient) costuma ser < $1 — mostra 3 casas quando < 1
+// (ex.: $0.123) em vez de arredondar para $0; 2 casas quando >= 1.
+export function fmtRpr(v: number, market?: Market): string {
+  const sym = market === 'BR' ? 'R$' : '$';
+  const n = Number(v) || 0;
+  const s = n.toFixed(Math.abs(n) < 1 ? 3 : 2);
+  return sym + (market === 'BR' ? s.replace('.', ',') : s);
+}
+
 export function fmtPercent(v: number, decimals = 1): string {
   // aceita tanto 0.0131 quanto 1.31 — heurística: se < 1, multiplica
   const x = Math.abs(v) <= 1 ? v * 100 : v;

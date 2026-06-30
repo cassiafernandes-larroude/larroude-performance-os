@@ -1,7 +1,7 @@
 ﻿'use client';
 import React, { useEffect, useMemo, useState } from 'react';
 import { api } from './fetcher';
-import { Kpi, SectionHead, HBar, StatusBadge, Pagination, Modal, fmtMoney, fmtMoneyCents, fmtInt, fmtPct, fmtDate } from './ui';
+import { Kpi, SectionHead, HBar, StatusBadge, Pagination, Modal, fmtMoney, fmtMoneyCents, fmtRpr, fmtInt, fmtPct, fmtDate } from './ui';
 import DailyBarChart from './DailyBarChart';
 import { KpiDelta, fmtCompact } from './KpiDelta';
 import { CAMPAIGN_BENCHMARKS, signalFor } from '@/lib/klaviyo/classify';
@@ -68,8 +68,8 @@ function BenchmarkRowCard({ r, color }: { r: BenchmarkRow; color: string }) {
       <div className="bm-row">
         <div className="bm-label">RPR</div>
         <div><div className="bar-track" style={{ height: 6 }}><div className={`bar-fill b-${color}`} style={{ width: Math.min(100, (r.rpr/r.rprTarget)*100) + '%' }} /></div></div>
-        <div className="bm-val">{fmtMoneyCents(r.rpr)}</div>
-        <div className="bm-bench">b: {fmtMoneyCents(r.rprBaseline)} &middot; t: {fmtMoneyCents(r.rprTarget)} &middot; <span style={{ color: dRPR >= 0 ? 'var(--green)' : 'var(--red)' }}>{dRPR >= 0 ? '+' : ''}${dRPR.toFixed(2)}</span></div>
+        <div className="bm-val">{fmtRpr(r.rpr)}</div>
+        <div className="bm-bench">b: {fmtRpr(r.rprBaseline)} &middot; t: {fmtRpr(r.rprTarget)} &middot; <span style={{ color: dRPR >= 0 ? 'var(--green)' : 'var(--red)' }}>{dRPR >= 0 ? '+' : ''}${dRPR.toFixed(2)}</span></div>
       </div>
     </div>
   );
@@ -123,13 +123,13 @@ export default function TabCampaigns({ market, period, custom }: { market: Marke
     <>
       <SectionHead pill="Campaigns KPIs" pillVariant="pink" title={<><b>Period summary</b> &middot; deltas vs prior period and YoY</>} right={`${data.rows.length} campaigns`} />
       <div className="kpi-grid kpi-grid-8" style={{ marginBottom: 20 }}>
-        <KpiDelta label="Campaign Revenue" value={(market === 'BR' ? 'R$' : '$') + fmtCompact(t.revenue || 0)} prior={d.revenue?.prior} yoy={d.revenue?.yoy} sub={`${data.rows.length} campaigns · RPR ${market === 'BR' ? 'R$' : '$'}${(t.rpr || 0).toFixed(4)}`} accent={ACC} />
+        <KpiDelta label="Campaign Revenue" value={(market === 'BR' ? 'R$' : '$') + fmtCompact(t.revenue || 0)} prior={d.revenue?.prior} yoy={d.revenue?.yoy} sub={`${data.rows.length} campaigns · RPR ${fmtRpr(t.rpr || 0, market)}`} accent={ACC} />
         <KpiDelta label="Conversions" value={fmtCompact(t.conversions || 0)} prior={d.conversions?.prior} yoy={d.conversions?.yoy} sub={`Conv. rate ${convRate.toFixed(3)}%`} accent={ACC} />
         <KpiDelta label="Total Clicks" value={fmtCompact(t.clicks || 0)} prior={d.clicks?.prior} yoy={d.clicks?.yoy} sub="unique clicks" accent={ACC} />
         <KpiDelta label="Open Rate" value={fmtPct(t.openRate || 0)} prior={d.openRate?.prior} yoy={d.openRate?.yoy} sub="all sends Â· deliv-based" accent={ACC} />
         <KpiDelta label="Click Rate (CTR)" value={fmtPct(t.clickRate || 0, 2)} prior={d.clickRate?.prior} yoy={d.clickRate?.yoy} sub="all sends Â· deliv-based" accent={ACC} />
         <KpiDelta label="Send Volume" value={fmtCompact(t.recipients || 0)} prior={d.recipients?.prior} yoy={d.recipients?.yoy} sub="total recipients" accent={ACC} />
-        <KpiDelta label="Avg RPR" value={(market === 'BR' ? 'R$' : '$') + (t.rpr || 0).toFixed(4)} prior={d.rpr?.prior} yoy={d.rpr?.yoy} sub="rev per recipient" accent={ACC} />
+        <KpiDelta label="Avg RPR" value={fmtRpr(t.rpr || 0, market)} prior={d.rpr?.prior} yoy={d.rpr?.yoy} sub="rev per recipient" accent={ACC} />
       </div>
 
       {series.length > 0 && <>
@@ -139,7 +139,7 @@ export default function TabCampaigns({ market, period, custom }: { market: Marke
           <DailyBarChart title="Daily Send Volume" data={sendPts} color="#1e3a8a" unit="number" market={market} />
           <DailyBarChart title="Open Rate %" data={orPts} color="#0d9488" unit="percent" market={market} />
           <DailyBarChart title="Click Rate %" data={ctrPts} color="#3b82f6" unit="percent" market={market} />
-          <DailyBarChart title="RPR ($)" data={rprPts} color="#B8861F" unit="currency" market={market} />
+          <DailyBarChart title="RPR ($)" data={rprPts} color="#B8861F" unit="rpr" market={market} />
         </div>
       </>}
 
@@ -192,7 +192,7 @@ export default function TabCampaigns({ market, period, custom }: { market: Marke
                   <td className="num">{fmtInt(r.recipients)}</td>
                   <td className="num">{fmtPct(r.openRate)}</td>
                   <td className="num">{fmtPct(r.clickRate, 2)}</td>
-                  <td className="num">{fmtMoneyCents(r.rpr, market)}</td>
+                  <td className="num">{fmtRpr(r.rpr, market)}</td>
                   <td className="num"><b>{fmtMoney(r.revenue, market)}</b></td>
                   <td className="bar"><HBar value={r.revenue} max={maxRev} color="pink" label={fmtMoney(r.revenue, market)} /></td>
                   <td><StatusBadge kind={kind as any} label={sig} /></td>
@@ -210,7 +210,7 @@ export default function TabCampaigns({ market, period, custom }: { market: Marke
           <Kpi label="Recipients" value={fmtInt(drill.recipients)} />
           <Kpi label="Open Rate" value={fmtPct(drill.openRate)} />
           <Kpi label="Click Rate" value={fmtPct(drill.clickRate, 2)} />
-          <Kpi label="RPR" value={fmtMoneyCents(drill.rpr, market)} />
+          <Kpi label="RPR" value={fmtRpr(drill.rpr, market)} />
           <Kpi label="Conversions" value={fmtInt(drill.conversions)} />
           <Kpi label="Bounce%" value={fmtPct(drill.bounceRate, 2)} color={drill.bounceRate > 0.5 ? 'red' : undefined} />
           <Kpi label="Unsub%" value={fmtPct(drill.unsubRate, 2)} color={drill.unsubRate > 0.5 ? 'red' : undefined} />

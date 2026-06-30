@@ -1,5 +1,5 @@
 ﻿// Transformações: mapeia respostas Klaviyo para CampaignRow/FlowRow normalizados.
-import { classifyCampaign, classifyFlow, isCsFlow, classifyFlowCategory } from './classify';
+import { classifyCampaign, classifyFlow, isCsFlow, isCsCampaign, classifyFlowCategory } from './classify';
 import type { CampaignRow, FlowRow } from '@/types/klaviyo/models';
 
 interface ReportEntry { groupings?: { campaign_id?: string; flow_id?: string }; statistics: Record<string, number>; }
@@ -16,7 +16,8 @@ export function reportToMap(report: any): Map<string, Record<string, number>> {
 }
 
 export function buildCampaignRows(meta: any[], reportMap: Map<string, Record<string, number>>): CampaignRow[] {
-  return meta.map((c: any) => {
+  // Cassia 2026-06-29: exclui campanhas de CS de TODAS as métricas (regra global).
+  return meta.filter((c: any) => !isCsCampaign(c?.attributes?.name || '')).map((c: any) => {
     const id = c.id;
     const a = c.attributes || {};
     const s = reportMap.get(id) || {};
@@ -49,7 +50,8 @@ export function buildCampaignRows(meta: any[], reportMap: Map<string, Record<str
 }
 
 export function buildFlowRows(meta: any[], reportMap: Map<string, Record<string, number>>): FlowRow[] {
-  return meta.map((f: any) => {
+  // Cassia 2026-06-29: exclui flows de CS de TODAS as métricas (regra global; antes era filtrado só na UI).
+  return meta.filter((f: any) => !isCsFlow(f?.attributes?.name || '')).map((f: any) => {
     const id = f.id;
     const a = f.attributes || {};
     const s = reportMap.get(id) || {};
