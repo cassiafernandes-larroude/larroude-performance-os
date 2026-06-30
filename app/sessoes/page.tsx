@@ -12,14 +12,14 @@ const PRESETS: Period[] = ['7d', '14d', '28d', '3M', '6M', '12M'];
 
 interface Metrics { sessions: number; cart: number; checkout: number; completed: number; bounceRate: number; cartRate: number; checkoutRate: number; convRate: number; }
 interface AggRow { key: string; sessions: number; cart: number; checkout: number; completed: number; bounceRate: number; cartRate: number; checkoutRate: number; convRate: number; }
-interface DimRow { key: string; sessions: number; completed: number; convRate: number; }
 interface ChannelRow { channel: string; sessions: number; share: number; convRate: number; }
+interface PageChannelRow { path: string; sessions: number; convRate: number; bounceRate: number; channels: Record<string, number>; }
 interface Bundle {
   market: Market; start: string; end: string; gran: string;
   totals: Metrics; series: { date: string; sessions: number; completed: number; convRate: number }[];
-  byType: AggRow[]; byCollection: AggRow[]; allPages: AggRow[];
+  byType: AggRow[]; byCollection: AggRow[]; allPages: PageChannelRow[];
+  channelOrder: string[];
   channelShare: { total: number; channels: ChannelRow[] };
-  byReferrer: DimRow[]; byUtm: DimRow[];
 }
 
 const fmtN = (v: number) => (v || 0).toLocaleString('pt-BR');
@@ -116,11 +116,12 @@ export default function SessoesPage() {
                 </div>
               ))}
             </div>
+            <div className="mb-4"><ChannelShare data={data.channelShare} /></div>
             {(() => {
               const slice = data.allPages.slice((pageNum - 1) * PER_PAGE, pageNum * PER_PAGE);
               return (
                 <>
-                  <Table title={`Todas as páginas com sessões · ${fmtN(data.allPages.length)} páginas`} rows={slice} keyLabel="Página" />
+                  <PagesChannelTable rows={slice} channelOrder={data.channelOrder} total={data.allPages.length} />
                   <Pager page={pageNum} total={data.allPages.length} perPage={PER_PAGE} onChange={setPageNum} />
                 </>
               );
@@ -133,16 +134,6 @@ export default function SessoesPage() {
             {data.byCollection.length === 0
               ? <div className="text-[13px]" style={{ color: '#6b7280' }}>Sem sessões em páginas de coleção no período.</div>
               : <Table title="Coleções por sessões (landing em /collections/)" rows={data.byCollection} keyLabel="Coleção" />}
-          </section>
-
-          {/* 4) Share de sessões por canal */}
-          <section>
-            <SectionTitle>📡 Share de sessões por canal</SectionTitle>
-            <ChannelShare data={data.channelShare} />
-            <div className="grid lg:grid-cols-2 gap-4 mt-4">
-              <DimTable title="Origem bruta (referrer name)" rows={data.byReferrer} />
-              <DimTable title="UTM source (bruto)" rows={data.byUtm} />
-            </div>
           </section>
 
           <p className="text-[11px]" style={{ color: '#9ca3af' }}>
@@ -244,25 +235,38 @@ function ChannelShare({ data }: { data: { total: number; channels: ChannelRow[] 
   );
 }
 
-function DimTable({ title, rows }: { title: string; rows: DimRow[] }) {
-  const max = Math.max(...rows.map((r) => r.sessions), 1);
+const CH_SHORT: Record<string, string> = { 'Meta Ads': 'Meta', 'Google Ads': 'Google', 'Orgânico': 'Orgân.', 'Klaviyo Email': 'Klaviyo', 'Direto': 'Direto', 'SMS Attentive': 'SMS', 'Criteo': 'Criteo', 'ShopMy': 'ShopMy', 'Awin Affiliate': 'Awin', 'Agent.shop': 'Agent' };
+function PagesChannelTable({ rows, channelOrder, total }: { rows: PageChannelRow[]; channelOrder: string[]; total: number }) {
   return (
     <div className="rounded-2xl p-4" style={{ background: '#fff', border: '0.8px solid #e5e3de' }}>
-      <div className="text-[12px] font-semibold uppercase tracking-wide mb-2" style={{ color: '#6b7280' }}>{title}</div>
-      <table className="w-full text-[13px]" style={{ borderCollapse: 'collapse' }}>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.key} style={{ borderTop: '1px solid #f1efe8' }}>
-              <td style={{ padding: '5px 6px', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.key}>{r.key}</td>
-              <td style={{ padding: '5px 6px', width: '40%' }}>
-                <div style={{ height: 6, borderRadius: 3, background: '#ece9e2' }}><div style={{ height: 6, borderRadius: 3, width: `${(r.sessions / max) * 100}%`, background: '#5d4ec5' }} /></div>
-              </td>
-              <td className="font-num" style={{ textAlign: 'right', padding: '5px 6px', fontWeight: 600 }}>{fmtN(r.sessions)}</td>
-              <td className="font-num" style={{ textAlign: 'right', padding: '5px 6px', color: '#16A34A' }}>{fmtP(r.convRate, 2)}</td>
+      <div className="text-[12px] font-semibold uppercase tracking-wide mb-2" style={{ color: '#6b7280' }}>Todas as páginas com sessões · {fmtN(total)} páginas · share por canal</div>
+      <div className="overflow-x-auto">
+        <table style={{ borderCollapse: 'collapse', fontSize: 12, minWidth: 920 }}>
+          <thead>
+            <tr style={{ color: '#9ca3af', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              <th style={{ textAlign: 'left', padding: '6px 8px' }}>Página</th>
+              <th style={{ textAlign: 'right', padding: '6px 8px' }}>Sessões</th>
+              <th style={{ textAlign: 'right', padding: '6px 8px' }}>Conv.</th>
+              <th style={{ textAlign: 'right', padding: '6px 8px' }}>Bounce</th>
+              {channelOrder.map((ch) => <th key={ch} style={{ textAlign: 'right', padding: '6px 6px', color: CH_COLOR[ch] || '#6b7280' }} title={ch}>{CH_SHORT[ch] || ch}</th>)}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.path} style={{ borderTop: '1px solid #f1efe8' }}>
+                <td style={{ padding: '6px 8px', maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.path}>{r.path}</td>
+                <td className="font-num" style={{ textAlign: 'right', padding: '6px 8px', fontWeight: 600 }}>{fmtN(r.sessions)}</td>
+                <td className="font-num" style={{ textAlign: 'right', padding: '6px 8px', color: '#16A34A' }}>{fmtP(r.convRate, 2)}</td>
+                <td className="font-num" style={{ textAlign: 'right', padding: '6px 8px', color: '#dc2626' }}>{fmtP(r.bounceRate)}</td>
+                {channelOrder.map((ch) => {
+                  const pct = r.sessions ? ((r.channels[ch] || 0) / r.sessions) * 100 : 0;
+                  return <td key={ch} className="font-num" style={{ textAlign: 'right', padding: '6px 6px', color: pct > 0 ? (CH_COLOR[ch] || '#374151') : '#d3d1c7' }}>{pct > 0 ? fmtP(pct, 0) : '·'}</td>;
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

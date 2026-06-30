@@ -3,8 +3,8 @@
 // referrer_name e utm_source.
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  getSessionTotals, getSessionSeries, getLandingPages, getSessionsByDimension, getSessionChannelShare,
-  type Market, type Gran, type PageRow,
+  getSessionTotals, getSessionSeries, getPagesWithChannels,
+  type Market, type Gran, type PageChannelRow,
 } from '@/lib/sessions/queries';
 import { memo, TTL_30M } from '@/lib/ltv-dashboard/memo-cache';
 import { dateRangeForPeriod, dateRangeCompleted, granularityForDays, daysBetween } from '@/lib/utils/periods';
@@ -30,7 +30,7 @@ function resolveRange(sp: URLSearchParams): { start: string; end: string; gran: 
 }
 
 interface Agg { key: string; sessions: number; cart: number; checkout: number; completed: number; bouncedW: number }
-function aggregate(rows: PageRow[], keyFn: (p: PageRow) => string | null) {
+function aggregate(rows: PageChannelRow[], keyFn: (p: PageChannelRow) => string | null) {
   const m = new Map<string, Agg>();
   for (const p of rows) {
     const k = keyFn(p);
@@ -69,21 +69,18 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
   const { start, end, gran } = resolveRange(req.nextUrl.searchParams);
 
   try {
-    const data = await memo(`sessions:${market}:${start}:${end}:${gran}:v2`, TTL_30M, async () => {
-      const [totals, series, pages, channelShare, byReferrer, byUtm] = await Promise.all([
+    const data = await memo(`sessions:${market}:${start}:${end}:${gran}:v3`, TTL_30M, async () => {
+      const [totals, series, pc] = await Promise.all([
         getSessionTotals(market, start, end),
         getSessionSeries(market, start, end, gran),
-        getLandingPages(market, start, end),
-        getSessionChannelShare(market, start, end),
-        getSessionsByDimension(market, start, end, 'referrer_name'),
-        getSessionsByDimension(market, start, end, 'utm_source'),
+        getPagesWithChannels(market, start, end),
       ]);
 
-      const byType = aggregate(pages, (p) => pageType(p.path));
-      const byCollection = aggregate(pages, (p) => collectionHandle(p.path)).slice(0, 50);
-      const allPages = aggregate(pages, (p) => p.path); // TODAS as páginas com sessões (paginadas no client, 25/pág)
+      const byType = aggregate(pc.pages, (p) => pageType(p.path));
+      const byCollection = aggregate(pc.pages, (p) => collectionHandle(p.path)).slice(0, 50);
 
-      return { market, start, end, gran, totals, series, byType, byCollection, allPages, channelShare, byReferrer: byReferrer.slice(0, 30), byUtm: byUtm.slice(0, 30) };
+      // allPages já vem ordenado por sessões, COM o share por canal de cada página.
+      return { market, start, end, gran, totals, series, byType, byCollection, allPages: pc.pages, channelOrder: pc.order, channelShare: pc.overall };
     });
 
     return NextResponse.json(data, { headers: { 'Cache-Control': 'public, max-age=0, s-maxage=300, stale-while-revalidate=1800' } });

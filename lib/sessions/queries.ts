@@ -128,6 +128,50 @@ export async function getSessionChannelShare(market: Market, since: string, unti
   return { total, channels };
 }
 
+// Cassia 2026-06-30: cross-tab página × canal numa query (GROUP BY landing_page_path + utm/referrer).
+// Alimenta: tabela "Sessões por página" com share por canal POR página + o share GERAL por canal +
+// derivação de byType/byCollection. ~34k linhas no período de 28d (LIMIT 50000 pega tudo).
+export interface PageChannelRow {
+  path: string; sessions: number; cart: number; checkout: number; completed: number;
+  convRate: number; bounceRate: number; channels: Record<string, number>;
+}
+export async function getPagesWithChannels(market: Market, since: string, until: string): Promise<{
+  order: SessionChannel[]; pages: PageChannelRow[]; overall: { total: number; channels: ChannelShareRow[] };
+}> {
+  const { rows, error } = await runShopifyQL(market, `FROM sessions SHOW ${COLS} GROUP BY landing_page_path, utm_source, utm_medium, referrer_source SINCE ${since} UNTIL ${until} LIMIT 50000`, 'unstable');
+  if (error) throw new Error('ShopifyQL sessions page×channel: ' + error);
+  interface Acc { sessions: number; cart: number; checkout: number; completed: number; bouncedW: number; ch: Map<string, number>; }
+  const pages = new Map<string, Acc>();
+  const overall = new Map<SessionChannel, { sessions: number; completed: number }>();
+  let grand = 0;
+  for (const r of rows) {
+    const path = String((r as any).landing_page_path || ''); if (!path) continue;
+    const m = pack(r);
+    const ch = classifySessionChannel((r as any).utm_source, (r as any).utm_medium, (r as any).referrer_source, market);
+    let e = pages.get(path);
+    if (!e) { e = { sessions: 0, cart: 0, checkout: 0, completed: 0, bouncedW: 0, ch: new Map() }; pages.set(path, e); }
+    e.sessions += m.sessions; e.cart += m.cart; e.checkout += m.checkout; e.completed += m.completed;
+    e.bouncedW += (m.bounceRate / 100) * m.sessions;
+    e.ch.set(ch, (e.ch.get(ch) || 0) + m.sessions);
+    const o = overall.get(ch) || { sessions: 0, completed: 0 };
+    o.sessions += m.sessions; o.completed += m.completed; overall.set(ch, o);
+    grand += m.sessions;
+  }
+  const pageRows: PageChannelRow[] = [...pages.entries()].map(([path, e]) => ({
+    path, sessions: e.sessions, cart: e.cart, checkout: e.checkout, completed: e.completed,
+    convRate: e.sessions ? (e.completed / e.sessions) * 100 : 0,
+    bounceRate: e.sessions ? (e.bouncedW / e.sessions) * 100 : 0,
+    channels: Object.fromEntries([...e.ch.entries()]),
+  })).sort((a, b) => b.sessions - a.sessions);
+  const mk = (c: SessionChannel): ChannelShareRow => {
+    const o = overall.get(c) || { sessions: 0, completed: 0 };
+    return { channel: c, sessions: o.sessions, share: grand ? (o.sessions / grand) * 100 : 0, convRate: o.sessions ? (o.completed / o.sessions) * 100 : 0 };
+  };
+  const chans = CHANNEL_ORDER[market].map(mk);
+  if (overall.get('Outros')) chans.push(mk('Outros'));
+  return { order: CHANNEL_ORDER[market], pages: pageRows, overall: { total: grand, channels: chans } };
+}
+
 export interface DimRow { key: string; sessions: number; completed: number; convRate: number; }
 export async function getSessionsByDimension(market: Market, since: string, until: string, dim: 'referrer_source' | 'referrer_name' | 'utm_source'): Promise<DimRow[]> {
   const { rows, error } = await runShopifyQL(market, `FROM sessions SHOW ${COLS} GROUP BY ${dim} SINCE ${since} UNTIL ${until} LIMIT 200`, 'unstable');
