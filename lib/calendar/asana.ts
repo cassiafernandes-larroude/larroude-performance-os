@@ -4,6 +4,8 @@
 // Campos customizados lidos (criados manualmente no Asana): "SKUs" (text), "Collection ID" (text),
 // "Mercado" (dropdown US/BR/Ambos, opcional — na falta, o mercado é deduzido do nome).
 
+import * as XLSX from 'xlsx';
+
 export const MACRO_CALENDAR_PROJECT_GID = '1215108556694095';
 const ASANA_BASE = 'https://app.asana.com/api/1.0';
 
@@ -155,4 +157,46 @@ export async function getMacroCalendar(): Promise<CalendarAction[]> {
     pages++;
   } while (offset && pages < 20);
   return actions;
+}
+
+// Cassia 2026-06-29: SKUs explícitos por campanha via planilha .xlsx ANEXADA na tarefa do Asana.
+// É a fonte mais robusta de "quais SKUs são da campanha" — lista explícita e imutável, sem depender
+// da composição mutável de uma collection. Extrai por regex todo SKU canônico (L<nº>-MODELO-COR-CÓD)
+// de qualquer aba/coluna; a canonicalização final fica no results.ts (toCanonical). Cacheado por
+// tarefa (10min); o anexo raramente muda.
+const SKU_RE = /^[A-Z]?\d{2,}-[A-Z0-9]+-[A-Z0-9.]+/i;
+const attachCache = new Map<string, { ts: number; skus: string[] }>();
+const ATTACH_TTL = 10 * 60 * 1000;
+
+export async function getAttachmentSkus(taskGid: string): Promise<string[]> {
+  const hit = attachCache.get(taskGid);
+  if (hit && Date.now() - hit.ts < ATTACH_TTL) return hit.skus;
+
+  let skus: string[] = [];
+  try {
+    const list = await asanaGet(`/attachments?parent=${taskGid}&opt_fields=name,download_url,resource_subtype`);
+    const xlsx = (list.data || []).find((a: any) => /\.xlsx$/i.test(a?.name || '') && a?.download_url);
+    if (xlsx?.download_url) {
+      const res = await fetch(xlsx.download_url, { cache: 'no-store' });
+      if (res.ok) {
+        const buf = new Uint8Array(await res.arrayBuffer());
+        const wb = XLSX.read(buf, { type: 'array' });
+        const found = new Set<string>();
+        for (const name of wb.SheetNames) {
+          const rows = XLSX.utils.sheet_to_json<any[]>(wb.Sheets[name], { header: 1, blankrows: false });
+          for (const row of rows) {
+            for (const cell of row || []) {
+              const v = String(cell ?? '').trim().toUpperCase();
+              if (SKU_RE.test(v)) found.add(v);
+            }
+          }
+        }
+        skus = [...found];
+      }
+    }
+  } catch {
+    skus = [];
+  }
+  attachCache.set(taskGid, { ts: Date.now(), skus });
+  return skus;
 }
