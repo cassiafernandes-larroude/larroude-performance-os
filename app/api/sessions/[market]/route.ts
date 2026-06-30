@@ -49,6 +49,27 @@ function aggregate(rows: PageChannelRow[], keyFn: (p: PageChannelRow) => string 
   })).sort((a, b) => b.sessions - a.sessions);
 }
 
+// Agrega páginas por coleção MANTENDO o breakdown por canal (mesmas colunas da tabela de páginas).
+function aggregateCollections(rows: PageChannelRow[]): PageChannelRow[] {
+  interface CAcc { sessions: number; cart: number; checkout: number; completed: number; bouncedW: number; ch: Map<string, number>; name?: string }
+  const m = new Map<string, CAcc>();
+  for (const p of rows) {
+    const h = collectionHandle(p.path); if (!h) continue;
+    let e = m.get(h);
+    if (!e) { e = { sessions: 0, cart: 0, checkout: 0, completed: 0, bouncedW: 0, ch: new Map() }; m.set(h, e); }
+    e.sessions += p.sessions; e.cart += p.cart; e.checkout += p.checkout; e.completed += p.completed;
+    e.bouncedW += (p.bounceRate / 100) * p.sessions;
+    for (const [c, s] of Object.entries(p.channels)) e.ch.set(c, (e.ch.get(c) || 0) + s);
+    if (!e.name && p.name) e.name = p.name;
+  }
+  return [...m.entries()].map(([h, e]) => ({
+    path: `/collections/${h}`, name: e.name, sessions: e.sessions, cart: e.cart, checkout: e.checkout, completed: e.completed,
+    convRate: e.sessions ? (e.completed / e.sessions) * 100 : 0,
+    bounceRate: e.sessions ? (e.bouncedW / e.sessions) * 100 : 0,
+    channels: Object.fromEntries([...e.ch.entries()]),
+  })).sort((a, b) => b.sessions - a.sessions).slice(0, 100);
+}
+
 function pageType(path: string): string {
   if (path === '/') return 'Home';
   if (path.startsWith('/products/')) return 'Produtos';
@@ -77,7 +98,7 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
       ]);
 
       const byType = aggregate(pc.pages, (p) => pageType(p.path));
-      const byCollection = aggregate(pc.pages, (p) => collectionHandle(p.path)).slice(0, 50);
+      const byCollection = aggregateCollections(pc.pages); // mesmas colunas das páginas (com share por canal)
 
       // allPages já vem ordenado por sessões, COM o share por canal de cada página.
       return { market, start, end, gran, totals, series, byType, byCollection, allPages: pc.pages, channelOrder: pc.order, channelShare: pc.overall };

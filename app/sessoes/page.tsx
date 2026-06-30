@@ -18,7 +18,7 @@ type OppCat = 'opp_pdp' | 'opp_channel' | 'escala' | 'baixa' | 'sinal';
 interface Bundle {
   market: Market; start: string; end: string; gran: string;
   totals: Metrics; series: { date: string; sessions: number; completed: number; convRate: number }[];
-  byType: AggRow[]; byCollection: AggRow[]; allPages: PageChannelRow[];
+  byType: AggRow[]; byCollection: PageChannelRow[]; allPages: PageChannelRow[];
   channelOrder: string[];
   channelShare: { total: number; channels: ChannelRow[] };
 }
@@ -154,19 +154,19 @@ export default function SessoesPage() {
               const slice = filtered.slice((pageNum - 1) * PER_PAGE, pageNum * PER_PAGE);
               return (
                 <>
-                  <PagesChannelTable rows={slice} channelOrder={data.channelOrder} total={filtered.length} avgConv={t.convRate} totalSessions={data.channelShare.total} />
+                  <PagesChannelTable rows={slice} channelOrder={data.channelOrder} total={filtered.length} avgConv={t.convRate} totalSessions={data.channelShare.total} title={`Todas as páginas com sessões · ${fmtN(filtered.length)} páginas · share por canal`} />
                   <Pager page={pageNum} total={filtered.length} perPage={PER_PAGE} onChange={setPageNum} />
                 </>
               );
             })()}
           </section>
 
-          {/* 3) Por coleção */}
+          {/* 3) Sessões por coleções */}
           <section>
-            <SectionTitle>🗂️ Por coleção</SectionTitle>
+            <SectionTitle>🗂️ Sessões por coleções</SectionTitle>
             {data.byCollection.length === 0
               ? <div className="text-[13px]" style={{ color: '#6b7280' }}>Sem sessões em páginas de coleção no período.</div>
-              : <Table title="Coleções por sessões (landing em /collections/)" rows={data.byCollection} keyLabel="Coleção" />}
+              : <PagesChannelTable rows={data.byCollection} channelOrder={data.channelOrder} total={data.byCollection.length} avgConv={t.convRate} totalSessions={data.channelShare.total} title={`Sessões por coleção · ${fmtN(data.byCollection.length)} coleções · share por canal`} entityLabel="Coleção" showPdp={false} />}
           </section>
 
           <p className="text-[11px]" style={{ color: '#9ca3af' }}>
@@ -194,39 +194,6 @@ function ChartCard({ title, children }: { title: string; children: React.ReactNo
     <div className="rounded-2xl p-4" style={{ background: '#fff', border: '0.8px solid #e5e3de' }}>
       <div className="text-[12px] font-semibold uppercase tracking-wide mb-2" style={{ color: '#6b7280' }}>{title}</div>
       {children}
-    </div>
-  );
-}
-function Table({ title, rows, keyLabel }: { title: string; rows: AggRow[]; keyLabel: string }) {
-  return (
-    <div className="rounded-2xl p-4" style={{ background: '#fff', border: '0.8px solid #e5e3de' }}>
-      <div className="text-[12px] font-semibold uppercase tracking-wide mb-2" style={{ color: '#6b7280' }}>{title}</div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-[13px]" style={{ borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ color: '#9ca3af', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              <th style={{ textAlign: 'left', padding: '6px 8px' }}>{keyLabel}</th>
-              <th style={{ textAlign: 'right', padding: '6px 8px' }}>Sessões</th>
-              <th style={{ textAlign: 'right', padding: '6px 8px' }}>Add-cart</th>
-              <th style={{ textAlign: 'right', padding: '6px 8px' }}>Checkout</th>
-              <th style={{ textAlign: 'right', padding: '6px 8px' }}>Conversão</th>
-              <th style={{ textAlign: 'right', padding: '6px 8px' }}>Bounce</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.key} style={{ borderTop: '1px solid #f1efe8' }}>
-                <td style={{ padding: '6px 8px', maxWidth: 360, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.key}>{r.key}</td>
-                <td className="font-num" style={{ textAlign: 'right', padding: '6px 8px', fontWeight: 600 }}>{fmtN(r.sessions)}</td>
-                <td className="font-num" style={{ textAlign: 'right', padding: '6px 8px', color: '#6b7280' }}>{fmtP(r.cartRate)}</td>
-                <td className="font-num" style={{ textAlign: 'right', padding: '6px 8px', color: '#6b7280' }}>{fmtP(r.checkoutRate)}</td>
-                <td className="font-num" style={{ textAlign: 'right', padding: '6px 8px', color: '#16A34A', fontWeight: 600 }}>{fmtP(r.convRate, 2)}</td>
-                <td className="font-num" style={{ textAlign: 'right', padding: '6px 8px', color: '#dc2626' }}>{fmtP(r.bounceRate)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
     </div>
   );
 }
@@ -294,18 +261,18 @@ function oppTag(path: string, sessions: number, convRate: number, avgConv: numbe
   return { cat: 'baixa', label: '🟠 Baixa conv.', color: '#b45309', bg: '#fdebcf' };
 }
 
-function PagesChannelTable({ rows, channelOrder, total, avgConv, totalSessions }: { rows: PageChannelRow[]; channelOrder: string[]; total: number; avgConv: number; totalSessions: number }) {
+function PagesChannelTable({ rows, channelOrder, total, avgConv, totalSessions, title, entityLabel = 'Página', showPdp = true }: { rows: PageChannelRow[]; channelOrder: string[]; total: number; avgConv: number; totalSessions: number; title: string; entityLabel?: string; showPdp?: boolean }) {
   const minSignal = Math.max(30, Math.round(totalSessions * 0.00005)); // mínimo p/ confiar na conversão
   const fewCeiling = Math.max(300, Math.round(totalSessions * 0.0005)); // teto de "poucas sessões" (espaço p/ crescer)
   return (
     <div className="rounded-2xl p-4" style={{ background: '#fff', border: '0.8px solid #e5e3de' }}>
-      <div className="text-[12px] font-semibold uppercase tracking-wide mb-1" style={{ color: '#6b7280' }}>Todas as páginas com sessões · {fmtN(total)} páginas · share por canal</div>
-      <div className="text-[11px] mb-2" style={{ color: '#9ca3af' }}>🟢 Oportunidade = converte bem (≥ média {fmtP(avgConv, 2)}) com poucas sessões ({fmtN(minSignal)}–{fmtN(fewCeiling)}) → impulsionar nos canais (⤴ = ≥ 2× a média). 🔴 Oportunidade PDP = página de produto com muitas sessões (≥ {fmtN(fewCeiling)}) e conversão abaixo da média → otimizar a PDP. 🔵 Já escala = boa conversão + muito tráfego. ⚪ Pouco sinal = poucas sessões.</div>
+      <div className="text-[12px] font-semibold uppercase tracking-wide mb-1" style={{ color: '#6b7280' }}>{title}</div>
+      <div className="text-[11px] mb-2" style={{ color: '#9ca3af' }}>🟢 Oportunidade = converte bem (≥ média {fmtP(avgConv, 2)}) com poucas sessões ({fmtN(minSignal)}–{fmtN(fewCeiling)}) → impulsionar nos canais (⤴ = ≥ 2× a média).{showPdp ? ` 🔴 Oportunidade PDP = página de produto com muitas sessões (≥ ${fmtN(fewCeiling)}) e conversão abaixo da média → otimizar a PDP.` : ''} 🔵 Já escala = boa conversão + muito tráfego. ⚪ Pouco sinal = poucas sessões.</div>
       <div className="overflow-x-auto">
         <table style={{ borderCollapse: 'collapse', fontSize: 12, minWidth: 1020 }}>
           <thead>
             <tr style={{ color: '#9ca3af', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              <th style={{ textAlign: 'left', padding: '6px 8px' }}>Página</th>
+              <th style={{ textAlign: 'left', padding: '6px 8px' }}>{entityLabel}</th>
               <th style={{ textAlign: 'left', padding: '6px 8px' }}>Oportunidade</th>
               <th style={{ textAlign: 'right', padding: '6px 8px' }}>Sessões</th>
               <th style={{ textAlign: 'right', padding: '6px 8px' }}>Conv.</th>
