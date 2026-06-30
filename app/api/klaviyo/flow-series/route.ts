@@ -8,7 +8,7 @@ import { placedOrderMetricId } from '@/lib/klaviyo/queries';
 import type { Market, Period } from '@/types/klaviyo/models';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 async function load(market: Market, period: Period, flowId: string, custom?: { start: string; end: string }) {
   const range = periodToRange(period, custom);

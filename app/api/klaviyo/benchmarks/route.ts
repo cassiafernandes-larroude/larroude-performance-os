@@ -8,7 +8,7 @@ import { CAMPAIGN_BENCHMARKS, FLOW_BENCHMARKS, signalFor } from '@/lib/klaviyo/c
 import type { Market, Period, BenchmarkRow, CampaignType, FlowType } from '@/types/klaviyo/models';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 function aggregate<T extends string>(items: { type: T; openRate: number; clickRate: number; rpr: number }[], bms: Record<T, any>): BenchmarkRow[] {
   const groups: Record<string, { or: number[]; ctr: number[]; rpr: number[] }> = {};

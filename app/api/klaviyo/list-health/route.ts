@@ -7,7 +7,7 @@ import { queryMetricAggregate } from '@/lib/klaviyo/queries';
 import type { Market, Period } from '@/types/klaviyo/models';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 async function resolveMetricIds(market: Market): Promise<{ ids: Record<string, string>; totalFound: number }> {
   const all = await klaviyoPaginate<any>(market, '/metrics', {

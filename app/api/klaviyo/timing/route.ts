@@ -7,7 +7,7 @@ import { reportToMap, buildCampaignRows } from '@/lib/klaviyo/transform';
 import type { Market, Period, DayOfWeekRow } from '@/types/klaviyo/models';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 

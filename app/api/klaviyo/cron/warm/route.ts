@@ -10,7 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 type Res = { label: string; status: number; ms: number; error?: string };
 
@@ -43,8 +43,8 @@ export async function GET(req: NextRequest) {
   const results: Res[] = [];
   const t0 = Date.now();
 
-  // FASE 1: ranges curtos (rápidos). Cap 24s. Ordem prioriza overview/campaigns/flows.
-  const shortDeadline = t0 + 24_000;
+  // FASE 1: ranges curtos (rápidos). Cap 30s. Ordem prioriza overview/campaigns/flows.
+  const shortDeadline = t0 + 30_000;
   const shortEndpoints = ['overview', 'campaigns', 'flows', 'segments', 'benchmarks', 'shopify-attribution', 'list-health', 'timing', 'insights'];
   const shortJobs: (() => Promise<Res>)[] = [];
   for (const period of ['L7D', 'L28D'])
@@ -53,8 +53,8 @@ export async function GET(req: NextRequest) {
         shortJobs.push(() => hit(base, `/${e}?market=${market}&period=${period}`, `${e} ${market} ${period}`, shortDeadline));
   await runPool(shortJobs, 6, results);
 
-  // FASE 2: ranges longos. Cap rígido 54s. overview primeiro (aba padrão).
-  const longDeadline = t0 + 54_000;
+  // FASE 2: ranges longos. Cap rígido 114s (maxDuration 120). overview primeiro (aba padrão).
+  const longDeadline = t0 + 114_000;
   const longEndpoints = ['overview', 'campaigns', 'segments', 'benchmarks', 'timing', 'insights'];
   const longJobs: (() => Promise<Res>)[] = [];
   for (const e of longEndpoints)

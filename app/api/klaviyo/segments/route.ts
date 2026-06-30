@@ -8,7 +8,7 @@ import { klaviyoPaginate } from '@/lib/klaviyo/klaviyo';
 import type { Market, Period, SegmentRow } from '@/types/klaviyo/models';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 // Também busca listas (audiences.included pode ter ambos)
 async function listLists(market: Market) {
