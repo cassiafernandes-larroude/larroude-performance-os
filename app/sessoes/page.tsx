@@ -121,7 +121,7 @@ export default function SessoesPage() {
               const slice = data.allPages.slice((pageNum - 1) * PER_PAGE, pageNum * PER_PAGE);
               return (
                 <>
-                  <PagesChannelTable rows={slice} channelOrder={data.channelOrder} total={data.allPages.length} />
+                  <PagesChannelTable rows={slice} channelOrder={data.channelOrder} total={data.allPages.length} avgConv={t.convRate} totalSessions={data.channelShare.total} />
                   <Pager page={pageNum} total={data.allPages.length} perPage={PER_PAGE} onChange={setPageNum} />
                 </>
               );
@@ -236,15 +236,30 @@ function ChannelShare({ data }: { data: { total: number; channels: ChannelRow[] 
 }
 
 const CH_SHORT: Record<string, string> = { 'Meta Ads': 'Meta', 'Google Ads': 'Google', 'Orgânico': 'Orgân.', 'Klaviyo Email': 'Klaviyo', 'Direto': 'Direto', 'SMS Attentive': 'SMS', 'Criteo': 'Criteo', 'ShopMy': 'ShopMy', 'Awin Affiliate': 'Awin', 'Agent.shop': 'Agent' };
-function PagesChannelTable({ rows, channelOrder, total }: { rows: PageChannelRow[]; channelOrder: string[]; total: number }) {
+
+// Sinaliza oportunidade por página: tráfego relevante + conversão abaixo da média do site (ou bounce
+// muito alto) = oportunidade de otimização; na média/acima = OK; pouco tráfego = baixo volume.
+function oppTag(sessions: number, convRate: number, bounceRate: number, avgConv: number, minSess: number) {
+  if (sessions < minSess) return { label: 'Baixo volume', color: '#6b7280', bg: '#f1efe8' };
+  const lowConv = convRate < avgConv;
+  const highBounce = bounceRate >= 75;
+  if (convRate < avgConv * 0.6 || (lowConv && highBounce)) return { label: '🔴 Oportunidade', color: '#b91c1c', bg: '#fde2e0' };
+  if (lowConv) return { label: '🟠 Oportunidade', color: '#b45309', bg: '#fdebcf' };
+  return { label: '🟢 OK', color: '#0f6e56', bg: '#dcf3ea' };
+}
+
+function PagesChannelTable({ rows, channelOrder, total, avgConv, totalSessions }: { rows: PageChannelRow[]; channelOrder: string[]; total: number; avgConv: number; totalSessions: number }) {
+  const minSess = Math.max(50, Math.round(totalSessions * 0.0005)); // tráfego "relevante" p/ valer otimizar
   return (
     <div className="rounded-2xl p-4" style={{ background: '#fff', border: '0.8px solid #e5e3de' }}>
-      <div className="text-[12px] font-semibold uppercase tracking-wide mb-2" style={{ color: '#6b7280' }}>Todas as páginas com sessões · {fmtN(total)} páginas · share por canal</div>
+      <div className="text-[12px] font-semibold uppercase tracking-wide mb-1" style={{ color: '#6b7280' }}>Todas as páginas com sessões · {fmtN(total)} páginas · share por canal</div>
+      <div className="text-[11px] mb-2" style={{ color: '#9ca3af' }}>Oportunidade = ≥ {fmtN(minSess)} sessões e conversão abaixo da média do site ({fmtP(avgConv, 2)}) — 🔴 muito abaixo, 🟠 abaixo. 🟢 OK = na média ou acima. Baixo volume = poucas sessões.</div>
       <div className="overflow-x-auto">
-        <table style={{ borderCollapse: 'collapse', fontSize: 12, minWidth: 920 }}>
+        <table style={{ borderCollapse: 'collapse', fontSize: 12, minWidth: 1020 }}>
           <thead>
             <tr style={{ color: '#9ca3af', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               <th style={{ textAlign: 'left', padding: '6px 8px' }}>Página</th>
+              <th style={{ textAlign: 'left', padding: '6px 8px' }}>Oportunidade</th>
               <th style={{ textAlign: 'right', padding: '6px 8px' }}>Sessões</th>
               <th style={{ textAlign: 'right', padding: '6px 8px' }}>Conv.</th>
               <th style={{ textAlign: 'right', padding: '6px 8px' }}>Bounce</th>
@@ -252,18 +267,22 @@ function PagesChannelTable({ rows, channelOrder, total }: { rows: PageChannelRow
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
-              <tr key={r.path} style={{ borderTop: '1px solid #f1efe8' }}>
-                <td style={{ padding: '6px 8px', maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.path}>{r.path}</td>
-                <td className="font-num" style={{ textAlign: 'right', padding: '6px 8px', fontWeight: 600 }}>{fmtN(r.sessions)}</td>
-                <td className="font-num" style={{ textAlign: 'right', padding: '6px 8px', color: '#16A34A' }}>{fmtP(r.convRate, 2)}</td>
-                <td className="font-num" style={{ textAlign: 'right', padding: '6px 8px', color: '#dc2626' }}>{fmtP(r.bounceRate)}</td>
-                {channelOrder.map((ch) => {
-                  const pct = r.sessions ? ((r.channels[ch] || 0) / r.sessions) * 100 : 0;
-                  return <td key={ch} className="font-num" style={{ textAlign: 'right', padding: '6px 6px', color: pct > 0 ? (CH_COLOR[ch] || '#374151') : '#d3d1c7' }}>{pct > 0 ? fmtP(pct, 0) : '·'}</td>;
-                })}
-              </tr>
-            ))}
+            {rows.map((r) => {
+              const tag = oppTag(r.sessions, r.convRate, r.bounceRate, avgConv, minSess);
+              return (
+                <tr key={r.path} style={{ borderTop: '1px solid #f1efe8' }}>
+                  <td style={{ padding: '6px 8px', maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.path}>{r.path}</td>
+                  <td style={{ padding: '6px 8px' }}><span style={{ fontSize: 11, fontWeight: 600, color: tag.color, background: tag.bg, padding: '2px 8px', borderRadius: 999, whiteSpace: 'nowrap' }}>{tag.label}</span></td>
+                  <td className="font-num" style={{ textAlign: 'right', padding: '6px 8px', fontWeight: 600 }}>{fmtN(r.sessions)}</td>
+                  <td className="font-num" style={{ textAlign: 'right', padding: '6px 8px', color: '#16A34A' }}>{fmtP(r.convRate, 2)}</td>
+                  <td className="font-num" style={{ textAlign: 'right', padding: '6px 8px', color: '#dc2626' }}>{fmtP(r.bounceRate)}</td>
+                  {channelOrder.map((ch) => {
+                    const pct = r.sessions ? ((r.channels[ch] || 0) / r.sessions) * 100 : 0;
+                    return <td key={ch} className="font-num" style={{ textAlign: 'right', padding: '6px 6px', color: pct > 0 ? (CH_COLOR[ch] || '#374151') : '#d3d1c7' }}>{pct > 0 ? fmtP(pct, 0) : '·'}</td>;
+                  })}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
