@@ -99,7 +99,14 @@ export async function listLists(market: Market) {
 
 // Métrica agregada. Klaviyo /metric-aggregates só aceita 'greater-or-equal' e 'less-than' em datetime.
 export async function queryMetricAggregate(market: Market, metricId: string, range: DateRange, interval: 'day'|'week'|'month' = 'week', measurements: string[] = ['count']) {
-  const endExclusive = new Date(new Date(range.end).getTime() + 1000).toISOString();
+  // Cassia 2026-06-29: o /metric-aggregates aceita no MÁXIMO 1 ano de range. Como o end é tratado
+  // de forma inclusiva (less-than em end+1s), o período 12M (365d) virava "1 ano e 1 segundo" e o
+  // Klaviyo devolvia 400. Clampa a janela [start, end+1s) para no máx. 1 ano (− 1s de margem).
+  const endExclusiveMs = new Date(range.end).getTime() + 1000;
+  const ONE_YEAR_MS = 365 * 86400000;
+  const startMs = Math.max(new Date(range.start).getTime(), endExclusiveMs - (ONE_YEAR_MS - 1000));
+  const startClamped = new Date(startMs).toISOString();
+  const endExclusive = new Date(endExclusiveMs).toISOString();
   const body = {
     data: {
       type: 'metric-aggregate',
@@ -108,7 +115,7 @@ export async function queryMetricAggregate(market: Market, metricId: string, ran
         measurements,
         interval,
         timezone: 'UTC',
-        filter: [`greater-or-equal(datetime,${range.start})`, `less-than(datetime,${endExclusive})`],
+        filter: [`greater-or-equal(datetime,${startClamped})`, `less-than(datetime,${endExclusive})`],
         page_size: 500
       }
     }
