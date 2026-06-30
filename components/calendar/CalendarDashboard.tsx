@@ -228,32 +228,39 @@ function ActionRow({ a, market }: { a: Action; market: Market }) {
       ? `tag=${encodeURIComponent(a.dropTag)}${win}`
       : null;
 
+  // Cassia 2026-06-29: drops mostram a lista de produtos E as subtarefas (abaixo dos produtos).
+  const wantSubs = isAds || !!a.dropTag;
   const toggle = useCallback(async () => {
     if (!expandable) return;
     const next = !open;
     setOpen(next);
     if (!next || loading) return;
-    if (isAds && subs === null) {
-      setLoading(true); setDetErr(null);
-      try {
+    const needProds = skuMode && prods === null;
+    const needSubs = wantSubs && subs === null;
+    if (!needProds && !needSubs) return;
+    setLoading(true); setDetErr(null);
+    try {
+      if (needProds) {
+        if (!skuQuery) { setProds([]); } // sale/ação sem vínculo → prompt
+        else {
+          const res = await fetch(`/api/calendar/drop-skus/${market}?${skuQuery}`, { cache: 'no-store' });
+          const json = await res.json();
+          setProds(Array.isArray(json.products) ? json.products : []);
+          if (!json.available && json.error) setDetErr(json.error);
+        }
+      }
+      if (needSubs) {
         const res = await fetch(`/api/calendar/subtasks/${a.gid}`, { cache: 'no-store' });
         const json = await res.json();
         setSubs(Array.isArray(json.subtasks) ? json.subtasks : []);
         if (!json.available && json.error) setDetErr(json.error);
-      } catch (e: any) { setDetErr(e?.message || 'falha'); setSubs([]); }
-      finally { setLoading(false); }
-    } else if (skuMode && prods === null) {
-      if (!skuQuery) { setProds([]); return; } // sale/ação sem vínculo → prompt
-      setLoading(true); setDetErr(null);
-      try {
-        const res = await fetch(`/api/calendar/drop-skus/${market}?${skuQuery}`, { cache: 'no-store' });
-        const json = await res.json();
-        setProds(Array.isArray(json.products) ? json.products : []);
-        if (!json.available && json.error) setDetErr(json.error);
-      } catch (e: any) { setDetErr(e?.message || 'falha'); setProds([]); }
-      finally { setLoading(false); }
-    }
-  }, [expandable, isAds, skuMode, skuQuery, open, loading, subs, prods, a.gid, market]);
+      }
+    } catch (e: any) {
+      setDetErr(e?.message || 'falha');
+      if (needProds) setProds([]);
+      if (needSubs) setSubs([]);
+    } finally { setLoading(false); }
+  }, [expandable, isAds, skuMode, wantSubs, skuQuery, open, loading, subs, prods, a.gid, market]);
 
   return (
     <div className="rounded-xl" style={{ background: 'var(--paper)', border: '1px solid var(--border)' }}>
@@ -274,7 +281,7 @@ function ActionRow({ a, market }: { a: Action; market: Market }) {
             <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: '#ebe9e3', color: '#1a1a1a' }}>{a.market}</span>
           )}
           {isAds && <span className="text-[10px]" style={{ color: 'var(--ink-muted)' }}>· subtarefas</span>}
-          {skuMode && <span className="text-[10px]" style={{ color: 'var(--ink-muted)' }}>· SKUs</span>}
+          {skuMode && <span className="text-[10px]" style={{ color: 'var(--ink-muted)' }}>· SKUs{a.dropTag ? ' + subtarefas' : ''}</span>}
         </div>
         <div className="flex items-center gap-2 flex-wrap mt-1.5">
           {a.category.map((c) => (
@@ -347,27 +354,6 @@ function ActionRow({ a, market }: { a: Action; market: Market }) {
           {loading && <div className="text-[11px] py-1" style={{ color: 'var(--ink-muted)' }}>Carregando…</div>}
           {detErr && <div className="text-[11px] py-1" style={{ color: '#e11d48' }}>Erro: {detErr}</div>}
 
-          {/* ADS → subtarefas */}
-          {isAds && !loading && subs && subs.length === 0 && !detErr && (
-            <div className="text-[11px] py-1" style={{ color: 'var(--ink-muted)' }}>Sem subtarefas.</div>
-          )}
-          {isAds && subs && subs.length > 0 && (
-            <div className="mt-1 space-y-1">
-              {subs.map((s) => (
-                <div key={s.gid} className="flex items-center gap-2 text-[12px]" style={{ color: 'var(--ink)' }}>
-                  <span
-                    className="inline-flex items-center justify-center w-4 h-4 rounded shrink-0"
-                    style={{ border: `1px solid ${s.completed ? '#10b981' : 'var(--border)'}`, background: s.completed ? '#10b981' : 'transparent' }}
-                  >
-                    {s.completed && <Check className="w-3 h-3" style={{ color: 'white' }} />}
-                  </span>
-                  <span style={{ textDecoration: s.completed ? 'line-through' : 'none', color: s.completed ? 'var(--ink-muted)' : 'var(--ink)' }}>{s.name}</span>
-                  {s.dueOn && <span className="text-[10px]" style={{ color: 'var(--ink-muted)' }}>· {fmtDate(s.dueOn)}</span>}
-                </div>
-              ))}
-            </div>
-          )}
-
           {/* Drop/Sale/linkadas → lista de SKUs/produtos */}
           {skuMode && !loading && prods && prods.length === 0 && !detErr && (
             <div className="text-[11px] py-1" style={{ color: 'var(--ink-muted)' }}>Nenhum produto encontrado para o vínculo.</div>
@@ -390,6 +376,32 @@ function ActionRow({ a, market }: { a: Action; market: Market }) {
                     <span className="w-[150px] shrink-0 font-num text-[11px]" style={{ color: 'var(--ink-muted)' }}>{p.sku}</span>
                     <span className="w-[70px] shrink-0 text-right font-num">{p.units != null ? fmtN(p.units) : '—'}</span>
                     <span className="w-[90px] shrink-0 text-right font-num" style={{ color: '#10b981' }}>{p.revenue != null ? fmtMoney(p.revenue, market) : '—'}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Subtarefas — ADS e drops (nos drops, abaixo da lista de produtos) */}
+          {wantSubs && !loading && subs && subs.length === 0 && !detErr && (
+            <div className="text-[11px] py-1" style={{ color: 'var(--ink-muted)' }}>Sem subtarefas.</div>
+          )}
+          {wantSubs && subs && subs.length > 0 && (
+            <div className="mt-3">
+              {skuMode && (
+                <div className="text-[10px] uppercase tracking-wider mb-1" style={{ color: 'var(--ink-muted)' }}>Subtarefas</div>
+              )}
+              <div className="space-y-1">
+                {subs.map((s) => (
+                  <div key={s.gid} className="flex items-center gap-2 text-[12px]" style={{ color: 'var(--ink)' }}>
+                    <span
+                      className="inline-flex items-center justify-center w-4 h-4 rounded shrink-0"
+                      style={{ border: `1px solid ${s.completed ? '#10b981' : 'var(--border)'}`, background: s.completed ? '#10b981' : 'transparent' }}
+                    >
+                      {s.completed && <Check className="w-3 h-3" style={{ color: 'white' }} />}
+                    </span>
+                    <span style={{ textDecoration: s.completed ? 'line-through' : 'none', color: s.completed ? 'var(--ink-muted)' : 'var(--ink)' }}>{s.name}</span>
+                    {s.dueOn && <span className="text-[10px]" style={{ color: 'var(--ink-muted)' }}>· {fmtDate(s.dueOn)}</span>}
                   </div>
                 ))}
               </div>
