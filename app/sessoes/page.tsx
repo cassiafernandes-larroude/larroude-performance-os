@@ -241,7 +241,7 @@ function Pager({ page, total, perPage, onChange }: { page: number; total: number
   );
 }
 
-const CH_COLOR: Record<string, string> = { meta: '#1877F2', 'google ads': '#EA4335', 'orgânico': '#16A34A', klaviyo: '#5d4ec5', direto: '#6b7280', attentive: '#A855F7', criteo: '#F59E0B', shopmy: '#EC4899', awin: '#0EA5E9', 'agent.shop': '#14B8A6', outros: '#9ca3af' };
+const CH_COLOR: Record<string, string> = { 'Meta Ads': '#1877F2', 'Google Ads': '#EA4335', 'Orgânico': '#22c55e', 'Klaviyo Email': '#5d4ec5', 'Direto': '#6b7280', 'SMS Attentive': '#A855F7', 'Criteo': '#F59E0B', 'ShopMy': '#EC4899', 'Awin Affiliate': '#0EA5E9', 'Agent.shop': '#14B8A6', 'Outros': '#9ca3af' };
 function ChannelShare({ data }: { data: { total: number; channels: ChannelRow[] } }) {
   return (
     <div className="rounded-2xl p-4" style={{ background: '#fff', border: '0.8px solid #e5e3de' }}>

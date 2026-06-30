@@ -62,36 +62,48 @@ export async function getLandingPages(market: Market, since: string, until: stri
     .filter((r) => r.path);
 }
 
-// Cassia 2026-06-30: classifica a atribuição de sessão do ShopifyQL (utm_source/medium + referrer)
-// nos canais do negócio (mesma taxonomia do spend). attentive/shopmy só US; agent.shop só BR.
-// Valores reais descobertos por probe (2026-06-30): meta=meta/ig/facebook/Instagram_*/an/threads;
-// google ads=utm_source google; klaviyo=Klaviyo ou medium email/flow; awin=awin/medium affiliate.
-export type SessionChannel = 'meta' | 'google ads' | 'orgânico' | 'klaviyo' | 'direto' | 'attentive' | 'criteo' | 'shopmy' | 'awin' | 'agent.shop' | 'outros';
+// Cassia 2026-06-30: classifica a atribuição de sessão do ShopifyQL nos canais do negócio, seguindo
+// AS MESMAS REGRAS da aba Channel Share (lib/shared/channel-utms.ts CHANNEL_UTM_PATTERNS +
+// channel-consolidation.ts). Pontos-chave: Meta = utm_source meta-ish COM mídia paga (ou token de
+// paid explícito); instagram/facebook SEM mídia paga = Orgânico (social). Orgânico Search + Social
+// consolidados em "Orgânico". attentive/shopmy só US; agent.shop só BR. Rótulos = labels canônicos.
+export type SessionChannel =
+  | 'Meta Ads' | 'Google Ads' | 'Orgânico' | 'Klaviyo Email' | 'Direto'
+  | 'SMS Attentive' | 'Criteo' | 'ShopMy' | 'Awin Affiliate' | 'Agent.shop' | 'Outros';
 
 export function classifySessionChannel(usRaw: any, umRaw: any, rsRaw: any, market: Market): SessionChannel {
   const us = String(usRaw ?? '').toLowerCase().trim();
   const um = String(umRaw ?? '').toLowerCase().trim();
   const rs = String(rsRaw ?? '').toLowerCase().trim();
-  if (us === 'klaviyo' || um === 'email' || um === 'flow' || um === 'newsletter') return 'klaviyo';
-  if (us.includes('criteo')) return 'criteo';
-  if (market === 'BR' && us.includes('agent')) return 'agent.shop';
-  if (market === 'US' && us.includes('shopmy')) return 'shopmy';
-  if (market === 'US' && (us === 'attentive' || um === 'sms' || um === 'text')) return 'attentive';
-  if (us.includes('awin') || um === 'affiliate' || um === 'afilliate') return 'awin';
-  if (us.includes('meta') || us.includes('facebook') || us.startsWith('ig') || us.includes('instagram') || us === 'an' || us.includes('threads')) return 'meta';
-  if (us === 'google') return 'google ads';
+  const paidMedium = /(^|[_\s-])(paid|cpc|cpm|display|social_paid|paidsocial|paid_social)/.test(um);
+  // Afiliados / owned (utm_source exato — CHANNEL_UTM_PATTERNS)
+  if (us === 'awin') return 'Awin Affiliate';
+  if (market === 'US' && us === 'shopmy') return 'ShopMy';
+  if (market === 'BR' && us.includes('agent-shop')) return 'Agent.shop';
+  if (us === 'klaviyo' || um === 'flow' || um === 'email') return 'Klaviyo Email';
+  if (market === 'US' && (us === 'attentive' || um === 'sms' || um === 'text')) return 'SMS Attentive';
+  if (us.includes('criteo')) return 'Criteo';
+  // Meta: tokens fortes de paid OU source meta-ish + mídia paga
+  const metaStrong = us === 'an' || /(^|[_\-])(meta|fb_ads|ig_ads|ig_paid|instagram_paid|fb_paid)/.test(us);
+  const metaSource = /(meta|facebook|instagram|^ig|^fb[_\-]?|[_\-](ig|fb))/.test(us);
+  if (metaStrong || (metaSource && paidMedium)) return 'Meta Ads';
+  // Google Ads: source google + mídia paga (orgânico google = sem utm + referrer search)
+  if (us === 'google' && paidMedium) return 'Google Ads';
+  // Orgânico (consolidado Search + Social)
+  if (um === 'organic') return 'Orgânico';
   if (!us) {
-    if (rs === 'direct') return 'direto';
-    if (rs === 'search' || rs === 'social' || um === 'organic') return 'orgânico';
-    return 'outros';
+    if (rs === 'direct') return 'Direto';
+    if (rs === 'search' || rs === 'social') return 'Orgânico';
+    return 'Outros';
   }
-  if (um === 'organic') return 'orgânico';
-  return 'outros';
+  if (metaSource && !paidMedium) return 'Orgânico'; // instagram/facebook orgânico (social)
+  if (us === 'google') return 'Orgânico';            // google sem mídia paga
+  return 'Outros';
 }
 
 const CHANNEL_ORDER: Record<Market, SessionChannel[]> = {
-  US: ['meta', 'google ads', 'orgânico', 'klaviyo', 'direto', 'attentive', 'criteo', 'shopmy', 'awin'],
-  BR: ['meta', 'google ads', 'orgânico', 'klaviyo', 'direto', 'criteo', 'awin', 'agent.shop'],
+  US: ['Meta Ads', 'Google Ads', 'Orgânico', 'Klaviyo Email', 'Direto', 'SMS Attentive', 'Criteo', 'ShopMy', 'Awin Affiliate'],
+  BR: ['Meta Ads', 'Google Ads', 'Orgânico', 'Klaviyo Email', 'Direto', 'Criteo', 'Awin Affiliate', 'Agent.shop'],
 };
 
 export interface ChannelShareRow { channel: SessionChannel; sessions: number; share: number; convRate: number; }
@@ -112,7 +124,7 @@ export async function getSessionChannelShare(market: Market, since: string, unti
     return { channel: ch, sessions: e.sessions, share: total ? (e.sessions / total) * 100 : 0, convRate: e.sessions ? (e.completed / e.sessions) * 100 : 0 };
   };
   const channels = CHANNEL_ORDER[market].map(mk);
-  if (agg.get('outros')) channels.push(mk('outros'));
+  if (agg.get('Outros')) channels.push(mk('Outros'));
   return { total, channels };
 }
 
