@@ -13,7 +13,8 @@ const PRESETS: Period[] = ['7d', '14d', '28d', '3M', '6M', '12M'];
 interface Metrics { sessions: number; cart: number; checkout: number; completed: number; bounceRate: number; cartRate: number; checkoutRate: number; convRate: number; }
 interface AggRow { key: string; sessions: number; cart: number; checkout: number; completed: number; bounceRate: number; cartRate: number; checkoutRate: number; convRate: number; }
 interface ChannelRow { channel: string; sessions: number; share: number; convRate: number; }
-interface PageChannelRow { path: string; sessions: number; convRate: number; bounceRate: number; channels: Record<string, number>; }
+interface PageChannelRow { path: string; sessions: number; convRate: number; bounceRate: number; channels: Record<string, number>; name?: string; skus?: string; }
+type OppCat = 'opp_pdp' | 'opp_channel' | 'escala' | 'baixa' | 'sinal';
 interface Bundle {
   market: Market; start: string; end: string; gran: string;
   totals: Metrics; series: { date: string; sessions: number; completed: number; convRate: number }[];
@@ -38,7 +39,10 @@ export default function SessoesPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [pageNum, setPageNum] = useState(1); // paginação da tabela "Sessões por página"
+  const [search, setSearch] = useState('');
+  const [oppFilter, setOppFilter] = useState<'all' | OppCat>('all');
   const PER_PAGE = 25;
+  useEffect(() => { setPageNum(1); }, [search, oppFilter]);
 
   useEffect(() => {
     let cancelled = false;
@@ -53,6 +57,20 @@ export default function SessoesPage() {
   }, [market, period, applied]);
 
   const sessionPts: BarPoint[] = useMemo(() => (data?.series || []).map((p) => ({ date: p.date, value: p.sessions, color: '#5d4ec5' })), [data]);
+
+  const filtered = useMemo(() => {
+    if (!data) return [];
+    const total = data.channelShare.total;
+    const minSignal = Math.max(30, Math.round(total * 0.00005));
+    const fewCeiling = Math.max(300, Math.round(total * 0.0005));
+    const avgConv = data.totals.convRate;
+    const q = search.trim().toLowerCase();
+    return data.allPages.filter((p) => {
+      if (oppFilter !== 'all' && oppTag(p.path, p.sessions, p.convRate, avgConv, minSignal, fewCeiling).cat !== oppFilter) return false;
+      if (q && !`${p.path} ${p.name || ''} ${p.skus || ''}`.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [data, search, oppFilter]);
 
   function applyDates() {
     if (/^\d{4}-\d{2}-\d{2}$/.test(draftStart) && /^\d{4}-\d{2}-\d{2}$/.test(draftEnd)) setApplied({ start: draftStart, end: draftEnd });
@@ -117,12 +135,27 @@ export default function SessoesPage() {
               ))}
             </div>
             <div className="mb-4"><ChannelShare data={data.channelShare} /></div>
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar página, coleção, produto ou SKU…"
+                className="rounded-full px-4 py-2 text-[13px] bg-white"
+                style={{ border: '1px solid #e5e3de', minWidth: 280, flex: '1 1 280px', maxWidth: 420 }}
+              />
+              {([['all', 'Todas'], ['opp_pdp', '🔴 Oportunidade PDP'], ['opp_channel', '🟢 Oportunidade (canais)'], ['escala', '🔵 Já escala'], ['baixa', '🟠 Baixa conv.'], ['sinal', '⚪ Pouco sinal']] as const).map(([k, label]) => {
+                const active = oppFilter === k;
+                return (
+                  <button key={k} onClick={() => setOppFilter(k)} className="rounded-full text-[12px] font-medium px-3 py-1.5" style={active ? { background: '#1a1a1a', color: '#fff' } : { background: '#ebe9e3', color: '#1a1a1a' }}>{label}</button>
+                );
+              })}
+            </div>
             {(() => {
-              const slice = data.allPages.slice((pageNum - 1) * PER_PAGE, pageNum * PER_PAGE);
+              const slice = filtered.slice((pageNum - 1) * PER_PAGE, pageNum * PER_PAGE);
               return (
                 <>
-                  <PagesChannelTable rows={slice} channelOrder={data.channelOrder} total={data.allPages.length} avgConv={t.convRate} totalSessions={data.channelShare.total} />
-                  <Pager page={pageNum} total={data.allPages.length} perPage={PER_PAGE} onChange={setPageNum} />
+                  <PagesChannelTable rows={slice} channelOrder={data.channelOrder} total={filtered.length} avgConv={t.convRate} totalSessions={data.channelShare.total} />
+                  <Pager page={pageNum} total={filtered.length} perPage={PER_PAGE} onChange={setPageNum} />
                 </>
               );
             })()}
@@ -242,23 +275,23 @@ const CH_SHORT: Record<string, string> = { 'Meta Ads': 'Meta', 'Google Ads': 'Go
 //  2) PDP — página de produto (/products/*) com MUITAS sessões e conversão BAIXA → otimizar a PDP.
 // Senão: "Já escala" (boa conversão + muito tráfego), "Baixa conv." (abaixo da média, fora de PDP),
 // "Pouco sinal" (sessões insuficientes p/ confiar na conversão).
-function oppTag(path: string, sessions: number, convRate: number, avgConv: number, minSignal: number, fewCeiling: number) {
-  if (sessions < minSignal) return { label: '⚪ Pouco sinal', color: '#6b7280', bg: '#f1efe8' };
+function oppTag(path: string, sessions: number, convRate: number, avgConv: number, minSignal: number, fewCeiling: number): { cat: OppCat; label: string; color: string; bg: string } {
+  if (sessions < minSignal) return { cat: 'sinal', label: '⚪ Pouco sinal', color: '#6b7280', bg: '#f1efe8' };
   const isPdp = path.startsWith('/products/');
   const goodConv = avgConv > 0 && convRate >= avgConv;
   const lowConv = avgConv > 0 && convRate < avgConv;
   // PDP com sessões altas e conversão baixa → oportunidade NA PDP (diagnosticar/otimizar a página)
   if (isPdp && sessions >= fewCeiling && lowConv) {
     const strong = convRate < avgConv * 0.6;
-    return { label: 'Oportunidade PDP', color: strong ? '#b91c1c' : '#b45309', bg: strong ? '#fde2e0' : '#fdebcf' };
+    return { cat: 'opp_pdp', label: 'Oportunidade PDP', color: strong ? '#b91c1c' : '#b45309', bg: strong ? '#fde2e0' : '#fdebcf' };
   }
   // Converte bem + poucas sessões → impulsionar nos canais
   if (goodConv && sessions < fewCeiling) {
     const strong = convRate >= avgConv * 2;
-    return { label: strong ? '🟢 Oportunidade ⤴' : '🟢 Oportunidade', color: '#0f6e56', bg: '#dcf3ea' };
+    return { cat: 'opp_channel', label: strong ? '🟢 Oportunidade ⤴' : '🟢 Oportunidade', color: '#0f6e56', bg: '#dcf3ea' };
   }
-  if (goodConv) return { label: '🔵 Já escala', color: '#1e40af', bg: '#e0e7ff' };
-  return { label: '🟠 Baixa conv.', color: '#b45309', bg: '#fdebcf' };
+  if (goodConv) return { cat: 'escala', label: '🔵 Já escala', color: '#1e40af', bg: '#e0e7ff' };
+  return { cat: 'baixa', label: '🟠 Baixa conv.', color: '#b45309', bg: '#fdebcf' };
 }
 
 function PagesChannelTable({ rows, channelOrder, total, avgConv, totalSessions }: { rows: PageChannelRow[]; channelOrder: string[]; total: number; avgConv: number; totalSessions: number }) {
@@ -285,7 +318,10 @@ function PagesChannelTable({ rows, channelOrder, total, avgConv, totalSessions }
               const tag = oppTag(r.path, r.sessions, r.convRate, avgConv, minSignal, fewCeiling);
               return (
                 <tr key={r.path} style={{ borderTop: '1px solid #f1efe8' }}>
-                  <td style={{ padding: '6px 8px', maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.path}>{r.path}</td>
+                  <td style={{ padding: '6px 8px', maxWidth: 300 }} title={`${r.name ? r.name + ' · ' : ''}${r.path}${r.skus ? ' · ' + r.skus : ''}`}>
+                    {r.name && <div style={{ fontWeight: 600, color: '#1A1A1A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 290 }}>{r.name}</div>}
+                    <div style={{ color: r.name ? '#9ca3af' : '#1A1A1A', fontSize: r.name ? 10.5 : 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 290 }}>{r.path}</div>
+                  </td>
                   <td style={{ padding: '6px 8px' }}><span style={{ fontSize: 11, fontWeight: 600, color: tag.color, background: tag.bg, padding: '2px 8px', borderRadius: 999, whiteSpace: 'nowrap' }}>{tag.label}</span></td>
                   <td className="font-num" style={{ textAlign: 'right', padding: '6px 8px', fontWeight: 600 }}>{fmtN(r.sessions)}</td>
                   <td className="font-num" style={{ textAlign: 'right', padding: '6px 8px', color: '#16A34A' }}>{fmtP(r.convRate, 2)}</td>

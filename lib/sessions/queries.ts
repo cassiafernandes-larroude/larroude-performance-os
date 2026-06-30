@@ -3,6 +3,7 @@
 // landing_page_path, referrer_source, referrer_name, utm_source/campaign + métricas de funil.
 // Coleções e "tipo de página" são derivados do landing_page_path.
 import { runShopifyQL } from '@/lib/main-dashboard/shopify-admin';
+import { runQuery } from '@/lib/bigquery/client';
 
 export type Market = 'US' | 'BR';
 export type Gran = 'day' | 'week' | 'month';
@@ -134,11 +135,44 @@ export async function getSessionChannelShare(market: Market, since: string, unti
 export interface PageChannelRow {
   path: string; sessions: number; cart: number; checkout: number; completed: number;
   convRate: number; bounceRate: number; channels: Record<string, number>;
+  name?: string; skus?: string; // enriquecido p/ busca: título do produto/coleção + SKUs-mãe
+}
+
+// Metadados p/ busca: handle → título/SKUs (produtos) e handle → título (coleções). BQ, cacheado 6h.
+const PROJ = 'larroude-data-prod';
+const META_DS: Record<Market, string> = { US: 'stg_shopify', BR: 'stg_shopify_br' };
+interface PageMeta { products: Map<string, { title: string; skus: string }>; collections: Map<string, string> }
+const metaCache: Partial<Record<Market, { ts: number; data: PageMeta }>> = {};
+async function getPageMeta(market: Market): Promise<PageMeta> {
+  const hit = metaCache[market];
+  if (hit && Date.now() - hit.ts < 6 * 3600 * 1000) return hit.data;
+  const ds = META_DS[market];
+  const [prodRows, collRows] = await Promise.all([
+    runQuery<{ handle: string; title: string; skus: string }>(`
+      SELECT p.handle AS handle, ANY_VALUE(p.title) AS title,
+        STRING_AGG(DISTINCT REGEXP_REPLACE(v.sku, r'^(L\\d+-[A-Z]+)-[0-9.]+-', r'\\1-'), ' ') AS skus
+      FROM \`${PROJ}.${ds}.products\` p JOIN \`${PROJ}.${ds}.product_variants\` v ON v.product_id = p.id
+      WHERE p.handle IS NOT NULL AND v.sku IS NOT NULL GROUP BY p.handle`).catch(() => []),
+    runQuery<{ handle: string; title: string }>(`SELECT handle, title FROM \`${PROJ}.${ds}.collections\` WHERE handle IS NOT NULL`).catch(() => []),
+  ]);
+  const products = new Map<string, { title: string; skus: string }>();
+  for (const r of prodRows) products.set(r.handle, { title: r.title || '', skus: r.skus || '' });
+  const collections = new Map<string, string>();
+  for (const r of collRows) collections.set(r.handle, r.title || '');
+  const data = { products, collections };
+  metaCache[market] = { ts: Date.now(), data };
+  return data;
+}
+function handleOf(path: string, prefix: string): string | null {
+  return path.startsWith(prefix) ? (path.slice(prefix.length).split(/[/?#]/)[0] || null) : null;
 }
 export async function getPagesWithChannels(market: Market, since: string, until: string): Promise<{
   order: SessionChannel[]; pages: PageChannelRow[]; overall: { total: number; channels: ChannelShareRow[] };
 }> {
-  const { rows, error } = await runShopifyQL(market, `FROM sessions SHOW ${COLS} GROUP BY landing_page_path, utm_source, utm_medium, referrer_source SINCE ${since} UNTIL ${until} LIMIT 50000`, 'unstable');
+  const [{ rows, error }, meta] = await Promise.all([
+    runShopifyQL(market, `FROM sessions SHOW ${COLS} GROUP BY landing_page_path, utm_source, utm_medium, referrer_source SINCE ${since} UNTIL ${until} LIMIT 50000`, 'unstable'),
+    getPageMeta(market).catch(() => ({ products: new Map(), collections: new Map() } as PageMeta)),
+  ]);
   if (error) throw new Error('ShopifyQL sessions page×channel: ' + error);
   interface Acc { sessions: number; cart: number; checkout: number; completed: number; bouncedW: number; ch: Map<string, number>; }
   const pages = new Map<string, Acc>();
@@ -157,12 +191,19 @@ export async function getPagesWithChannels(market: Market, since: string, until:
     o.sessions += m.sessions; o.completed += m.completed; overall.set(ch, o);
     grand += m.sessions;
   }
-  const pageRows: PageChannelRow[] = [...pages.entries()].map(([path, e]) => ({
-    path, sessions: e.sessions, cart: e.cart, checkout: e.checkout, completed: e.completed,
-    convRate: e.sessions ? (e.completed / e.sessions) * 100 : 0,
-    bounceRate: e.sessions ? (e.bouncedW / e.sessions) * 100 : 0,
-    channels: Object.fromEntries([...e.ch.entries()]),
-  })).sort((a, b) => b.sessions - a.sessions);
+  const pageRows: PageChannelRow[] = [...pages.entries()].map(([path, e]) => {
+    const ph = handleOf(path, '/products/');
+    const cph = handleOf(path, '/collections/');
+    const prod = ph ? meta.products.get(ph) : undefined;
+    const name = prod?.title || (cph ? meta.collections.get(cph) : undefined) || undefined;
+    return {
+      path, sessions: e.sessions, cart: e.cart, checkout: e.checkout, completed: e.completed,
+      convRate: e.sessions ? (e.completed / e.sessions) * 100 : 0,
+      bounceRate: e.sessions ? (e.bouncedW / e.sessions) * 100 : 0,
+      channels: Object.fromEntries([...e.ch.entries()]),
+      name, skus: prod?.skus || undefined,
+    };
+  }).sort((a, b) => b.sessions - a.sessions);
   const mk = (c: SessionChannel): ChannelShareRow => {
     const o = overall.get(c) || { sessions: 0, completed: 0 };
     return { channel: c, sessions: o.sessions, share: grand ? (o.sessions / grand) * 100 : 0, convRate: o.sessions ? (o.completed / o.sessions) * 100 : 0 };
