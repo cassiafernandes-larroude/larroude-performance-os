@@ -7,7 +7,7 @@ import { RefreshCw, ExternalLink, CalendarDays, ChevronRight, ChevronLeft, Chevr
 
 type Market = 'US' | 'BR';
 
-interface ActionResult { gmv: number; units: number; orders: number; basis: 'sku' | 'collection' | 'tag' | 'sitewide' | 'attachment'; skuCount: number; tag?: string; spend: number; spendOk: boolean; roas: number | null; window: { start: string; end: string }; partial?: boolean; frozen?: boolean; }
+interface ActionResult { gmv: number; units: number; orders: number; basis: 'sku' | 'collection' | 'tag' | 'sitewide'; skuCount: number; tag?: string; spend: number; spendOk: boolean; roas: number | null; window: { start: string; end: string }; partial?: boolean; frozen?: boolean; }
 interface Action {
   gid: string; title: string; url: string; week: string; category: string[];
   market: 'US' | 'BR' | 'BOTH';
@@ -318,20 +318,11 @@ function ActionRow({ a, market }: { a: Action; market: Market }) {
                   ? `tag ${a.result.tag} · ${a.result.skuCount} SKUs`
                   : a.result.basis === 'collection'
                     ? `collection · ${a.result.skuCount} SKUs`
-                    : a.result.basis === 'attachment'
-                      ? `planilha · ${a.result.skuCount} SKUs`
-                      : `${a.result.skuCount} SKU(s)`}
+                    : `${a.result.skuCount} SKU(s)`}
               {a.window ? ` · ${fmtDate(a.window.start)}–${fmtDate(a.window.end)}` : ''}
               {a.result.partial ? ' · ⚠ vendas parciais' : ''}
               {!a.result.spendOk ? ' · ⚠ investido indisponível (token Meta)' : ''}
             </div>
-            {a.result.basis === 'attachment' && (
-              <div className="mt-1">
-                <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded inline-flex items-center gap-1" style={{ color: '#0f6e56', background: 'rgba(29,158,117,0.12)' }} title="SKUs da planilha .xlsx anexada na tarefa — lista explícita e imutável da campanha.">
-                  📄 lista da planilha
-                </span>
-              </div>
-            )}
             {a.result.basis === 'collection' && (
               <div className="mt-1">
                 {a.result.frozen ? (

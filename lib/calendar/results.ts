@@ -42,7 +42,7 @@ export interface ActionResult {
   gmv: number;
   units: number;
   orders: number;
-  basis: 'sku' | 'collection' | 'tag' | 'sitewide' | 'attachment';
+  basis: 'sku' | 'collection' | 'tag' | 'sitewide';
   skuCount: number;          // nº de SKUs-mãe (produtos) considerados (0 quando basis=sitewide)
   tag?: string;              // tag de produto usada quando basis=tag (ex.: DROP_17.06.26)
   spend: number;             // total investido (ads Meta cujo nome casa os SKUs)
@@ -401,7 +401,7 @@ export async function getActionResult(
   market: Market,
   start: string,
   end: string,
-  link: { skus: string[]; collectionId: string | null; dropTag?: string | null; sitewide?: boolean; attachmentSkus?: string[] }
+  link: { skus: string[]; collectionId: string | null; dropTag?: string | null; sitewide?: boolean }
 ): Promise<ActionResult | null> {
   // Campanha SITE INTEIRO: mede vendas DTC de todo o site na janela + spend total de mídia (ROAS).
   if (link.sitewide) {
@@ -414,20 +414,21 @@ export async function getActionResult(
       window: { start, end },
     };
   }
-  let basis: 'sku' | 'collection' | 'tag' | 'attachment';
+  let basis: 'sku' | 'collection' | 'tag';
   let rawSkus: string[];
   let tag: string | undefined;
   let frozen: boolean | undefined;
-  if (link.attachmentSkus && link.attachmentSkus.length) {
-    // Planilha .xlsx anexada na tarefa: lista explícita e imutável de SKUs da campanha. Tem
-    // prioridade sobre Collection ID (que é mutável) — é a fonte mais confiável de membership.
-    basis = 'attachment';
-    rawSkus = link.attachmentSkus;
+  if (link.skus.length) {
+    // Cassia 2026-06-29: SKUs do campo "SKUs" do Asana são a fonte explícita e imutável da campanha
+    // e têm PRIORIDADE sobre Collection ID (mutável). Decisão da Cássia: "sempre vou inserir os skus
+    // no campo de sku" — assim a lista preenchida na tarefa manda, não a composição da coleção.
+    basis = 'sku';
+    rawSkus = link.skus;
   } else if (link.collectionId) {
     basis = 'collection';
-    // Cassia 2026-06-29: composição da collection NA JANELA da campanha (congelada no BQ pelo cron),
-    // não a de hoje — uma collection editada depois mudaria os SKUs medidos. Sem snapshot p/ a janela
-    // (campanha antiga), cai no membership ATUAL e marca frozen=false para a UI sinalizar.
+    // Fallback quando não há SKUs manuais: composição da collection NA JANELA da campanha (congelada
+    // no KV pelo cron), não a de hoje — collection editada depois mudaria os SKUs medidos. Sem snapshot
+    // p/ a janela (campanha antiga), cai no membership ATUAL e marca frozen=false para a UI sinalizar.
     const frozenSkus = await getFrozenCollectionSkus(market, link.collectionId, end).catch(() => [] as string[]);
     if (frozenSkus.length) {
       rawSkus = frozenSkus;
@@ -436,9 +437,6 @@ export async function getActionResult(
       rawSkus = await collectionSkus(market, link.collectionId);
       frozen = false;
     }
-  } else if (link.skus.length) {
-    basis = 'sku';
-    rawSkus = link.skus;
   } else if (link.dropTag) {
     basis = 'tag';
     tag = link.dropTag;

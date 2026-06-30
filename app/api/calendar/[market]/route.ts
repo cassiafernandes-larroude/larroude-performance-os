@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getMacroCalendar, getAttachmentSkus, asanaConfigured, type Market, type CalendarAction } from '@/lib/calendar/asana';
+import { getMacroCalendar, asanaConfigured, type Market, type CalendarAction } from '@/lib/calendar/asana';
 import { getActionResult, actionWindow, type ActionResult } from '@/lib/calendar/results';
 import { memo } from '@/lib/ltv-dashboard/memo-cache';
 
@@ -30,22 +30,13 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
       // Resultado só para ações COM vínculo e cuja janela já começou (mensurável).
       const enriched = await Promise.all(mine.map(async (a) => {
         const win = actionWindow(a.startOn, a.dueOn);
-        const inWindow = !!win && win.start <= today;
-        const hasBaseLink = a.collectionId != null || a.skus.length > 0 || a.dropTag != null;
-        // SKUs explícitos via planilha .xlsx anexada (só em ações de campanha na janela; cacheado por
-        // tarefa). Tem prioridade sobre Collection ID no getActionResult.
-        const campaignish = a.category.some((c) => /campanh|sale|drop|collab|pre-?order/i.test(c)) || /sale|campaign|drop/i.test(a.title);
-        let attachmentSkus: string[] = [];
-        if (inWindow && !a.sitewide && (hasBaseLink || campaignish)) {
-          attachmentSkus = await getAttachmentSkus(a.gid).catch(() => []);
-        }
-        const hasLink = a.sitewide || hasBaseLink || attachmentSkus.length > 0;
+        const hasLink = a.sitewide || a.collectionId != null || a.skus.length > 0 || a.dropTag != null;
         let result: ActionResult | null = null;
         let resultError: string | null = null;
         let status: 'no_link' | 'pending' | 'measured' = hasLink ? 'pending' : 'no_link';
-        if (hasLink && inWindow) {
+        if (hasLink && win && win.start <= today) {
           try {
-            result = await getActionResult(market, win!.start, win!.end, { skus: a.skus, collectionId: a.collectionId, dropTag: a.dropTag, sitewide: a.sitewide, attachmentSkus });
+            result = await getActionResult(market, win.start, win.end, { skus: a.skus, collectionId: a.collectionId, dropTag: a.dropTag, sitewide: a.sitewide });
             status = 'measured';
           } catch (e: any) {
             resultError = e?.message ? String(e.message).slice(0, 160) : 'erro';
