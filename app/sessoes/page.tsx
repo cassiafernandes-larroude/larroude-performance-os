@@ -53,7 +53,6 @@ export default function SessoesPage() {
   }, [market, period, applied]);
 
   const sessionPts: BarPoint[] = useMemo(() => (data?.series || []).map((p) => ({ date: p.date, value: p.sessions, color: '#5d4ec5' })), [data]);
-  const convPts: BarPoint[] = useMemo(() => (data?.series || []).map((p) => ({ date: p.date, value: Number(p.convRate.toFixed(2)), color: '#16A34A' })), [data]);
 
   function applyDates() {
     if (/^\d{4}-\d{2}-\d{2}$/.test(draftStart) && /^\d{4}-\d{2}-\d{2}$/.test(draftEnd)) setApplied({ start: draftStart, end: draftEnd });
@@ -97,24 +96,12 @@ export default function SessoesPage() {
           {/* 1) Visão geral */}
           <section>
             <SectionTitle>🌐 Visão geral</SectionTitle>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
               <Kpi label="Sessões" value={fmtN(t.sessions)} accent="#5d4ec5" />
               <Kpi label="Conversão" value={fmtP(t.convRate, 2)} accent="#16A34A" />
               <Kpi label="Bounce rate" value={fmtP(t.bounceRate)} accent="#dc2626" />
-              <Kpi label="Add-to-cart" value={fmtP(t.cartRate)} accent="#E8722A" />
-              <Kpi label="Chegou ao checkout" value={fmtP(t.checkoutRate)} accent="#3b82f6" />
             </div>
-            <div className="grid lg:grid-cols-2 gap-4">
-              <ChartCard title="Sessões ao longo do tempo"><BarLineChart title="" data={sessionPts} color="#5d4ec5" unit="number" market={market} height={220} bare /></ChartCard>
-              <ChartCard title="Taxa de conversão (%)"><BarLineChart title="" data={convPts} color="#16A34A" unit="percent" market={market} height={220} bare /></ChartCard>
-            </div>
-            {/* Funil */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
-              <FunnelStep label="Sessões" value={t.sessions} pct={100} color="#5d4ec5" />
-              <FunnelStep label="Add-to-cart" value={t.cart} pct={t.cartRate} color="#E8722A" />
-              <FunnelStep label="Checkout" value={t.checkout} pct={t.checkoutRate} color="#3b82f6" />
-              <FunnelStep label="Pedido" value={t.completed} pct={t.convRate} color="#16A34A" />
-            </div>
+            <ChartCard title="Sessões ao longo do tempo"><BarLineChart title="" data={sessionPts} color="#5d4ec5" unit="number" market={market} height={240} bare /></ChartCard>
           </section>
 
           {/* 2) Sessões por página */}
@@ -183,15 +170,6 @@ function ChartCard({ title, children }: { title: string; children: React.ReactNo
     <div className="rounded-2xl p-4" style={{ background: '#fff', border: '0.8px solid #e5e3de' }}>
       <div className="text-[12px] font-semibold uppercase tracking-wide mb-2" style={{ color: '#6b7280' }}>{title}</div>
       {children}
-    </div>
-  );
-}
-function FunnelStep({ label, value, pct, color }: { label: string; value: number; pct: number; color: string }) {
-  return (
-    <div className="rounded-xl p-3" style={{ background: '#fff', border: '1px solid #ece9e2', borderTop: `3px solid ${color}` }}>
-      <div className="text-[11px] font-semibold" style={{ color: '#6b7280' }}>{label}</div>
-      <div className="font-num text-[20px] font-bold" style={{ color: '#1A1A1A' }}>{fmtN(value)}</div>
-      <div className="text-[11px]" style={{ color }}>{fmtP(pct, pct < 10 ? 2 : 1)}</div>
     </div>
   );
 }
