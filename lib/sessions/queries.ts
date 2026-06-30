@@ -62,6 +62,60 @@ export async function getLandingPages(market: Market, since: string, until: stri
     .filter((r) => r.path);
 }
 
+// Cassia 2026-06-30: classifica a atribuição de sessão do ShopifyQL (utm_source/medium + referrer)
+// nos canais do negócio (mesma taxonomia do spend). attentive/shopmy só US; agent.shop só BR.
+// Valores reais descobertos por probe (2026-06-30): meta=meta/ig/facebook/Instagram_*/an/threads;
+// google ads=utm_source google; klaviyo=Klaviyo ou medium email/flow; awin=awin/medium affiliate.
+export type SessionChannel = 'meta' | 'google ads' | 'orgânico' | 'klaviyo' | 'direto' | 'attentive' | 'criteo' | 'shopmy' | 'awin' | 'agent.shop' | 'outros';
+
+export function classifySessionChannel(usRaw: any, umRaw: any, rsRaw: any, market: Market): SessionChannel {
+  const us = String(usRaw ?? '').toLowerCase().trim();
+  const um = String(umRaw ?? '').toLowerCase().trim();
+  const rs = String(rsRaw ?? '').toLowerCase().trim();
+  if (us === 'klaviyo' || um === 'email' || um === 'flow' || um === 'newsletter') return 'klaviyo';
+  if (us.includes('criteo')) return 'criteo';
+  if (market === 'BR' && us.includes('agent')) return 'agent.shop';
+  if (market === 'US' && us.includes('shopmy')) return 'shopmy';
+  if (market === 'US' && (us === 'attentive' || um === 'sms' || um === 'text')) return 'attentive';
+  if (us.includes('awin') || um === 'affiliate' || um === 'afilliate') return 'awin';
+  if (us.includes('meta') || us.includes('facebook') || us.startsWith('ig') || us.includes('instagram') || us === 'an' || us.includes('threads')) return 'meta';
+  if (us === 'google') return 'google ads';
+  if (!us) {
+    if (rs === 'direct') return 'direto';
+    if (rs === 'search' || rs === 'social' || um === 'organic') return 'orgânico';
+    return 'outros';
+  }
+  if (um === 'organic') return 'orgânico';
+  return 'outros';
+}
+
+const CHANNEL_ORDER: Record<Market, SessionChannel[]> = {
+  US: ['meta', 'google ads', 'orgânico', 'klaviyo', 'direto', 'attentive', 'criteo', 'shopmy', 'awin'],
+  BR: ['meta', 'google ads', 'orgânico', 'klaviyo', 'direto', 'criteo', 'awin', 'agent.shop'],
+};
+
+export interface ChannelShareRow { channel: SessionChannel; sessions: number; share: number; convRate: number; }
+export async function getSessionChannelShare(market: Market, since: string, until: string): Promise<{ total: number; channels: ChannelShareRow[] }> {
+  const { rows, error } = await runShopifyQL(market, `FROM sessions SHOW ${COLS} GROUP BY utm_source, utm_medium, referrer_source SINCE ${since} UNTIL ${until} LIMIT 5000`, 'unstable');
+  if (error) throw new Error('ShopifyQL sessions channel share: ' + error);
+  const agg = new Map<SessionChannel, { sessions: number; completed: number }>();
+  let total = 0;
+  for (const r of rows) {
+    const m = pack(r);
+    const ch = classifySessionChannel((r as any).utm_source, (r as any).utm_medium, (r as any).referrer_source, market);
+    const e = agg.get(ch) || { sessions: 0, completed: 0 };
+    e.sessions += m.sessions; e.completed += m.completed; agg.set(ch, e);
+    total += m.sessions;
+  }
+  const mk = (ch: SessionChannel): ChannelShareRow => {
+    const e = agg.get(ch) || { sessions: 0, completed: 0 };
+    return { channel: ch, sessions: e.sessions, share: total ? (e.sessions / total) * 100 : 0, convRate: e.sessions ? (e.completed / e.sessions) * 100 : 0 };
+  };
+  const channels = CHANNEL_ORDER[market].map(mk);
+  if (agg.get('outros')) channels.push(mk('outros'));
+  return { total, channels };
+}
+
 export interface DimRow { key: string; sessions: number; completed: number; convRate: number; }
 export async function getSessionsByDimension(market: Market, since: string, until: string, dim: 'referrer_source' | 'referrer_name' | 'utm_source'): Promise<DimRow[]> {
   const { rows, error } = await runShopifyQL(market, `FROM sessions SHOW ${COLS} GROUP BY ${dim} SINCE ${since} UNTIL ${until} LIMIT 200`, 'unstable');

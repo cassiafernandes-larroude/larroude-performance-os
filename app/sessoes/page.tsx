@@ -13,11 +13,13 @@ const PRESETS: Period[] = ['7d', '14d', '28d', '3M', '6M', '12M'];
 interface Metrics { sessions: number; cart: number; checkout: number; completed: number; bounceRate: number; cartRate: number; checkoutRate: number; convRate: number; }
 interface AggRow { key: string; sessions: number; cart: number; checkout: number; completed: number; bounceRate: number; cartRate: number; checkoutRate: number; convRate: number; }
 interface DimRow { key: string; sessions: number; completed: number; convRate: number; }
+interface ChannelRow { channel: string; sessions: number; share: number; convRate: number; }
 interface Bundle {
   market: Market; start: string; end: string; gran: string;
   totals: Metrics; series: { date: string; sessions: number; completed: number; convRate: number }[];
-  byType: AggRow[]; byCollection: AggRow[]; topPages: AggRow[];
-  byChannel: DimRow[]; byReferrer: DimRow[]; byUtm: DimRow[];
+  byType: AggRow[]; byCollection: AggRow[]; allPages: AggRow[];
+  channelShare: { total: number; channels: ChannelRow[] };
+  byReferrer: DimRow[]; byUtm: DimRow[];
 }
 
 const fmtN = (v: number) => (v || 0).toLocaleString('pt-BR');
@@ -35,10 +37,12 @@ export default function SessoesPage() {
   const [data, setData] = useState<Bundle | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [pageNum, setPageNum] = useState(1); // paginação da tabela "Sessões por página"
+  const PER_PAGE = 25;
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true); setErr(null);
+    setLoading(true); setErr(null); setPageNum(1);
     const qs = new URLSearchParams();
     if (applied) { qs.set('start', applied.start); qs.set('end', applied.end); } else { qs.set('period', period); }
     fetch(`/api/sessions/${market}?${qs}`, { cache: 'no-store' })
@@ -113,9 +117,9 @@ export default function SessoesPage() {
             </div>
           </section>
 
-          {/* 2) Por página */}
+          {/* 2) Sessões por página */}
           <section>
-            <SectionTitle>📄 Por página</SectionTitle>
+            <SectionTitle>📄 Sessões por página</SectionTitle>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
               {data.byType.map((r) => (
                 <div key={r.key} className="rounded-xl p-3" style={{ background: '#fff', border: '1px solid #ece9e2' }}>
@@ -125,7 +129,15 @@ export default function SessoesPage() {
                 </div>
               ))}
             </div>
-            <Table title="Top páginas por sessões" rows={data.topPages} keyLabel="Página" />
+            {(() => {
+              const slice = data.allPages.slice((pageNum - 1) * PER_PAGE, pageNum * PER_PAGE);
+              return (
+                <>
+                  <Table title={`Todas as páginas com sessões · ${fmtN(data.allPages.length)} páginas`} rows={slice} keyLabel="Página" />
+                  <Pager page={pageNum} total={data.allPages.length} perPage={PER_PAGE} onChange={setPageNum} />
+                </>
+              );
+            })()}
           </section>
 
           {/* 3) Por coleção */}
@@ -136,13 +148,13 @@ export default function SessoesPage() {
               : <Table title="Coleções por sessões (landing em /collections/)" rows={data.byCollection} keyLabel="Coleção" />}
           </section>
 
-          {/* 4) Por canal / fonte */}
+          {/* 4) Share de sessões por canal */}
           <section>
-            <SectionTitle>📡 Por canal / fonte</SectionTitle>
-            <div className="grid lg:grid-cols-3 gap-4">
-              <DimTable title="Canal (referrer source)" rows={data.byChannel} />
-              <DimTable title="Origem (referrer name)" rows={data.byReferrer} />
-              <DimTable title="UTM source" rows={data.byUtm} />
+            <SectionTitle>📡 Share de sessões por canal</SectionTitle>
+            <ChannelShare data={data.channelShare} />
+            <div className="grid lg:grid-cols-2 gap-4 mt-4">
+              <DimTable title="Origem bruta (referrer name)" rows={data.byReferrer} />
+              <DimTable title="UTM source (bruto)" rows={data.byUtm} />
             </div>
           </section>
 
@@ -216,6 +228,44 @@ function Table({ title, rows, keyLabel }: { title: string; rows: AggRow[]; keyLa
     </div>
   );
 }
+function Pager({ page, total, perPage, onChange }: { page: number; total: number; perPage: number; onChange: (p: number) => void }) {
+  const last = Math.max(1, Math.ceil(total / perPage));
+  if (last <= 1) return null;
+  const btn = (disabled: boolean): React.CSSProperties => ({ border: '1px solid #e5e3de', background: '#fff', borderRadius: 8, padding: '4px 12px', opacity: disabled ? 0.4 : 1, cursor: disabled ? 'default' : 'pointer' });
+  return (
+    <div className="flex items-center justify-center gap-3 mt-3 text-[13px]">
+      <button disabled={page <= 1} onClick={() => onChange(page - 1)} style={btn(page <= 1)}>‹ Anterior</button>
+      <span style={{ color: '#6b7280' }}>Página <b>{page}</b> de <b>{last}</b> · {fmtN(total)} páginas</span>
+      <button disabled={page >= last} onClick={() => onChange(page + 1)} style={btn(page >= last)}>Próxima ›</button>
+    </div>
+  );
+}
+
+const CH_COLOR: Record<string, string> = { meta: '#1877F2', 'google ads': '#EA4335', 'orgânico': '#16A34A', klaviyo: '#5d4ec5', direto: '#6b7280', attentive: '#A855F7', criteo: '#F59E0B', shopmy: '#EC4899', awin: '#0EA5E9', 'agent.shop': '#14B8A6', outros: '#9ca3af' };
+function ChannelShare({ data }: { data: { total: number; channels: ChannelRow[] } }) {
+  return (
+    <div className="rounded-2xl p-4" style={{ background: '#fff', border: '0.8px solid #e5e3de' }}>
+      <div className="text-[12px] font-semibold uppercase tracking-wide mb-3" style={{ color: '#6b7280' }}>Participação por canal · {fmtN(data.total)} sessões</div>
+      <div className="space-y-2">
+        {data.channels.map((c) => {
+          const col = CH_COLOR[c.channel] || '#9ca3af';
+          return (
+            <div key={c.channel} className="flex items-center gap-3">
+              <div style={{ width: 92, fontSize: 12, fontWeight: 600, color: '#1A1A1A', textTransform: 'capitalize' }}>{c.channel}</div>
+              <div style={{ flex: 1, height: 18, borderRadius: 4, background: '#f1efe8' }}>
+                <div style={{ height: 18, borderRadius: 4, width: `${Math.min(100, c.share)}%`, background: col, minWidth: c.share > 0 ? 4 : 0 }} />
+              </div>
+              <div className="font-num" style={{ width: 56, textAlign: 'right', fontSize: 13, fontWeight: 700, color: col }}>{fmtP(c.share, 1)}</div>
+              <div className="font-num" style={{ width: 90, textAlign: 'right', fontSize: 12, color: '#6b7280' }}>{fmtN(c.sessions)}</div>
+              <div className="font-num" style={{ width: 78, textAlign: 'right', fontSize: 12, color: '#16A34A' }}>conv {fmtP(c.convRate, 2)}</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function DimTable({ title, rows }: { title: string; rows: DimRow[] }) {
   const max = Math.max(...rows.map((r) => r.sessions), 1);
   return (

@@ -3,7 +3,7 @@
 // referrer_name e utm_source.
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  getSessionTotals, getSessionSeries, getLandingPages, getSessionsByDimension,
+  getSessionTotals, getSessionSeries, getLandingPages, getSessionsByDimension, getSessionChannelShare,
   type Market, type Gran, type PageRow,
 } from '@/lib/sessions/queries';
 import { memo, TTL_30M } from '@/lib/ltv-dashboard/memo-cache';
@@ -69,21 +69,21 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
   const { start, end, gran } = resolveRange(req.nextUrl.searchParams);
 
   try {
-    const data = await memo(`sessions:${market}:${start}:${end}:${gran}:v1`, TTL_30M, async () => {
-      const [totals, series, pages, byChannel, byReferrer, byUtm] = await Promise.all([
+    const data = await memo(`sessions:${market}:${start}:${end}:${gran}:v2`, TTL_30M, async () => {
+      const [totals, series, pages, channelShare, byReferrer, byUtm] = await Promise.all([
         getSessionTotals(market, start, end),
         getSessionSeries(market, start, end, gran),
         getLandingPages(market, start, end),
-        getSessionsByDimension(market, start, end, 'referrer_source'),
+        getSessionChannelShare(market, start, end),
         getSessionsByDimension(market, start, end, 'referrer_name'),
         getSessionsByDimension(market, start, end, 'utm_source'),
       ]);
 
       const byType = aggregate(pages, (p) => pageType(p.path));
       const byCollection = aggregate(pages, (p) => collectionHandle(p.path)).slice(0, 50);
-      const topPages = aggregate(pages, (p) => p.path).slice(0, 50);
+      const allPages = aggregate(pages, (p) => p.path); // TODAS as páginas com sessões (paginadas no client, 25/pág)
 
-      return { market, start, end, gran, totals, series, byType, byCollection, topPages, byChannel, byReferrer: byReferrer.slice(0, 30), byUtm: byUtm.slice(0, 30) };
+      return { market, start, end, gran, totals, series, byType, byCollection, allPages, channelShare, byReferrer: byReferrer.slice(0, 30), byUtm: byUtm.slice(0, 30) };
     });
 
     return NextResponse.json(data, { headers: { 'Cache-Control': 'public, max-age=0, s-maxage=300, stale-while-revalidate=1800' } });
