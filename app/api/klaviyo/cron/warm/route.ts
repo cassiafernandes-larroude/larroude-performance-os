@@ -1,11 +1,12 @@
 // Pre-warming cron: aquece os caches do Klaviyo CRM (unstable_cache 12h + stale-while-revalidate).
-// Cassia 2026-06-29: 2 correções —
-//   (1) BUG: as URLs eram `${base}/api/overview` (404). O certo é `${base}/api/klaviyo/overview`.
-//       O cron NUNCA aqueceu nada. Corrigido.
-//   (2) Ranges longos (3M/6M/12M) agora também são aquecidos. Os relatórios do Klaviyo demoram
-//       ~30-45s p/ 1 ano (a API devolve 429 até o relatório ficar pronto → backoff), então não cabe
-//       aguardar TODAS as combinações no budget de 60s. Aquecemos com prioridade (overview primeiro)
-//       e um deadline; uma vez que o cache é populado, o stale-while-revalidate serve instantâneo.
+// Cassia 2026-06-29:
+//   (1) BUG corrigido: as URLs eram `${base}/api/overview` (404) — o certo é `/api/klaviyo/overview`.
+//       O cron NUNCA aqueceu nada. Agora aponta certo.
+//   (2) Aquece também ranges longos (3M/6M/12M). Os relatórios do Klaviyo p/ 1 ano levam ~30-45s
+//       (a API devolve 429 até o relatório ficar pronto → backoff), então NÃO cabe aquecer todas as
+//       combinações em 60s. Usamos um CAP RÍGIDO de tempo: cada request é abortado no deadline, então
+//       o cron nunca estoura (FUNCTION_INVOCATION_TIMEOUT). Aquece o que couber (curtos + ~os primeiros
+//       longos, overview primeiro); o resto é coberto por stale-while-revalidate / tráfego orgânico.
 import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
@@ -13,25 +14,26 @@ export const maxDuration = 60;
 
 type Res = { label: string; status: number; ms: number; error?: string };
 
-async function hit(base: string, path: string, label: string): Promise<Res> {
+// Aborta no deadline (limite rígido) — garante que o cron termine antes dos 60s da função.
+async function hit(base: string, path: string, label: string, deadline: number): Promise<Res> {
   const start = Date.now();
+  const remaining = deadline - start;
+  if (remaining <= 500) return { label, status: -2, ms: 0, error: 'skip(no-budget)' };
+  const ctrl = new AbortController();
+  const to = setTimeout(() => ctrl.abort(), remaining);
   try {
-    const r = await fetch(`${base}${path}`, { cache: 'no-store' });
+    const r = await fetch(`${base}${path}`, { cache: 'no-store', signal: ctrl.signal });
+    clearTimeout(to);
     return { label, status: r.status, ms: Date.now() - start };
   } catch (e) {
-    return { label, status: 0, ms: Date.now() - start, error: (e as Error).message };
+    clearTimeout(to);
+    return { label, status: 0, ms: Date.now() - start, error: (e as Error).name };
   }
 }
 
-/** Roda os jobs em paralelo (pool) até a lista acabar OU o deadline passar. */
-async function runPool(jobs: (() => Promise<Res>)[], pool: number, deadline: number, out: Res[]) {
+async function runPool(jobs: (() => Promise<Res>)[], pool: number, out: Res[]) {
   let idx = 0;
-  const worker = async () => {
-    while (idx < jobs.length && Date.now() < deadline) {
-      const job = jobs[idx++];
-      out.push(await job());
-    }
-  };
+  const worker = async () => { while (idx < jobs.length) out.push(await jobs[idx++]()); };
   await Promise.all(Array.from({ length: pool }, worker));
 }
 
@@ -41,25 +43,25 @@ export async function GET(req: NextRequest) {
   const results: Res[] = [];
   const t0 = Date.now();
 
-  // FASE 1: ranges curtos (rápidos) — aquece com deadline ~26s.
-  const shortPeriods = ['L7D', 'L28D'];
-  const shortEndpoints = ['overview', 'campaigns', 'flows', 'segments', 'benchmarks', 'list-health', 'timing', 'insights', 'shopify-attribution'];
+  // FASE 1: ranges curtos (rápidos). Cap 24s. Ordem prioriza overview/campaigns/flows.
+  const shortDeadline = t0 + 24_000;
+  const shortEndpoints = ['overview', 'campaigns', 'flows', 'segments', 'benchmarks', 'shopify-attribution', 'list-health', 'timing', 'insights'];
   const shortJobs: (() => Promise<Res>)[] = [];
-  for (const market of markets)
-    for (const period of shortPeriods)
-      for (const e of shortEndpoints)
-        shortJobs.push(() => hit(base, `/${e}?market=${market}&period=${period}`, `${e} ${market} ${period}`));
-  await runPool(shortJobs, 6, t0 + 26_000, results);
+  for (const period of ['L7D', 'L28D'])
+    for (const e of shortEndpoints)
+      for (const market of markets)
+        shortJobs.push(() => hit(base, `/${e}?market=${market}&period=${period}`, `${e} ${market} ${period}`, shortDeadline));
+  await runPool(shortJobs, 6, results);
 
-  // FASE 2: ranges longos — overview primeiro (aba padrão), depois o resto. Deadline ~56s total.
-  const longPeriods = ['3M', '6M', '12M'];
+  // FASE 2: ranges longos. Cap rígido 54s. overview primeiro (aba padrão).
+  const longDeadline = t0 + 54_000;
   const longEndpoints = ['overview', 'campaigns', 'segments', 'benchmarks', 'timing', 'insights'];
   const longJobs: (() => Promise<Res>)[] = [];
   for (const e of longEndpoints)
-    for (const period of longPeriods)
+    for (const period of ['3M', '6M', '12M'])
       for (const market of markets)
-        longJobs.push(() => hit(base, `/${e}?market=${market}&period=${period}`, `${e} ${market} ${period}`));
-  await runPool(longJobs, 4, t0 + 56_000, results);
+        longJobs.push(() => hit(base, `/${e}?market=${market}&period=${period}`, `${e} ${market} ${period}`, longDeadline));
+  await runPool(longJobs, 4, results);
 
   const ok = results.filter(r => r.status === 200).length;
   return NextResponse.json({ generatedAt: new Date().toISOString(), elapsedMs: Date.now() - t0, ok, total: results.length, results });
