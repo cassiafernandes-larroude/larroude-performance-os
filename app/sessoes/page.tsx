@@ -237,23 +237,27 @@ function ChannelShare({ data }: { data: { total: number; channels: ChannelRow[] 
 
 const CH_SHORT: Record<string, string> = { 'Meta Ads': 'Meta', 'Google Ads': 'Google', 'Orgânico': 'Orgân.', 'Klaviyo Email': 'Klaviyo', 'Direto': 'Direto', 'SMS Attentive': 'SMS', 'Criteo': 'Criteo', 'ShopMy': 'ShopMy', 'Awin Affiliate': 'Awin', 'Agent.shop': 'Agent' };
 
-// Sinaliza oportunidade por página: tráfego relevante + conversão abaixo da média do site (ou bounce
-// muito alto) = oportunidade de otimização; na média/acima = OK; pouco tráfego = baixo volume.
-function oppTag(sessions: number, convRate: number, bounceRate: number, avgConv: number, minSess: number) {
-  if (sessions < minSess) return { label: 'Baixo volume', color: '#6b7280', bg: '#f1efe8' };
-  const lowConv = convRate < avgConv;
-  const highBounce = bounceRate >= 75;
-  if (convRate < avgConv * 0.6 || (lowConv && highBounce)) return { label: '🔴 Oportunidade', color: '#b91c1c', bg: '#fde2e0' };
-  if (lowConv) return { label: '🟠 Oportunidade', color: '#b45309', bg: '#fdebcf' };
-  return { label: '🟢 OK', color: '#0f6e56', bg: '#dcf3ea' };
+// Oportunidade = página que CONVERTE BEM (>= média do site) mas tem POUCAS sessões → vale impulsionar
+// nos canais p/ trazer mais tráfego. "Já escala" = boa conversão + muito tráfego. "Baixa conv." =
+// abaixo da média. "Pouco sinal" = sessões insuficientes p/ confiar na conversão.
+function oppTag(sessions: number, convRate: number, avgConv: number, minSignal: number, fewCeiling: number) {
+  if (sessions < minSignal) return { label: '⚪ Pouco sinal', color: '#6b7280', bg: '#f1efe8' };
+  const goodConv = avgConv > 0 && convRate >= avgConv;
+  if (goodConv && sessions < fewCeiling) {
+    const strong = convRate >= avgConv * 2;
+    return { label: strong ? '🟢 Oportunidade ⤴' : '🟢 Oportunidade', color: '#0f6e56', bg: '#dcf3ea' };
+  }
+  if (goodConv) return { label: '🔵 Já escala', color: '#1e40af', bg: '#e0e7ff' };
+  return { label: '🟠 Baixa conv.', color: '#b45309', bg: '#fdebcf' };
 }
 
 function PagesChannelTable({ rows, channelOrder, total, avgConv, totalSessions }: { rows: PageChannelRow[]; channelOrder: string[]; total: number; avgConv: number; totalSessions: number }) {
-  const minSess = Math.max(50, Math.round(totalSessions * 0.0005)); // tráfego "relevante" p/ valer otimizar
+  const minSignal = Math.max(30, Math.round(totalSessions * 0.00005)); // mínimo p/ confiar na conversão
+  const fewCeiling = Math.max(300, Math.round(totalSessions * 0.0005)); // teto de "poucas sessões" (espaço p/ crescer)
   return (
     <div className="rounded-2xl p-4" style={{ background: '#fff', border: '0.8px solid #e5e3de' }}>
       <div className="text-[12px] font-semibold uppercase tracking-wide mb-1" style={{ color: '#6b7280' }}>Todas as páginas com sessões · {fmtN(total)} páginas · share por canal</div>
-      <div className="text-[11px] mb-2" style={{ color: '#9ca3af' }}>Oportunidade = ≥ {fmtN(minSess)} sessões e conversão abaixo da média do site ({fmtP(avgConv, 2)}) — 🔴 muito abaixo, 🟠 abaixo. 🟢 OK = na média ou acima. Baixo volume = poucas sessões.</div>
+      <div className="text-[11px] mb-2" style={{ color: '#9ca3af' }}>🟢 Oportunidade = converte bem (≥ média {fmtP(avgConv, 2)}) com poucas sessões ({fmtN(minSignal)}–{fmtN(fewCeiling)}) → impulsionar nos canais (⤴ = ≥ 2× a média). 🔵 Já escala = boa conversão + muito tráfego. 🟠 Baixa conv. = abaixo da média. ⚪ Pouco sinal = poucas sessões p/ confiar.</div>
       <div className="overflow-x-auto">
         <table style={{ borderCollapse: 'collapse', fontSize: 12, minWidth: 1020 }}>
           <thead>
@@ -268,7 +272,7 @@ function PagesChannelTable({ rows, channelOrder, total, avgConv, totalSessions }
           </thead>
           <tbody>
             {rows.map((r) => {
-              const tag = oppTag(r.sessions, r.convRate, r.bounceRate, avgConv, minSess);
+              const tag = oppTag(r.sessions, r.convRate, avgConv, minSignal, fewCeiling);
               return (
                 <tr key={r.path} style={{ borderTop: '1px solid #f1efe8' }}>
                   <td style={{ padding: '6px 8px', maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.path}>{r.path}</td>
