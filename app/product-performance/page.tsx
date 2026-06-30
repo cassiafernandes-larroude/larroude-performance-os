@@ -6,7 +6,7 @@
 // filtro de período igual ao Dashboard Principal e visão CONSOLIDADA (BR+US em US$).
 // Fontes: /api/product-performance/[market|all] (+/today) + /api/unit-economics/[market]/timeseries.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import BarLineChart, { type BarPoint } from '@/components/shared/BarLineChart';
 import MultiLineChart, { type Series } from '@/components/klaviyo/MultiLineChart';
 import { FULFILLMENT_CATEGORY_GROUPS, type FulfillmentCategory } from '@/lib/shared/fulfillment-category';
@@ -51,6 +51,7 @@ interface ProductRow {
   materials: string[]; colors: string[]; collab: string | null; drop: string | null;
   fisico: number | null; remessa: number | null; d2d: number | null;
 }
+interface VariantStockRow { sku: string; size: string | null; fisico: number; remessa: number; d2d: number }
 type CatKey = 'all' | 'collab' | 'b2b' | 'tenis' | 'bolsas' | 'vestuario' | 'material' | 'cor';
 const CAT_TABS: { key: CatKey; label: string }[] = [
   { key: 'all', label: 'Todos' },
@@ -153,6 +154,20 @@ export default function ProductPerformancePage() {
   const [today, setToday] = useState<TodayData | null>(null);
   const [seriesBySku, setSeriesBySku] = useState<Record<string, SeriesPoint[]>>({});
   const [loadingSeries, setLoadingSeries] = useState(false);
+  // Modal de estoque por variante (tamanho) — abre ao clicar na linha "Estoque" do card.
+  const [stockModal, setStockModal] = useState<{ motherSku: string; name: string } | null>(null);
+  const [stockVariants, setStockVariants] = useState<VariantStockRow[] | null>(null);
+  const [stockLoading, setStockLoading] = useState(false);
+  const openStock = useCallback((p: ProductRow) => {
+    setStockModal({ motherSku: p.motherSku, name: p.name });
+    setStockVariants(null);
+    setStockLoading(true);
+    fetch(`/api/product-performance/${market}/stock/${encodeURIComponent(p.motherSku)}`, { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((j) => setStockVariants(Array.isArray(j.variants) ? j.variants : []))
+      .catch(() => setStockVariants([]))
+      .finally(() => setStockLoading(false));
+  }, [market]);
   const carouselRef = useRef<HTMLDivElement>(null);
   const scrollCarousel = (dir: -1 | 1) => carouselRef.current?.scrollBy({ left: dir * 640, behavior: 'smooth' });
 
@@ -388,8 +403,10 @@ export default function ProductPerformancePage() {
           <div className="mt-1" style={{ fontSize: 10.5, fontWeight: 600, color: up ? '#16A34A' : '#dc2626' }}>{up ? '↑' : '↓'} {deltaPct}% vs período ant.</div>
           <div className="mt-1 inline-block px-1.5 py-0.5 rounded" style={{ fontSize: 9.5, color: '#7c3aed', background: '#f3effc' }}>{shareTotal.toFixed(1)}% do total</div>
           {(p.fisico != null || p.remessa != null || p.d2d != null) && (
-            <div className="mt-2 pt-2" style={{ borderTop: '1px dashed #ece9e2' }}>
-              <div style={{ fontSize: 8.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#9ca3af', marginBottom: 2 }}>Estoque</div>
+            <div className="mt-2 pt-2 rounded hover:bg-black/[0.03] transition-colors" style={{ borderTop: '1px dashed #ece9e2', cursor: 'pointer', margin: '8px -4px 0', padding: '8px 4px 0' }}
+              onClick={(e) => { e.stopPropagation(); openStock(p); }}
+              title="Ver estoque por tamanho">
+              <div style={{ fontSize: 8.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#9ca3af', marginBottom: 2 }}>Estoque · por tamanho ›</div>
               <div className="flex items-center gap-2 flex-wrap" style={{ fontSize: 10.5 }}>
                 <span title="Físico — armazém (US: RS + Ship Essential · BR: RS)" style={{ color: '#0f6e56', fontWeight: 600 }}>
                   Físico {p.fisico != null ? fmtNum(p.fisico) : '—'}
@@ -733,6 +750,56 @@ export default function ProductPerformancePage() {
         </div>
       </div>
       </>)}
+
+      {/* Modal: estoque por variante (tamanho) */}
+      {stockModal && (
+        <div onClick={() => setStockModal(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 520, maxHeight: '85vh', overflow: 'auto', boxShadow: '0 10px 40px rgba(0,0,0,0.2)' }}>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid #ece9e2', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: '#fff' }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 15, color: '#1A1A1A' }}>{stockModal.name}</div>
+                <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#9ca3af' }}>{stockModal.motherSku} · {market}</div>
+              </div>
+              <button onClick={() => setStockModal(null)} aria-label="Fechar" style={{ fontSize: 22, color: '#9ca3af', lineHeight: 1, background: 'none', border: 'none', cursor: 'pointer' }}>×</button>
+            </div>
+            <div style={{ padding: '12px 20px 20px' }}>
+              {stockLoading && <div style={{ color: '#6b7280', padding: '24px 0', textAlign: 'center' }}>Carregando estoque…</div>}
+              {!stockLoading && stockVariants && stockVariants.length === 0 && <div style={{ color: '#6b7280', padding: '24px 0', textAlign: 'center' }}>Sem variantes com estoque rastreado.</div>}
+              {!stockLoading && stockVariants && stockVariants.length > 0 && (
+                <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#9ca3af' }}>
+                      <th style={{ textAlign: 'left', padding: '6px 0' }}>Tamanho</th>
+                      <th style={{ textAlign: 'right' }}>Físico</th>
+                      <th style={{ textAlign: 'right' }}>Remessa</th>
+                      <th style={{ textAlign: 'right' }}>D2D</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stockVariants.map((v) => (
+                      <tr key={v.sku} style={{ borderTop: '1px solid #f1efe8' }}>
+                        <td style={{ textAlign: 'left', padding: '6px 0', fontWeight: 600, color: '#1A1A1A' }}>{v.size || v.sku}</td>
+                        <td style={{ textAlign: 'right', color: v.fisico < 0 ? '#dc2626' : '#0f6e56' }}>{fmtNum(v.fisico)}</td>
+                        <td style={{ textAlign: 'right', color: '#b45309' }}>{fmtNum(v.remessa)}</td>
+                        <td style={{ textAlign: 'right', color: '#6b7280' }}>{v.d2d >= 9999 ? '∞' : fmtNum(v.d2d)}</td>
+                      </tr>
+                    ))}
+                    <tr style={{ borderTop: '2px solid #ece9e2', fontWeight: 700 }}>
+                      <td style={{ textAlign: 'left', padding: '6px 0', color: '#1A1A1A' }}>Total</td>
+                      <td style={{ textAlign: 'right', color: '#0f6e56' }}>{fmtNum(stockVariants.reduce((s, v) => s + v.fisico, 0))}</td>
+                      <td style={{ textAlign: 'right', color: '#b45309' }}>{fmtNum(stockVariants.reduce((s, v) => s + v.remessa, 0))}</td>
+                      <td style={{ textAlign: 'right', color: '#6b7280' }}>{stockVariants.some((v) => v.d2d >= 9999) ? '∞' : fmtNum(stockVariants.reduce((s, v) => s + v.d2d, 0))}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              )}
+              <div style={{ fontSize: 10.5, color: '#9ca3af', marginTop: 14, lineHeight: 1.5 }}>
+                Físico = armazém (US: RS + Ship Essential · BR: RS) · Remessa = lote em produção (Senda) · D2D = produção sob demanda (Possibility; ∞ = ilimitado)
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </main>
   );
