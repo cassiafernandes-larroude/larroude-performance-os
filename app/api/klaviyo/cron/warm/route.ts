@@ -8,6 +8,7 @@
 //       o cron nunca estoura (FUNCTION_INVOCATION_TIMEOUT). Aquece o que couber (curtos + ~os primeiros
 //       longos, overview primeiro); o resto é coberto por stale-while-revalidate / tráfego orgânico.
 import { NextRequest, NextResponse } from 'next/server';
+import { KLAVIYO_CACHE_V } from '@/lib/klaviyo/cache-version';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
@@ -50,7 +51,7 @@ export async function GET(req: NextRequest) {
   for (const period of ['L7D', 'L28D'])
     for (const e of shortEndpoints)
       for (const market of markets)
-        shortJobs.push(() => hit(base, `/${e}?market=${market}&period=${period}`, `${e} ${market} ${period}`, shortDeadline));
+        shortJobs.push(() => hit(base, `/${e}?market=${market}&period=${period}&v=${KLAVIYO_CACHE_V}`, `${e} ${market} ${period}`, shortDeadline));
   await runPool(shortJobs, 6, results);
 
   // FASE 2: ranges longos. Cap rígido 114s (maxDuration 120). overview primeiro (aba padrão).
@@ -60,7 +61,7 @@ export async function GET(req: NextRequest) {
   for (const e of longEndpoints)
     for (const period of ['3M', '6M', '12M'])
       for (const market of markets)
-        longJobs.push(() => hit(base, `/${e}?market=${market}&period=${period}`, `${e} ${market} ${period}`, longDeadline));
+        longJobs.push(() => hit(base, `/${e}?market=${market}&period=${period}&v=${KLAVIYO_CACHE_V}`, `${e} ${market} ${period}`, longDeadline));
   await runPool(longJobs, 4, results);
 
   const ok = results.filter(r => r.status === 200).length;
