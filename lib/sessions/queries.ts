@@ -63,6 +63,27 @@ export async function getLandingPages(market: Market, since: string, until: stri
     .filter((r) => r.path);
 }
 
+// Cassia 2026-06-30: sessões + conversão por PÁGINA DE PRODUTO (/products/<handle>), enriquecido com
+// nome + SKUs (getPageMeta) — p/ o quadro de produtos na aba Performance de Produto. Agrega por handle
+// (variações de path com querystring somam juntas).
+export interface ProductSessionRow { handle: string; path: string; name: string; skus: string; sessions: number; completed: number; convRate: number; }
+export async function getProductPageSessions(market: Market, since: string, until: string): Promise<ProductSessionRow[]> {
+  const [pages, meta] = await Promise.all([getLandingPages(market, since, until), getPageMeta(market).catch(() => ({ products: new Map(), collections: new Map() } as PageMeta))]);
+  const byHandle = new Map<string, { sessions: number; completed: number }>();
+  for (const p of pages) {
+    if (!p.path.startsWith('/products/')) continue;
+    const handle = p.path.slice('/products/'.length).split(/[/?#]/)[0];
+    if (!handle) continue;
+    const e = byHandle.get(handle) || { sessions: 0, completed: 0 };
+    e.sessions += p.sessions; e.completed += p.completed;
+    byHandle.set(handle, e);
+  }
+  return [...byHandle.entries()].map(([handle, e]) => {
+    const m = meta.products.get(handle);
+    return { handle, path: `/products/${handle}`, name: m?.title || handle, skus: m?.skus || '', sessions: e.sessions, completed: e.completed, convRate: e.sessions ? (e.completed / e.sessions) * 100 : 0 };
+  }).sort((a, b) => b.sessions - a.sessions);
+}
+
 // Cassia 2026-06-30: classifica a atribuição de sessão do ShopifyQL nos canais do negócio, seguindo
 // AS MESMAS REGRAS da aba Channel Share (lib/shared/channel-utms.ts CHANNEL_UTM_PATTERNS +
 // channel-consolidation.ts). Pontos-chave: Meta = utm_source meta-ish COM mídia paga (ou token de

@@ -749,6 +749,8 @@ export default function ProductPerformancePage() {
           )}
         </div>
       </div>
+
+      <ProductSessionsTable market={market === 'BR' ? 'BR' : 'US'} rangeQS={rangeQS} />
       </>)}
 
       {/* Modal: estoque por variante (tamanho) */}
@@ -802,6 +804,105 @@ export default function ProductPerformancePage() {
       )}
 
     </main>
+  );
+}
+
+// ---------------- Sessões por página de produto (busca + 25/pág) ----------------
+interface PSRow { handle: string; path: string; name: string; skus: string; sessions: number; convRate: number; }
+function ProductSessionsTable({ market, rangeQS }: { market: 'US' | 'BR'; rangeQS: string }) {
+  const [rows, setRows] = useState<PSRow[] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [q, setQ] = useState('');
+  const [pg, setPg] = useState(1);
+  const PER = 25;
+  const loc = market === 'BR' ? 'pt-BR' : 'en-US';
+
+  useEffect(() => {
+    let cancel = false;
+    setRows(null); setErr(null); setPg(1);
+    fetch(`/api/product-performance/${market}/product-sessions?${rangeQS}`, { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((j) => { if (cancel) return; if (j.error) throw new Error(j.detail || j.error); setRows(j.products || []); })
+      .catch((e) => { if (cancel) return; setErr(String(e?.message || e)); });
+    return () => { cancel = true; };
+  }, [market, rangeQS]);
+
+  useEffect(() => { setPg(1); }, [q]);
+
+  const filtered = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    if (!s) return rows || [];
+    return (rows || []).filter((r) => `${r.name} ${r.handle} ${r.skus}`.toLowerCase().includes(s));
+  }, [rows, q]);
+
+  const last = Math.max(1, Math.ceil(filtered.length / PER));
+  const page = Math.min(pg, last);
+  const slice = filtered.slice((page - 1) * PER, page * PER);
+  const fmtN = (v: number) => Math.round(v).toLocaleString(loc);
+  const convColor = (c: number) => (c >= 3 ? '#16A34A' : c >= 1.5 ? '#5d4ec5' : '#dc2626');
+
+  return (
+    <div className="card p-5 mt-4">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 12, marginBottom: 14 }}>
+        <div>
+          <h3 style={{ fontSize: 15, fontWeight: 700, color: '#1f2937', margin: 0 }}>SESSÕES POR PÁGINA DE PRODUTO</h3>
+          <div style={{ fontSize: 11.5, color: '#9ca3af', marginTop: 3 }}>Sessões e taxa de conversão de cada /products/… · fonte ShopifyQL</div>
+        </div>
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Buscar por nome ou SKU…"
+          style={{ fontSize: 13, padding: '8px 12px', border: '1px solid #e5e7eb', borderRadius: 8, minWidth: 240, outline: 'none' }}
+        />
+      </div>
+
+      {err && <div style={{ fontSize: 12.5, color: '#dc2626', padding: '8px 0' }}>Erro: {err}</div>}
+      {!rows && !err && <div style={{ fontSize: 13, color: '#9ca3af', padding: '20px 0' }}>Carregando…</div>}
+
+      {rows && !err && (
+        <>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ textAlign: 'left', color: '#6b7280', fontSize: 11, textTransform: 'uppercase', borderBottom: '1px solid #e5e7eb' }}>
+                  <th style={{ padding: '8px 10px 8px 0', width: 40 }}>#</th>
+                  <th style={{ padding: '8px 10px' }}>Produto</th>
+                  <th style={{ padding: '8px 10px', textAlign: 'right' }}>Sessões</th>
+                  <th style={{ padding: '8px 0 8px 10px', textAlign: 'right' }}>Conversão</th>
+                </tr>
+              </thead>
+              <tbody>
+                {slice.map((r, i) => (
+                  <tr key={r.handle} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                    <td style={{ padding: '9px 10px 9px 0', color: '#9ca3af', fontVariantNumeric: 'tabular-nums' }}>{(page - 1) * PER + i + 1}</td>
+                    <td style={{ padding: '9px 10px' }}>
+                      <div style={{ fontWeight: 600, color: '#1f2937' }}>{r.name}</div>
+                      <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 1 }}>{r.skus || r.handle}</div>
+                    </td>
+                    <td style={{ padding: '9px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#374151' }}>{fmtN(r.sessions)}</td>
+                    <td style={{ padding: '9px 0 9px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: convColor(r.convRate) }}>{r.convRate.toFixed(2)}%</td>
+                  </tr>
+                ))}
+                {slice.length === 0 && (
+                  <tr><td colSpan={4} style={{ padding: '20px 0', textAlign: 'center', color: '#9ca3af', fontSize: 12.5 }}>Nenhum produto encontrado.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, fontSize: 12.5, color: '#6b7280' }}>
+            <span>{filtered.length.toLocaleString(loc)} produto(s)</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button onClick={() => setPg((p) => Math.max(1, p - 1))} disabled={page <= 1}
+                style={{ padding: '5px 10px', border: '1px solid #e5e7eb', borderRadius: 6, background: '#fff', cursor: page <= 1 ? 'default' : 'pointer', opacity: page <= 1 ? 0.4 : 1 }}>‹</button>
+              <span style={{ fontVariantNumeric: 'tabular-nums' }}>{page} / {last}</span>
+              <button onClick={() => setPg((p) => Math.min(last, p + 1))} disabled={page >= last}
+                style={{ padding: '5px 10px', border: '1px solid #e5e7eb', borderRadius: 6, background: '#fff', cursor: page >= last ? 'default' : 'pointer', opacity: page >= last ? 0.4 : 1 }}>›</button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 

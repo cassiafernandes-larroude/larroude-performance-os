@@ -41,6 +41,8 @@ export default function SessoesPage() {
   const [pageNum, setPageNum] = useState(1); // paginação da tabela "Sessões por página"
   const [search, setSearch] = useState('');
   const [oppFilter, setOppFilter] = useState<'all' | OppCat>('all');
+  const [collSearch, setCollSearch] = useState('');
+  const [collOppFilter, setCollOppFilter] = useState<'all' | OppCat>('all');
   const PER_PAGE = 25;
   useEffect(() => { setPageNum(1); }, [search, oppFilter]);
 
@@ -71,6 +73,20 @@ export default function SessoesPage() {
       return true;
     });
   }, [data, search, oppFilter]);
+
+  const collFiltered = useMemo(() => {
+    if (!data) return [];
+    const total = data.channelShare.total;
+    const minSignal = Math.max(30, Math.round(total * 0.00005));
+    const fewCeiling = Math.max(300, Math.round(total * 0.0005));
+    const avgConv = data.totals.convRate;
+    const q = collSearch.trim().toLowerCase();
+    return data.byCollection.filter((c) => {
+      if (collOppFilter !== 'all' && oppTag(c.path, c.sessions, c.convRate, avgConv, minSignal, fewCeiling).cat !== collOppFilter) return false;
+      if (q && !`${c.path} ${c.name || ''}`.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [data, collSearch, collOppFilter]);
 
   function applyDates() {
     if (/^\d{4}-\d{2}-\d{2}$/.test(draftStart) && /^\d{4}-\d{2}-\d{2}$/.test(draftEnd)) setApplied({ start: draftStart, end: draftEnd });
@@ -164,9 +180,26 @@ export default function SessoesPage() {
           {/* 3) Sessões por coleções */}
           <section>
             <SectionTitle>🗂️ Sessões por coleções</SectionTitle>
-            {data.byCollection.length === 0
-              ? <div className="text-[13px]" style={{ color: '#6b7280' }}>Sem sessões em páginas de coleção no período.</div>
-              : <PagesChannelTable rows={data.byCollection} channelOrder={data.channelOrder} total={data.byCollection.length} avgConv={t.convRate} totalSessions={data.channelShare.total} title={`Sessões por coleção · ${fmtN(data.byCollection.length)} coleções · share por canal`} entityLabel="Coleção" showPdp={false} />}
+            {data.byCollection.length === 0 ? (
+              <div className="text-[13px]" style={{ color: '#6b7280' }}>Sem sessões em páginas de coleção no período.</div>
+            ) : (
+              <>
+                <div className="flex flex-wrap items-center gap-2 mb-3">
+                  <input
+                    value={collSearch}
+                    onChange={(e) => setCollSearch(e.target.value)}
+                    placeholder="Buscar coleção pelo nome…"
+                    className="rounded-full px-4 py-2 text-[13px] bg-white"
+                    style={{ border: '1px solid #e5e3de', minWidth: 260, flex: '1 1 260px', maxWidth: 400 }}
+                  />
+                  {([['all', 'Todas'], ['opp_channel', '🟢 Oportunidade'], ['escala', '🔵 Já escala'], ['baixa', '🟠 Baixa conv.'], ['sinal', '⚪ Pouco sinal']] as const).map(([k, label]) => {
+                    const active = collOppFilter === k;
+                    return <button key={k} onClick={() => setCollOppFilter(k)} className="rounded-full text-[12px] font-medium px-3 py-1.5" style={active ? { background: '#1a1a1a', color: '#fff' } : { background: '#ebe9e3', color: '#1a1a1a' }}>{label}</button>;
+                  })}
+                </div>
+                <PagesChannelTable rows={collFiltered} channelOrder={data.channelOrder} total={collFiltered.length} avgConv={t.convRate} totalSessions={data.channelShare.total} title={`Sessões por coleção · ${fmtN(collFiltered.length)} coleções · share por canal`} entityLabel="Coleção" showPdp={false} />
+              </>
+            )}
           </section>
 
           <p className="text-[11px]" style={{ color: '#9ca3af' }}>
