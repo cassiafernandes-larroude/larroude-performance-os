@@ -814,8 +814,16 @@ function ProductSessionsTable({ market, rangeQS }: { market: 'US' | 'BR'; rangeQ
   const [err, setErr] = useState<string | null>(null);
   const [q, setQ] = useState('');
   const [pg, setPg] = useState(1);
+  const [sortKey, setSortKey] = useState<'sessions' | 'conv'>('sessions');
+  const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc');
   const PER = 25;
   const loc = market === 'BR' ? 'pt-BR' : 'en-US';
+  function toggleSort(key: 'sessions' | 'conv') {
+    if (key === sortKey) setSortDir((d) => (d === 'desc' ? 'asc' : 'desc'));
+    else { setSortKey(key); setSortDir('desc'); }
+    setPg(1);
+  }
+  const arrow = (key: 'sessions' | 'conv') => (sortKey === key ? (sortDir === 'desc' ? ' ↓' : ' ↑') : '');
 
   useEffect(() => {
     let cancel = false;
@@ -831,9 +839,11 @@ function ProductSessionsTable({ market, rangeQS }: { market: 'US' | 'BR'; rangeQ
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
-    if (!s) return rows || [];
-    return (rows || []).filter((r) => `${r.name} ${r.handle} ${r.skus}`.toLowerCase().includes(s));
-  }, [rows, q]);
+    const base = !s ? (rows || []) : (rows || []).filter((r) => `${r.name} ${r.handle} ${r.skus}`.toLowerCase().includes(s));
+    const val = (r: PSRow) => (sortKey === 'sessions' ? r.sessions : r.convRate);
+    const mul = sortDir === 'desc' ? -1 : 1;
+    return [...base].sort((a, b) => (val(a) - val(b)) * mul);
+  }, [rows, q, sortKey, sortDir]);
 
   const last = Math.max(1, Math.ceil(filtered.length / PER));
   const page = Math.min(pg, last);
@@ -867,8 +877,8 @@ function ProductSessionsTable({ market, rangeQS }: { market: 'US' | 'BR'; rangeQ
                 <tr style={{ textAlign: 'left', color: '#6b7280', fontSize: 11, textTransform: 'uppercase', borderBottom: '1px solid #e5e7eb' }}>
                   <th style={{ padding: '8px 10px 8px 0', width: 40 }}>#</th>
                   <th style={{ padding: '8px 10px' }}>Produto</th>
-                  <th style={{ padding: '8px 10px', textAlign: 'right' }}>Sessões</th>
-                  <th style={{ padding: '8px 0 8px 10px', textAlign: 'right' }}>Conversão</th>
+                  <th onClick={() => toggleSort('sessions')} style={{ padding: '8px 10px', textAlign: 'right', cursor: 'pointer', userSelect: 'none', color: sortKey === 'sessions' ? '#5d4ec5' : undefined }}>Sessões{arrow('sessions')}</th>
+                  <th onClick={() => toggleSort('conv')} style={{ padding: '8px 0 8px 10px', textAlign: 'right', cursor: 'pointer', userSelect: 'none', color: sortKey === 'conv' ? '#5d4ec5' : undefined }}>Conversão{arrow('conv')}</th>
                 </tr>
               </thead>
               <tbody>
