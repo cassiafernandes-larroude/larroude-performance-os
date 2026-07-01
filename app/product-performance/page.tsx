@@ -845,7 +845,7 @@ function ProductSessionsTable({ market, rangeQS }: { market: 'US' | 'BR'; rangeQ
     <div className="card p-5 mt-4">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 12, marginBottom: 14 }}>
         <div>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: '#1f2937', margin: 0 }}>SESSÕES POR PÁGINA DE PRODUTO</h3>
+          <h3 style={{ fontSize: 15, fontWeight: 700, color: '#1f2937', margin: 0 }}>TAXA DE CONVERSÃO POR PRODUTO</h3>
           <div style={{ fontSize: 11.5, color: '#9ca3af', marginTop: 3 }}>Sessões e taxa de conversão de cada /products/… · fonte ShopifyQL</div>
         </div>
         <input
