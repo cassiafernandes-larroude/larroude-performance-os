@@ -28,7 +28,7 @@ const TZ: Record<Market, string> = {
 // Cassia 2026-06-17: delega ao helper compartilhado (regra de ouro, REGRAS secao 1/10).
 // Inclui agora tag `influencer`, cancelled/test e exclusao de trocas (Loop/TroquEcommerce)
 // — antes faltavam aqui e quebravam a paridade ORDERS/AOV com LTV/CAC.
-// O `financial_status NOT IN ('voided','refunded')` continua inline em cada call site.
+// O `financial_status NOT IN ('voided','pending','expired','authorized')` continua inline em cada call site.
 // Cassia 2026-06-17: fulCats opcional — filtro de origem (estoque/pre-order). No-op quando
 // ausente, entao funcoes que nao passam fulCats nao mudam. `dataset` necessario p/ o semi-join.
 function shopifyOrderFilters(market: Market, alias = '', fulCats?: FulfillmentCategory[] | null, dataset?: string): string {
@@ -93,14 +93,14 @@ export async function queryAggregatedKpis(market: Market, start: string, end: st
         COUNT(*) AS orders
       FROM \`larroude-data-prod.${dataset}.orders\`
       WHERE DATE(created_at, '${TZ[market]}') BETWEEN @start AND @end
-        AND financial_status NOT IN ('voided','refunded') ${shopifyOrderFilters(market, '', fulCats, dataset)}
+        AND financial_status NOT IN ('voided','pending','expired','authorized') ${shopifyOrderFilters(market, '', fulCats, dataset)}
     ),
     units_t AS (
       SELECT SUM(CAST(JSON_VALUE(li,'$.quantity') AS INT64)) AS units
       FROM \`larroude-data-prod.${dataset}.orders\` o,
            UNNEST(JSON_QUERY_ARRAY(line_items)) li
       WHERE DATE(o.created_at, '${TZ[market]}') BETWEEN @start AND @end
-        AND o.financial_status NOT IN ('voided','refunded') ${shopifyOrderFilters(market, 'o', fulCats, dataset)}
+        AND o.financial_status NOT IN ('voided','pending','expired','authorized') ${shopifyOrderFilters(market, 'o', fulCats, dataset)}
         ${excludeRedoLineItemSQL('li')}
     ),
     refunds_raw AS (
@@ -143,7 +143,7 @@ export async function queryAggregatedKpis(market: Market, start: string, end: st
       SELECT JSON_VALUE(customer, '$.id') AS cust_id,
              MIN(DATE(created_at, '${TZ[market]}')) AS first_dt
       FROM \`larroude-data-prod.${dataset}.orders\`
-      WHERE customer IS NOT NULL AND financial_status NOT IN ('voided','refunded') ${shopifyOrderFilters(market, '', fulCats, dataset)}
+      WHERE customer IS NOT NULL AND financial_status NOT IN ('voided','pending','expired','authorized') ${shopifyOrderFilters(market, '', fulCats, dataset)}
       GROUP BY cust_id
     ),
     customer_split AS (
@@ -155,7 +155,7 @@ export async function queryAggregatedKpis(market: Market, start: string, end: st
       FROM \`larroude-data-prod.${dataset}.orders\` o
       JOIN first_order_per_customer fo ON JSON_VALUE(o.customer, '$.id') = fo.cust_id
       WHERE DATE(o.created_at, '${TZ[market]}') BETWEEN @start AND @end
-        AND o.financial_status NOT IN ('voided','refunded') ${shopifyOrderFilters(market, 'o', fulCats, dataset)}
+        AND o.financial_status NOT IN ('voided','pending','expired','authorized') ${shopifyOrderFilters(market, 'o', fulCats, dataset)}
     ),
     cac AS (
       SELECT new_customer_orders AS new_customers FROM customer_split
@@ -225,7 +225,7 @@ export async function queryOriginShare(market: Market, start: string, end: strin
         CAST(total_price AS NUMERIC) AS revenue
       FROM \`larroude-data-prod.${dataset}.orders\`
       WHERE DATE(created_at, '${TZ[market]}') BETWEEN @start AND @end
-        AND financial_status NOT IN ('voided','refunded') ${shopifyOrderFilters(market)}
+        AND financial_status NOT IN ('voided','pending','expired','authorized') ${shopifyOrderFilters(market)}
     ),
     cls AS (
       SELECT units, revenue,
@@ -264,7 +264,7 @@ export async function queryDailySales(market: Market, start: string, end: string
         SUM(CAST(total_tax AS NUMERIC)) AS tax
       FROM \`larroude-data-prod.${dataset}.orders\`
       WHERE DATE(created_at, '${TZ[market]}') BETWEEN @start AND @end
-        AND financial_status NOT IN ('voided','refunded') ${shopifyOrderFilters(market, '', fulCats, dataset)}
+        AND financial_status NOT IN ('voided','pending','expired','authorized') ${shopifyOrderFilters(market, '', fulCats, dataset)}
       GROUP BY d
     ),
     units_daily AS (
@@ -273,7 +273,7 @@ export async function queryDailySales(market: Market, start: string, end: string
       FROM \`larroude-data-prod.${dataset}.orders\` o,
            UNNEST(JSON_QUERY_ARRAY(line_items)) li
       WHERE DATE(o.created_at, '${TZ[market]}') BETWEEN @start AND @end
-        AND o.financial_status NOT IN ('voided','refunded') ${shopifyOrderFilters(market, 'o', fulCats, dataset)}
+        AND o.financial_status NOT IN ('voided','pending','expired','authorized') ${shopifyOrderFilters(market, 'o', fulCats, dataset)}
         ${excludeRedoLineItemSQL('li')}
       GROUP BY d
     )
@@ -382,7 +382,7 @@ export async function queryDailyCac(market: Market, start: string, end: string, 
              MIN(DATE(created_at, '${TZ[market]}')) AS first_order_date
       FROM \`larroude-data-prod.${dataset}.orders\`
       WHERE customer IS NOT NULL
-        AND financial_status NOT IN ('voided', 'refunded') ${shopifyOrderFilters(market, '', fulCats, dataset)}
+        AND financial_status NOT IN ('voided','pending','expired','authorized') ${shopifyOrderFilters(market, '', fulCats, dataset)}
       GROUP BY customer_id
     ),
     new_customers_daily AS (
@@ -392,14 +392,14 @@ export async function queryDailyCac(market: Market, start: string, end: string, 
         ON JSON_VALUE(o.customer, '$.id') = fo.customer_id
        AND DATE(o.created_at, '${TZ[market]}') = fo.first_order_date
       WHERE DATE(o.created_at, '${TZ[market]}') BETWEEN @start AND @end
-        AND o.financial_status NOT IN ('voided', 'refunded') ${shopifyOrderFilters(market, 'o', fulCats, dataset)}
+        AND o.financial_status NOT IN ('voided','pending','expired','authorized') ${shopifyOrderFilters(market, 'o', fulCats, dataset)}
       GROUP BY d
     ),
     orders_daily AS (
       SELECT DATE(created_at, '${TZ[market]}') AS d, COUNT(*) AS orders
       FROM \`larroude-data-prod.${dataset}.orders\`
       WHERE DATE(created_at, '${TZ[market]}') BETWEEN @start AND @end
-        AND financial_status NOT IN ('voided', 'refunded') ${shopifyOrderFilters(market, '', fulCats, dataset)}
+        AND financial_status NOT IN ('voided','pending','expired','authorized') ${shopifyOrderFilters(market, '', fulCats, dataset)}
       GROUP BY d
     ),
     spend_daily AS (
@@ -573,7 +573,7 @@ export async function queryChannelMix(market: Market, start: string, end: string
         LOWER(IFNULL(referring_site, '')) AS referrer
       FROM \`larroude-data-prod.${dataset}.orders\`
       WHERE DATE(created_at, '${TZ[market]}') BETWEEN @start AND @end
-        AND financial_status NOT IN ('voided', 'refunded') ${shopifyOrderFilters(market)}
+        AND financial_status NOT IN ('voided','pending','expired','authorized') ${shopifyOrderFilters(market)}
     ),
     classified AS (
       SELECT
@@ -650,7 +650,7 @@ export async function queryShopifyFunnel(market: Market, start: string, end: str
       SELECT COUNT(*) AS orders_count
       FROM \`larroude-data-prod.${dataset}.orders\`
       WHERE DATE(created_at, '${TZ[market]}') BETWEEN @start AND @end
-        AND financial_status NOT IN ('voided', 'refunded') ${shopifyOrderFilters(market)}
+        AND financial_status NOT IN ('voided','pending','expired','authorized') ${shopifyOrderFilters(market)}
     )
     SELECT
       atc.abandoned_count,
@@ -680,7 +680,7 @@ export async function queryChannelMixDaily(market: Market, start: string, end: s
         LOWER(IFNULL(referring_site, '')) AS referrer
       FROM \`larroude-data-prod.${dataset}.orders\`
       WHERE DATE(created_at, '${TZ[market]}') BETWEEN @start AND @end
-        AND financial_status NOT IN ('voided', 'refunded') ${shopifyOrderFilters(market)}
+        AND financial_status NOT IN ('voided','pending','expired','authorized') ${shopifyOrderFilters(market)}
     ),
     classified AS (
       SELECT

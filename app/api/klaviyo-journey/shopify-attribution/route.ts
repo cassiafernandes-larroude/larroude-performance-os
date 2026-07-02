@@ -145,7 +145,7 @@ export async function GET(req: Request) {
       "  ANY_VALUE(currency) AS currency " +
       "FROM `" + table + "` " +
       "WHERE DATE(created_at, '" + tz + "') >= DATE(@start_date) AND DATE(created_at, '" + tz + "') < DATE(@end_date)" +
-      "  AND financial_status NOT IN ('voided','refunded') " +
+      "  AND financial_status NOT IN ('voided','pending','expired','authorized') " +
       dtcCoreFilters(market);
 
     const projectId = process.env.GCP_PROJECT_ID || BQ_PROJECT_FALLBACK;

@@ -35,7 +35,7 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
   const gran: Granularity = (url.searchParams.get('gran') as Granularity) || granFor(since, until);
 
   try {
-    const result = await memo(`funnel:v1:${market}:${since}:${until}:${gran}`, TTL_10M, async () => {
+    const result = await memo(`funnel:v2:${market}:${since}:${until}:${gran}`, TTL_10M, async () => {
       // Cassia 2026-06-21: funil (ShopifyQL) é o core; pagamento (BQ) é não-fatal — se o BQ falhar,
       // o funil ainda aparece com o bloco de pagamento vazio.
       const emptyPay = { cards: [], cardTotal: 0, pixPaid: 0, pixPending: 0, other: 0, hasPix: market === 'BR' };

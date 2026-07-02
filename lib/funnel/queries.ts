@@ -251,7 +251,7 @@ export async function getPaidOrdersDaily(market: Market, since: string, until: s
   const tableRef = '`' + ORDERS_TABLE[market] + '`';
   const sql = `
     SELECT FORMAT_DATE('%Y-%m-%d', DATE(created_at, '${tz}')) AS d,
-           COUNTIF(financial_status = 'paid') AS paid
+           COUNTIF(financial_status IN ('paid','partially_refunded','refunded')) AS paid
     FROM ${tableRef}
     WHERE ${funnelOrderFilters(market)}
       AND DATE(created_at, '${tz}') BETWEEN @since AND @until

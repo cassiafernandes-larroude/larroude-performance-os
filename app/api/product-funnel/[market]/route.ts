@@ -21,7 +21,7 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
   if (!isMarket(market)) return NextResponse.json({ error: 'Invalid market' }, { status: 400 });
   const windowDays = parseWindow(req);
   try {
-    const result = await memo(`preorder-funnel:v2:${market}:w${windowDays}`, TTL_10M, () => getPreorderFunnel(market, windowDays));
+    const result = await memo(`preorder-funnel:v3:${market}:w${windowDays}`, TTL_10M, () => getPreorderFunnel(market, windowDays));
     return NextResponse.json(result, { headers: { 'Cache-Control': 'public, max-age=300, s-maxage=600, stale-while-revalidate=3600' } });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'unknown';

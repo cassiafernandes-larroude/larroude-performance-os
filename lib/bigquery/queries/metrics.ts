@@ -43,7 +43,7 @@ export function aggregatedKpisSQL(market: Market, fulCats?: FulfillmentCategory[
   // ouro (REGRAS secao 1/10). Inclui agora tag `influencer`, cancelled/test, PIX nao-pago
   // BR e exclusao de trocas (Loop/TroquEcommerce) — antes faltavam aqui e o Overview
   // divergia de Main/CAC/LTV. O voided/refunded base continua inline.
-  const ORDER_FILTERS = `financial_status NOT IN ('voided','refunded') ${dtcCoreFilters(market)} ${fulBare}`;
+  const ORDER_FILTERS = `financial_status NOT IN ('voided','pending','expired','authorized') ${dtcCoreFilters(market)} ${fulBare}`;
 
   return `
     WITH
@@ -63,7 +63,7 @@ export function aggregatedKpisSQL(market: Market, fulCats?: FulfillmentCategory[
       FROM \`larroude-data-prod.${dataset}.orders\` o,
            UNNEST(JSON_QUERY_ARRAY(line_items)) li
       WHERE DATE(o.created_at, '${tz}') BETWEEN @start AND @end
-        AND o.financial_status NOT IN ('voided','refunded')
+        AND o.financial_status NOT IN ('voided','pending','expired','authorized')
         ${dtcCoreFilters(market, 'o')}
         ${fulO}
         ${excludeRedoLineItemSQL('li')}
@@ -114,7 +114,7 @@ export function aggregatedKpisSQL(market: Market, fulCats?: FulfillmentCategory[
       FROM \`larroude-data-prod.${dataset}.orders\` o
       JOIN first_order_per_customer fo ON JSON_VALUE(o.customer, '$.id') = fo.cust_id
       WHERE DATE(o.created_at, '${tz}') BETWEEN @start AND @end
-        AND o.financial_status NOT IN ('voided','refunded')
+        AND o.financial_status NOT IN ('voided','pending','expired','authorized')
         ${dtcCoreFilters(market, 'o')}
         ${fulO}
     )

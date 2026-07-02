@@ -122,9 +122,7 @@ export async function getUnitEconomics(
   const currency: 'USD' | 'BRL' = market === 'US' ? 'USD' : 'BRL';
   // Cassia 2026-07-02: TZ por mercado + exclusão de PIX não-pago (BR), alinhado ao getProductPerformance
   const tz = market === 'US' ? 'America/New_York' : 'America/Sao_Paulo';
-  const finStatus = market === 'BR'
-    ? `o.financial_status NOT IN ('voided','refunded','pending','expired','authorized')`
-    : `o.financial_status NOT IN ('voided','refunded')`;
+  const finStatus = `o.financial_status NOT IN ('voided','pending','expired','authorized')`;
 
   const sql = `
     WITH
@@ -371,9 +369,7 @@ export async function getProductUeTimeseries(
   const fulFilter = fulfillmentCategoryFilterSQL(fulCats, 'o', dataset);
   // Cassia 2026-07-02: TZ por mercado + exclusão de PIX não-pago (BR)
   const tz = market === 'US' ? 'America/New_York' : 'America/Sao_Paulo';
-  const finStatus = market === 'BR'
-    ? `o.financial_status NOT IN ('voided','refunded','pending','expired','authorized')`
-    : `o.financial_status NOT IN ('voided','refunded')`;
+  const finStatus = `o.financial_status NOT IN ('voided','pending','expired','authorized')`;
 
   const sql = `
     WITH
@@ -463,9 +459,7 @@ export async function getOverallUeTimeseries(
   const fulFilter = fulfillmentCategoryFilterSQL(fulCats, 'o', dataset);
   // Cassia 2026-07-02: TZ por mercado + exclusão de PIX não-pago (BR)
   const tz = market === 'US' ? 'America/New_York' : 'America/Sao_Paulo';
-  const finStatus = market === 'BR'
-    ? `o.financial_status NOT IN ('voided','refunded','pending','expired','authorized')`
-    : `o.financial_status NOT IN ('voided','refunded')`;
+  const finStatus = `o.financial_status NOT IN ('voided','pending','expired','authorized')`;
 
   const sql = `
     WITH
@@ -552,9 +546,7 @@ export async function getProductPerformance(market: Market, startDate: string, e
   const dataset = ordersDataset(market);
   const cap = MAX_ORDER_VALUE[market];
   const tz = market === 'US' ? 'America/New_York' : 'America/Sao_Paulo';
-  const pix = market === 'BR'
-    ? `AND financial_status NOT IN ('voided','refunded','pending','expired','authorized')`
-    : `AND financial_status NOT IN ('voided','refunded')`;
+  const pix = `AND financial_status NOT IN ('voided','pending','expired','authorized')`;
   const fulFilter = fulfillmentCategoryFilterSQL(fulCats, '', dataset); // filtro de origem (In Stock/On-Demand/Pre-Order)
   const sql = `
     WITH valid_orders AS (

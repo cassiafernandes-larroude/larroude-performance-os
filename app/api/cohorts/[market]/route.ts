@@ -16,7 +16,7 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
   try {
     // Cassia 2026-07-02: coortes de aquisição 12 meses (getCohorts já devolve retenção %
     // por offset, trocas excluídas — mesma regra do LTV/Clientes). Memo 6h + CDN 1h.
-    const cohorts = await memo(`cohorts:v1:${market}`, TTL_6H, () => getCohorts(market));
+    const cohorts = await memo(`cohorts:v2:${market}`, TTL_6H, () => getCohorts(market));
     return NextResponse.json({ available: true, market, cohorts }, {
       headers: { 'Cache-Control': 'public, max-age=1800, s-maxage=3600, stale-while-revalidate=86400' },
     });

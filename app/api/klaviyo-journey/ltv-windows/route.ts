@@ -113,7 +113,7 @@ export async function GET(req: Request) {
         FROM \`${table}\`, params
         WHERE JSON_VALUE(customer, '$.id') IS NOT NULL
           AND JSON_VALUE(customer, '$.id') != '5025734230182'
-          AND financial_status NOT IN ('voided','refunded')
+          AND financial_status NOT IN ('voided','pending','expired','authorized')
           ${dtcCoreFilters(market)}
           AND DATE(created_at, '${tz}') BETWEEN params.start_date AND params.end_date
       ),

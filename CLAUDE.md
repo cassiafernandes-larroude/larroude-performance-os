@@ -38,11 +38,15 @@ Next.js 14 (App Router) + TypeScript + Tailwind + chart.js. Sem ORM. BigQuery di
 ### DTC only (Direct-to-Consumer)
 Filtros aplicados em **TODAS** as queries Shopify (Main / CAC / LTV / Overview / North Star / Consolidated):
 
-- Excluir tags: `b2b | wholesale | marketplace | redo` (case-insensitive)
+- Excluir tags: `b2b | wholesale | marketplace | redo | influencer` (case-insensitive)
 - Threshold de valor por order: US > $30k → excluir, BR > R$25k → excluir
-- BR adicional: `financial_status NOT IN ('pending','expired','authorized')` (PIX não-pago)
+- `financial_status NOT IN ('voided','pending','expired','authorized')` nos DOIS mercados
+  (Cassia 2026-07-02, alinhamento Enrico): **`refunded` é INCLUÍDO** — a venda conta no mês
+  em que aconteceu; a devolução é netada por VALOR (NET_SALES_EXPR / refund_value / returns).
+  Exceção consciente: queries operacionais (ex.: "pedidos em aberto") continuam excluindo refunded.
 - `cancelled_at IS NULL`, `test = FALSE`
-- LTV adicional: excluir trocas (Loop Returns EXC-*, TroquEcommerce)
+- Line items: excluir sku `x-redo` (seguro Redo $4,98) das somas de unidades — `excludeRedoLineItemSQL`
+- LTV adicional: excluir trocas (Loop Returns EXC-*, TroquEcommerce, tag `le:exchange`)
 
 Funções centralizadas:
 - `lib/main-dashboard/queries.ts` → `shopifyOrderFilters(market)`

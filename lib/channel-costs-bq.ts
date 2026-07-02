@@ -55,8 +55,7 @@ export async function getPercentRevenueCostsFromBQ(
       WHERE DATE(created_at, '${tz}') BETWEEN @start AND @end
         AND cancelled_at IS NULL
         AND test = FALSE
-        AND financial_status NOT IN ('voided','refunded')
-        ${market === "BR" ? `AND LOWER(IFNULL(financial_status, '')) NOT IN ('pending', 'expired', 'authorized')` : ""}
+        AND financial_status NOT IN ('voided','pending','expired','authorized')
         AND (
           JSON_VALUE(customer, '$.tags') IS NULL
           OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(customer, '$.tags')), r'${EXCLUDED_TAGS_REGEX}')

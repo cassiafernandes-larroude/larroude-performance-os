@@ -63,9 +63,8 @@ export async function POST(req: NextRequest) {
     const dataset = market === 'US' ? 'stg_shopify' : 'stg_shopify_br';
 
     // Filtros DTC alinhados com Main/CAC
-    const pixFilter = market === 'BR'
-      ? `AND o.financial_status NOT IN ('voided','refunded','pending','expired','authorized')`
-      : `AND o.financial_status NOT IN ('voided','refunded')`;
+    // Cassia 2026-07-02: financial_status canônico (refunded incluído; não-pago fora nos 2 mercados)
+    const pixFilter = `AND o.financial_status NOT IN ('voided','pending','expired','authorized')`;
 
     // 1) SKUs: agrupa line_items por mother code (L0042) e soma units/revenue
     const skusResult: Record<string, SkuPerformance> = {};

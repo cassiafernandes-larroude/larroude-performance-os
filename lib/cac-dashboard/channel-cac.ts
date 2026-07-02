@@ -87,7 +87,7 @@ async function getNewCustomersByChannel(
 ): Promise<Map<string, number>> {
   // Cassia 2026-07-02: MIN(created_at) por customer sem filtro de data no CTE base —
   // "novo" é lifetime, não "primeira compra dentro da janela". Mesmos filtros DTC
-  // canônicos + financial_status NOT IN ('voided','refunded') do resto do CAC.
+  // canônicos + financial_status NOT IN ('voided','pending','expired','authorized') do resto do CAC.
   const sql = `
     WITH base AS (
       SELECT
@@ -98,7 +98,7 @@ async function getNewCustomersByChannel(
         LOWER(IFNULL(o.referring_site, '')) AS rs
       FROM \`${ORDERS_TABLE[market]}\` o
       WHERE JSON_VALUE(o.customer, '$.id') IS NOT NULL
-        AND o.financial_status NOT IN ('voided','refunded')
+        AND o.financial_status NOT IN ('voided','pending','expired','authorized')
         ${dtcCoreFilters(market, 'o')}
     ),
     first_purchase AS (

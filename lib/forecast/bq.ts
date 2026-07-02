@@ -22,9 +22,8 @@ const DIM_MODELO = `REGEXP_EXTRACT(JSON_VALUE(li,'$.sku'), r'^[A-Z]?\\d+')`;
 const ROOT = `REGEXP_EXTRACT(JSON_VALUE(li,'$.sku'), r'^[A-Z]?\\d+')`;
 
 function finFilter(m: Market): string {
-  return m === 'BR'
-    ? "o.financial_status NOT IN ('voided','refunded','pending','expired','authorized')"
-    : "o.financial_status NOT IN ('voided','refunded')";
+  // Cassia 2026-07-02: financial_status canônico nos 2 mercados (refunded incluído — regra Enrico)
+  return "o.financial_status NOT IN ('voided','pending','expired','authorized')";
 }
 
 export interface ForecastRow { key: string; metodo: 'YoY' | 'run-rate'; weekly: number[]; total: number; }

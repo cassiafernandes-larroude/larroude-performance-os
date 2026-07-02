@@ -308,7 +308,9 @@ export async function getOpenOrders(market: Market, limit = 50): Promise<OpenOrd
   const openWhere = `
     ${COMMON_FILTERS_DTC(market)}
     AND (fulfillment_status IS NULL OR fulfillment_status = 'partial')
-    AND financial_status NOT IN ('refunded','voided')
+    -- Cassia 2026-07-02: aqui refunded CONTINUA excluído (query operacional: pedido estornado
+    -- não é "aberto para envio") — exceção consciente à regra canônica de vendas.
+    AND financial_status NOT IN ('voided','refunded','pending','expired','authorized')
     AND DATE(created_at, '${LTV_TZ[market]}') >= DATE_SUB(CURRENT_DATE(), INTERVAL 365 DAY)
   `;
   const totalsSql = `

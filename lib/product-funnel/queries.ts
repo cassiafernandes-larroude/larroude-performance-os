@@ -32,11 +32,10 @@ const META_ACCOUNTS: Record<Market, string[]> = {
   BR: ['1735567560524487', '1975682443187483', '756931007040325'],
 };
 // Cassia 2026-07-02: filtros DTC canônicos com alias 'o' — antes só tags da order via regex local.
-// Inclui customer tags, cap de valor, trocas e financial_status (BR também exclui PIX não-pago).
+// Inclui customer tags, cap de valor, trocas e financial_status canônico (refunded incluído;
+// não-pago excluído nos 2 mercados — Cassia 2026-07-02, alinhamento Enrico).
 function pfOrderFilters(market: Market): string {
-  const fin = market === 'BR'
-    ? `AND o.financial_status NOT IN ('voided','refunded','pending','expired','authorized')`
-    : `AND o.financial_status NOT IN ('voided','refunded')`;
+  const fin = `AND o.financial_status NOT IN ('voided','pending','expired','authorized')`;
   return `o.cancelled_at IS NULL AND o.test = FALSE
         ${excludeTagsSQL('o')}
         AND CAST(o.total_price AS NUMERIC) < ${DTC_MAX_ORDER_VALUE[market]}

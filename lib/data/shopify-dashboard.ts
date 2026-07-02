@@ -177,17 +177,16 @@ const ZERO_SHOPIFY: Omit<ShopifyBundle, "market" | "period" | "source"> = {
   weekday_perf: [], suggestions: [],
 };
 
-// Filtros: exclui canceladas/test/B2B/wholesale/marketplace/redo; orders > cap; BR exclui PIX nao pago
+// Filtros: exclui canceladas/test/B2B/wholesale/marketplace/redo; orders > cap.
+// Cassia 2026-07-02: financial_status canônico — refunded INCLUÍDO (venda conta no mês;
+// devoluções netadas no bloco returns), não-pago excluído nos 2 mercados (regra Enrico).
 // alias = prefixo da tabela (ex: "" ou "o.") - usado quando filtros aparecem dentro de JOIN/UNNEST
 function commonFiltersShopify(market: Market, alias: string = ""): string {
   const a = alias; // "" ou "o."
   const cap = market === "US" ? 30000 : 25000;
-  const pix = market === "BR" ? `
-    AND LOWER(IFNULL(${a}financial_status, '')) NOT IN ('pending', 'expired', 'authorized')
-  ` : "";
   return `
     ${a}cancelled_at IS NULL AND ${a}test = FALSE
-    AND ${a}financial_status NOT IN ('voided','refunded')
+    AND ${a}financial_status NOT IN ('voided','pending','expired','authorized')
     AND JSON_VALUE(${a}customer, '$.id') != '5025734230182'
     AND (
       JSON_VALUE(${a}customer, '$.tags') IS NULL
@@ -195,7 +194,6 @@ function commonFiltersShopify(market: Market, alias: string = ""): string {
     )
     AND NOT REGEXP_CONTAINS(LOWER(IFNULL(${a}tags, '')), r'${EXCLUDED_TAGS_REGEX}')
     AND CAST(${a}total_price AS NUMERIC) < ${cap}
-    ${pix}
     ${excludeExchangesSQL(a.replace(/\.$/, ""))}
   `;
 }
@@ -207,7 +205,7 @@ export async function getShopifyBundle(
 ): Promise<ShopifyBundle> {
   await getPreorderMotherSkus(market); // warm cache p/ exclusão pre-order
   const fulKey = fulCats && fulCats.length ? fulCats.slice().sort().join('+') : 'all';
-  return cached(`shopify-v3:${market}:${period.from}:${period.to}:ful=${fulKey}`, 1800, async () => {
+  return cached(`shopify-v4:${market}:${period.from}:${period.to}:ful=${fulKey}`, 1800, async () => {
     const range = period;
 
     if (!hasBigQueryCredentials()) {
@@ -294,15 +292,13 @@ export async function getShopifyBundle(
             UNNEST(JSON_QUERY_ARRAY(line_items)) li
           WHERE DATE(o.created_at, '${tz}') BETWEEN @from AND @to
             AND o.cancelled_at IS NULL AND o.test = FALSE
-            AND o.financial_status NOT IN ('voided','refunded')
+            AND o.financial_status NOT IN ('voided','pending','expired','authorized')
             AND (
               JSON_VALUE(o.customer, '$.tags') IS NULL
               OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(o.customer, '$.tags')), r'${EXCLUDED_TAGS_REGEX}')
             )
             AND NOT REGEXP_CONTAINS(LOWER(IFNULL(o.tags, '')), r'${EXCLUDED_TAGS_REGEX}')
             AND CAST(o.total_price AS NUMERIC) < ${market === "US" ? 30000 : 25000}
-            ${market === "BR" ? `
-            AND LOWER(IFNULL(o.financial_status, '')) NOT IN ('pending', 'expired', 'authorized')` : ""}
             ${fulO}
             ${excludeRedoLineItemSQL('li')}
         )
@@ -339,15 +335,13 @@ export async function getShopifyBundle(
           UNNEST(JSON_QUERY_ARRAY(line_items)) li
         WHERE DATE(o.created_at, '${tz}') BETWEEN @from AND @to
           AND o.cancelled_at IS NULL AND o.test = FALSE
-          AND o.financial_status NOT IN ('voided','refunded')
+          AND o.financial_status NOT IN ('voided','pending','expired','authorized')
           AND (
             JSON_VALUE(o.customer, '$.tags') IS NULL
             OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(o.customer, '$.tags')), r'${EXCLUDED_TAGS_REGEX}')
           )
           AND NOT REGEXP_CONTAINS(LOWER(IFNULL(o.tags, '')), r'${EXCLUDED_TAGS_REGEX}')
           AND CAST(o.total_price AS NUMERIC) < ${market === "US" ? 30000 : 25000}
-          ${market === "BR" ? `
-          AND LOWER(IFNULL(o.financial_status, '')) NOT IN ('pending', 'expired', 'authorized')` : ""}
           ${fulO}
           ${excludeRedoLineItemSQL('li')}
         GROUP BY title
@@ -368,15 +362,13 @@ export async function getShopifyBundle(
           UNNEST(JSON_QUERY_ARRAY(line_items)) li
         WHERE DATE(o.created_at, '${tz}') BETWEEN @from AND @to
           AND o.cancelled_at IS NULL AND o.test = FALSE
-          AND o.financial_status NOT IN ('voided','refunded')
+          AND o.financial_status NOT IN ('voided','pending','expired','authorized')
           AND (
             JSON_VALUE(o.customer, '$.tags') IS NULL
             OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(o.customer, '$.tags')), r'${EXCLUDED_TAGS_REGEX}')
           )
           AND NOT REGEXP_CONTAINS(LOWER(IFNULL(o.tags, '')), r'${EXCLUDED_TAGS_REGEX}')
           AND CAST(o.total_price AS NUMERIC) < ${market === "US" ? 30000 : 25000}
-          ${market === "BR" ? `
-          AND LOWER(IFNULL(o.financial_status, '')) NOT IN ('pending', 'expired', 'authorized')` : ""}
           ${fulO}
           ${excludeRedoLineItemSQL('li')}
         GROUP BY collection

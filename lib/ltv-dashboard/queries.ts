@@ -37,7 +37,7 @@
  */
 
 import { runQuery } from './bigquery';
-import { EXCLUDED_TAGS_REGEX, excludeRedoLineItemSQL } from '@/lib/shared/dtc-filters';
+import { EXCLUDED_TAGS_REGEX, excludeRedoLineItemSQL, financialStatusSQL } from '@/lib/shared/dtc-filters';
 import { getMetaSpendByDay } from './connectors/meta-ads';
 import { getGoogleAdsSpendByDay } from './connectors/google-ads';
 import { motherSkuOf, productTypeOf } from './connectors/shopify';
@@ -112,12 +112,12 @@ const COMMON_FILTERS_BASE = `
 const LTV_MAX_ORDER_VALUE: Record<Market, number> = { US: 30000, BR: 25000 };
 
 function dtcExtras(market: Market): string {
-  const pixFilter = market === 'BR'
-    ? `AND financial_status NOT IN ('voided','refunded','pending','expired','authorized')`
-    : '';
+  // Cassia 2026-07-02: financial_status canônico nos DOIS mercados (regra Enrico): refunded
+  // INCLUÍDO (venda conta no mês; NET_SALES_EXPR já neta o valor), não-pago excluído.
+  // Antes o US não tinha filtro nenhum aqui (até voided entrava).
   return `
     AND CAST(total_price AS NUMERIC) < ${LTV_MAX_ORDER_VALUE[market]}
-    ${pixFilter}
+    ${financialStatusSQL()}
   `;
 }
 

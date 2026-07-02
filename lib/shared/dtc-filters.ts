@@ -71,25 +71,39 @@ export function excludeTagsSQL(alias = ""): string {
 }
 
 /**
+ * Cassia 2026-07-02: REGRA CANONICA de financial_status (alinhamento com o financeiro/Enrico):
+ *   - `refunded` agora e' INCLUIDO — a venda conta no mes em que aconteceu (visao bruta +
+ *     devolucoes rastreadas a parte). Antes exclui-lo fazia o historico mudar retroativamente
+ *     quando a devolucao acontecia. Os motores que exibem "net" ja' netam pelo VALOR dos
+ *     refunds (NET_SALES_EXPR / refund_value / refund line items) — isso continua.
+ *   - `pending/expired/authorized` excluidos nos DOIS mercados (antes so' BR/PIX) — pedido
+ *     nao pago nao e' venda, em nenhum mercado.
+ * Mesma clausula para US e BR.
+ * @param alias prefixo da tabela (ex.: 'o'); vazio = colunas sem alias
+ */
+export function financialStatusSQL(alias = ""): string {
+  const a = alias ? `${alias}.` : "";
+  return `AND ${a}financial_status NOT IN ('voided','pending','expired','authorized')`;
+}
+
+/**
  * Filtro DTC "core" completo para CTEs sobre a tabela de orders.
- * Inclui: tags(order+customer) + cap de valor + cancelled + test + PIX nao-pago (BR) + trocas.
+ * Inclui: tags(order+customer) + cap de valor + cancelled + test + financial_status canonico
+ * (refunded INCLUIDO, nao-pago excluido nos dois mercados) + trocas.
  *
- * NAO inclui `financial_status NOT IN ('voided','refunded')` — isso continua sendo
- * aplicado inline em cada query (e o filtro PIX do BR ja' estende esse conjunto).
+ * Cassia 2026-07-02: financial_status passou a fazer parte do core (antes era inline em cada
+ * query com `NOT IN ('voided','refunded')`). NAO re-aplicar filtros de financial_status por
+ * fora — quem precisa de excecao (ex.: bucket PIX-pendente do funil) monta o proprio WHERE.
  *
  * @param market 'US' | 'BR'
  * @param alias prefixo da tabela (ex.: 'o'); vazio = colunas sem alias
  */
 export function dtcCoreFilters(market: DtcMarket, alias = ""): string {
-  const a = alias ? `${alias}.` : "";
-  const pix = market === "BR"
-    ? `AND ${a}financial_status NOT IN ('voided','refunded','pending','expired','authorized')`
-    : "";
   return `
-    AND ${a}cancelled_at IS NULL
-    AND ${a}test = FALSE
+    AND ${alias ? `${alias}.` : ""}cancelled_at IS NULL
+    AND ${alias ? `${alias}.` : ""}test = FALSE
     ${excludeTagsSQL(alias)}
-    AND CAST(${a}total_price AS NUMERIC) < ${DTC_MAX_ORDER_VALUE[market]}
-    ${pix}
+    AND CAST(${alias ? `${alias}.` : ""}total_price AS NUMERIC) < ${DTC_MAX_ORDER_VALUE[market]}
+    ${financialStatusSQL(alias)}
     ${excludeExchangesSQL(alias)}`;
 }

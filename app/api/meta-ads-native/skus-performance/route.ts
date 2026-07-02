@@ -128,9 +128,8 @@ export async function POST(req: NextRequest) {
     const skusFromAds = Object.keys(adsBySku);
 
     // 2) Top N SKUs por unidades vendidas no Shopify (DTC)
-    const pixFilter = market === 'BR'
-      ? `AND o.financial_status NOT IN ('voided','refunded','pending','expired','authorized')`
-      : `AND o.financial_status NOT IN ('voided','refunded')`;
+    // Cassia 2026-07-02: financial_status canônico (refunded incluído; não-pago fora nos 2 mercados)
+    const pixFilter = `AND o.financial_status NOT IN ('voided','pending','expired','authorized')`;
 
     // Cassia 2026-06-14: Mother SKU = estilo + cor (sem tamanho).
     // Replicando a lógica do UE motherSkuOf:

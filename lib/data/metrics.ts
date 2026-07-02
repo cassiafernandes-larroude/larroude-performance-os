@@ -102,8 +102,8 @@ export async function getMetricBundle(
   const fulKey = fulCats && fulCats.length ? fulCats.slice().sort().join('+') : 'all';
   // Cassia 2026-07-02: v16 — payload agora inclui preorder_spend/preorder_roas.
   const cacheKey = customRange
-    ? `metrics-v16-preorder:${market}:custom:${customRange.from}:${customRange.to}:ful=${fulKey}`
-    : `metrics-v16-preorder:${market}:${period}:ful=${fulKey}`;
+    ? `metrics-v17-finstatus:${market}:custom:${customRange.from}:${customRange.to}:ful=${fulKey}`
+    : `metrics-v17-finstatus:${market}:${period}:ful=${fulKey}`;
   return cached(cacheKey, 1800, async () => {
     const range = customRange ?? dateRangeCompleted(period, market);
     const prevRange = customRange
