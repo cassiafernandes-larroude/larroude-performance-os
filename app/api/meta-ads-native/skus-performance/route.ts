@@ -17,6 +17,7 @@ import { hasBigQueryCredentials } from '@/lib/bigquery/client';
 import { shopifyGraphQL, hasShopifyCredentials } from '@/lib/shopify/admin';
 import { extractAdRefFromName } from '@/lib/meta-ads-native/sku-extractor';
 import { EXCLUDED_TAGS_REGEX, excludeExchangesSQL } from '@/lib/shared/dtc-filters';
+import { getCogsBySku } from '@/lib/unit-economics/shopify-cogs';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 600;
@@ -71,6 +72,10 @@ interface SkuRow {
   totalAdsCount: number;    // quantos ads rodaram no período (referência)
   activeAdsCount: number;
   campaigns: string[];      // nomes únicos das campanhas onde tem ad desse SKU
+  // Cassia 2026-07-02: margem — COGS via Shopify unitCost (média das variantes do mother SKU).
+  cogsPerUnit: number | null;         // null = COGS indisponível (fetch falhou / sem cadastro)
+  contributionMargin: number | null;  // revenue − units×COGS − spend
+  mroas: number | null;               // (revenue − units×COGS) / spend; null se spend=0 ou sem COGS
 }
 
 const MAX_ORDER_VALUE = { US: 30000, BR: 25000 } as const;
@@ -215,6 +220,31 @@ export async function POST(req: NextRequest) {
 
     // 4) Pra cada SKU (top + others), busca image+productName via Shopify GraphQL
     const allSkus = [...topSkus, ...otherActiveSkus];
+
+    // 4b) COGS por mother SKU via Shopify unitCost (lib/unit-economics/shopify-cogs).
+    // Cassia 2026-07-02: COGS é por VARIANTE — busca com wildcard (sku:L0042-CAMEL*)
+    // pra pegar todas as variantes do mother e tira a MÉDIA. Falha → Map vazio
+    // (rows ficam com cogsPerUnit=null e a UI esconde as colunas mROAS/CM).
+    const cogsByVariant: Map<string, number> = await getCogsBySku(
+      market,
+      allSkus.map(s => `${s}*`)
+    ).catch((err) => {
+      console.error('[skus-performance] COGS fetch failed (mROAS/CM will be null):', err);
+      return new Map<string, number>();
+    });
+    const cogsForMother = (motherSku: string): number | null => {
+      let sum = 0;
+      let n = 0;
+      cogsByVariant.forEach((cost, rawVariantSku) => {
+        // mother SKUs vêm em UPPER da query BQ; normaliza o lado Shopify pra casar
+        const variantSku = rawVariantSku.toUpperCase();
+        if (variantSku === motherSku || variantSku.startsWith(motherSku + '-')) {
+          sum += cost;
+          n++;
+        }
+      });
+      return n > 0 ? sum / n : null;
+    };
     const imageCache: Record<string, { name: string | null; image: string | null }> = {};
     if (hasShopifyCredentials(market)) {
       await Promise.all(allSkus.map(async sku => {
@@ -271,6 +301,12 @@ export async function POST(req: NextRequest) {
       const shopifyRevenue = sales?.revenue ?? 0;
       const unitsSold = sales?.units ?? 0;
       const campaigns = Array.from(new Set(dedupedAds.map(a => a.campaignName).filter((n): n is string => !!n)));
+      // Cassia 2026-07-02: margem por SKU — CM = revenue − units×COGS − spend;
+      // mROAS = (revenue − units×COGS) / spend. Sem COGS ou sem spend → null (UI mostra "—").
+      const cogsPerUnit = cogsForMother(sku);
+      const totalCogs = cogsPerUnit != null ? unitsSold * cogsPerUnit : null;
+      const contributionMargin = totalCogs != null ? shopifyRevenue - totalCogs - adsSpend : null;
+      const mroas = totalCogs != null && adsSpend > 0 ? (shopifyRevenue - totalCogs) / adsSpend : null;
       return {
         sku,
         productName: imageCache[sku]?.name ?? sales?.product_name ?? null,
@@ -288,6 +324,9 @@ export async function POST(req: NextRequest) {
         totalAdsCount: dedupedAds.length,
         activeAdsCount: activeAds.length,
         campaigns,
+        cogsPerUnit,
+        contributionMargin,
+        mroas,
       };
     };
 

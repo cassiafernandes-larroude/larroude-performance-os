@@ -37,6 +37,10 @@ interface SkuRow {
   totalAdsCount: number;
   activeAdsCount: number;
   campaigns: string[];
+  // Cassia 2026-07-02: margem — null quando COGS indisponível (colunas ficam ocultas)
+  cogsPerUnit: number | null;
+  contributionMargin: number | null;
+  mroas: number | null;
 }
 
 interface Props {
@@ -106,6 +110,13 @@ export default function CreativesTab({ ads, region, since, until, currency }: Pr
     return { revenue, spend, units, purchases, roas: spend > 0 ? revenue / spend : 0 };
   }, [otherWithAds]);
 
+  // Cassia 2026-07-02: se o fetch de COGS falhou no endpoint, TODAS as rows vêm com
+  // cogsPerUnit=null → esconde as colunas mROAS/CM em vez de mostrar tudo "—".
+  const showMargin = useMemo(
+    () => [...top, ...otherWithAds].some(r => r.cogsPerUnit != null),
+    [top, otherWithAds]
+  );
+
   return (
     <div className="space-y-6">
       {loading && (
@@ -125,6 +136,7 @@ export default function CreativesTab({ ads, region, since, until, currency }: Pr
         expandedSku={expandedSku}
         onToggle={(sku) => setExpandedSku(prev => prev === sku ? null : sku)}
         accent="#10b981"
+        showMargin={showMargin}
       />
 
       {/* QUADRO 2 — SKUs fora do top 30 mas com ads ativos */}
@@ -138,6 +150,7 @@ export default function CreativesTab({ ads, region, since, until, currency }: Pr
           expandedSku={expandedSku}
           onToggle={(sku) => setExpandedSku(prev => prev === sku ? null : sku)}
           accent="#f59e0b"
+          showMargin={showMargin}
         />
       )}
     </div>
@@ -148,7 +161,7 @@ export default function CreativesTab({ ads, region, since, until, currency }: Pr
 // Sub-componente: quadro de SKUs
 // ----------------------------------------------------------------------------
 function SkuQuadro({
-  title, subtitle, rows, totals, currency, expandedSku, onToggle, accent,
+  title, subtitle, rows, totals, currency, expandedSku, onToggle, accent, showMargin,
 }: {
   title: string;
   subtitle: string;
@@ -158,7 +171,9 @@ function SkuQuadro({
   expandedSku: string | null;
   onToggle: (sku: string) => void;
   accent: string;
+  showMargin: boolean;
 }) {
+  const colCount = showMargin ? 11 : 9;
   return (
     <div className="card" style={{ borderTop: `3px solid ${accent}` }}>
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
@@ -186,12 +201,18 @@ function SkuQuadro({
               <th className="text-left px-2 py-1.5">Criativos</th>
               <th className="text-right px-2 py-1.5">Spend</th>
               <th className="text-right px-2 py-1.5">ROAS</th>
+              {showMargin && (
+                <>
+                  <th className="text-right px-2 py-1.5" title="(Revenue − COGS) / Spend">mROAS</th>
+                  <th className="text-right px-2 py-1.5" title="Revenue − COGS − Spend">CM</th>
+                </>
+              )}
               <th className="text-right px-2 py-1.5">Purchases</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 && (
-              <tr><td colSpan={9} className="px-2 py-6 text-center" style={{ color: 'var(--ink-muted)' }}>No data in selected period.</td></tr>
+              <tr><td colSpan={colCount} className="px-2 py-6 text-center" style={{ color: 'var(--ink-muted)' }}>No data in selected period.</td></tr>
             )}
             {rows.map((r, idx) => {
               const expanded = expandedSku === r.sku;
@@ -278,11 +299,21 @@ function SkuQuadro({
                     <td className="px-2 py-1.5 text-right tabular-nums font-semibold" style={{ color: r.roasReal >= 1 ? '#10b981' : r.roasReal > 0 ? '#f59e0b' : 'var(--ink-muted)' }}>
                       {r.roasReal > 0 ? `${formatDecimal(r.roasReal)}×` : '—'}
                     </td>
+                    {showMargin && (
+                      <>
+                        <td className="px-2 py-1.5 text-right tabular-nums font-semibold" title="(Revenue − COGS) / Spend" style={{ color: r.mroas == null ? 'var(--ink-muted)' : r.mroas >= 1 ? '#10b981' : '#f59e0b' }}>
+                          {r.mroas != null ? `${formatDecimal(r.mroas)}×` : '—'}
+                        </td>
+                        <td className="px-2 py-1.5 text-right tabular-nums" title="Revenue − COGS − Spend" style={{ color: r.contributionMargin == null ? 'var(--ink-muted)' : r.contributionMargin >= 0 ? '#10b981' : '#ef4444' }}>
+                          {r.contributionMargin != null ? formatCurrency(r.contributionMargin, currency, true) : '—'}
+                        </td>
+                      </>
+                    )}
                     <td className="px-2 py-1.5 text-right tabular-nums">{formatNumber(r.adsPurchases)}</td>
                   </tr>
                   {expanded && r.ads.length > 0 && (
                     <tr key={`${r.sku}-detail`} style={{ background: 'var(--paper)' }}>
-                      <td colSpan={9} className="px-3 py-2">
+                      <td colSpan={colCount} className="px-3 py-2">
                         <div className="text-[10px] uppercase tracking-wider font-semibold mb-2" style={{ color: 'var(--ink-muted)' }}>Criativos deste SKU</div>
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
                           {r.ads.map(ad => {

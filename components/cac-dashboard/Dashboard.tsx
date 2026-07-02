@@ -8,6 +8,7 @@ import DailyChart from './DailyChart';
 import ProductTable from './ProductTable';
 import ProductTrendChart from './ProductTrendChart';
 import ProductMatrixHeatmap from './ProductMatrixHeatmap';
+import ChannelCacSection from './ChannelCacSection';
 import type {
   DailyPoint,
   KpiSummary,
@@ -150,7 +151,8 @@ export default function Dashboard({ freshness }: { freshness: string }) {
         {/* Cassia 2026-06-13: Cause & Effect Diagnostics (período selecionado) */}
         {data?.daily && data.daily.length > 0 && (() => {
           const invSeries = data.daily.map((d) => ({ date: d.date, value: Number(d.spend) || 0 }));
-          const outSeries = data.daily.map((d) => ({ date: d.date, value: Number(d.new_customers) || 0 }));
+          // Cassia 2026-07-02: campo é camelCase (newCustomers) — snake_case retornava undefined e o diagnóstico saía zerado
+          const outSeries = data.daily.map((d) => ({ date: d.date, value: Number(d.newCustomers) || 0 }));
           const diag = computeGenericDiagnostics({
             domain: 'customer-acquisition',
             invName: 'spend',
@@ -160,7 +162,7 @@ export default function Dashboard({ freshness }: { freshness: string }) {
             invSeries,
             outSeries,
             totalInv: summary?.spend,
-            totalOut: summary?.new_customers,
+            totalOut: summary?.newCustomers,
             efficiency: summary?.cac,
             // CAC: quanto MENOR melhor — inverte healthy/critical
             efficiencyHealthyAt: -1, // não aplicável da mesma forma
@@ -319,6 +321,13 @@ export default function Dashboard({ freshness }: { freshness: string }) {
             </div>
           </>
         ) : null}
+
+        <div className="section-label" style={{ marginTop: 16 }}>
+          <span>📡</span>
+          <span>CAC by Channel · {periodLabel}</span>
+        </div>
+
+        <ChannelCacSection market={market} start={period.start} end={period.end} />
 
         <footer className="footer">
           Larroudé · CAC Dashboard · Spend via Meta Marketing API + Google Ads API · Orders via Shopify Admin GraphQL · 12M history via BigQuery (
