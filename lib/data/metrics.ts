@@ -100,9 +100,10 @@ export async function getMetricBundle(
 ): Promise<MetricBundle> {
   await getPreorderMotherSkus(market); // warm cache p/ exclusão pre-order
   const fulKey = fulCats && fulCats.length ? fulCats.slice().sort().join('+') : 'all';
+  // Cassia 2026-07-02: v16 — payload agora inclui preorder_spend/preorder_roas.
   const cacheKey = customRange
-    ? `metrics-v15-google-bq:${market}:custom:${customRange.from}:${customRange.to}:ful=${fulKey}`
-    : `metrics-v15-google-bq:${market}:${period}:ful=${fulKey}`;
+    ? `metrics-v16-preorder:${market}:custom:${customRange.from}:${customRange.to}:ful=${fulKey}`
+    : `metrics-v16-preorder:${market}:${period}:ful=${fulKey}`;
   return cached(cacheKey, 1800, async () => {
     const range = customRange ?? dateRangeCompleted(period, market);
     const prevRange = customRange
@@ -349,6 +350,24 @@ export async function getMetricBundle(
     const recalcRoasTotal = cSpend > 0 ? cTotal / cSpend : 0;
     const recalcRoasTotalPrev = pSpend > 0 ? pTotal / pSpend : 0;
 
+    // Cassia 2026-07-02: expõe o split pre-order que a SQL do gold já calcula (regex de campanha
+    // pre-order/pre-venda) mas era descartado antes de chegar na resposta. Spend = Meta pre-order
+    // + Google pre-order do BQ gold (Meta pode ter ~2d de lag — D0/D-1 pode vir 0). ROAS pre-order
+    // = receita de pedidos com origem pre-order (queryOriginShare, assigned location) / spend.
+    const cPreorderSpend = num(c.meta_spend_preorder) + num(c.google_spend_preorder);
+    const pPreorderSpend = num(p.meta_spend_preorder) + num(p.google_spend_preorder);
+    let preorderRoas: number | null = null;
+    if (cPreorderSpend > 0) {
+      try {
+        const { queryOriginShare } = await import("@/lib/main-dashboard/queries");
+        const osRows = await queryOriginShare(market as any, range.from, range.to);
+        const preorderRevenue = Number((osRows || []).find((r: any) => r.category === "pre-order")?.revenue) || 0;
+        preorderRoas = preorderRevenue / cPreorderSpend;
+      } catch (err) {
+        console.warn("[overview preorder] origin share fetch failed:", err);
+      }
+    }
+
     const metrics: Metric[] = [
       baseMetric({
         key: "amount_spent",
@@ -432,6 +451,25 @@ export async function getMetricBundle(
         formatted: formatNumber(c.new_customers),
         currency: null,
         delta_pct: pct(c.new_customers, p.new_customers),
+      }),
+      // Cassia 2026-07-02: pre-order fora dos 8 cards principais (Overview usa slice(0,8)) —
+      // consumido pela linha "Pré-Order" do app/page.tsx.
+      baseMetric({
+        key: "preorder_spend",
+        label: "PRÉ-ORDER SPEND",
+        value: cPreorderSpend,
+        formatted: formatCurrency(cPreorderSpend, currency),
+        delta_pct: pct(cPreorderSpend, pPreorderSpend),
+        hint: "Campanhas pre-order (Meta + Google · BQ gold)",
+      }),
+      baseMetric({
+        key: "preorder_roas",
+        label: "PRÉ-ORDER ROAS",
+        value: preorderRoas ?? 0,
+        formatted: preorderRoas != null ? formatMultiplier(preorderRoas) : "—",
+        currency: null,
+        delta_pct: null,
+        hint: "Receita pedidos pré-order / spend pré-order",
       }),
     ];
 

@@ -4,6 +4,7 @@ import { api } from './fetcher';
 import { Kpi, SectionHead, HBar, CompareCard, fmtMoney, fmtInt, fmtPct, fmtMoneyCents, fmtMoneyCompact, fmtRpr } from './ui';
 import DailyBarChart from './DailyBarChart';
 import RevenueVolumeChart from './RevenueVolumeChart';
+import DeliverabilityCard from './DeliverabilityCard';
 import type { Market, Period, CustomRange } from '@/types/klaviyo/models';
 import GenericDiagnosticsPanel from '@/components/shared/GenericDiagnosticsPanel';
 import { computeGenericDiagnostics } from '@/lib/data/generic-diagnostics';
@@ -198,7 +199,9 @@ export default function TabOverview({ market, period, custom }: { market: Market
       </>}
 
       {/* LIST HEALTH (moved from removed List Health tab) */}
-      <SectionHead pill="List Health" pillVariant="green" title={<><b>List growth</b> &middot; Subscribed vs Unsubscribed &middot; {listHealth?.interval || 'loading'} granularity</>} right={listHealth?.metricsUsed?.subscribed || ''} />
+      <SectionHead pill="List Health" pillVariant="green" title={<><b>List growth &amp; deliverability</b> &middot; Subscribed vs Unsubscribed vs Spam &middot; {listHealth?.interval || 'loading'} granularity</>} right={listHealth?.metricsUsed?.subscribed || ''} />
+      {/* Cassia 2026-07-02: card de deliverability — trend subs/unsubs/spam + alerta spam rate > 0.1% dos envios */}
+      <DeliverabilityCard market={market} period={period} custom={custom} delivered={(c.recipients || 0) + (f.recipients || 0)} />
       {!listHealth && <div className="loading">Loading list health...</div>}
       {listHealth && (() => {
         const lhPoints = (listHealth.points || []) as any[];

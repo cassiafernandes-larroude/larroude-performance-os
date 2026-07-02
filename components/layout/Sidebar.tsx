@@ -54,6 +54,7 @@ const navSections: NavSection[] = [
       { href: "/channel-share", label: "Channel Share", icon: PieChart },
       { href: "/cac-native", label: "CAC", icon: Users },
       { href: "/clientes", label: "Clientes", icon: Users },
+      { href: "/cohort-analysis", label: "Cohort Analysis", icon: Users },
       { href: "/unit-economics", label: "Unit Economics", icon: Microscope },
       { href: "/product-performance", label: "Product Performance", icon: BarChart3 },
       { href: "/produtos-apostar", label: "Products to Bet On", icon: Target },

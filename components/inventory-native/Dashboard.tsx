@@ -612,7 +612,8 @@ export default function InventoryDashboard() {
             sub={<>bruta <b>{fmtPct(kpis.grossWeighted)}</b> · contrib <b>{fmtPct(kpis.contribWeighted)}</b></>}
             highlight={kpis.netWeighted < 0 ? 'red' : kpis.netWeighted < 0.1 ? 'gold' : 'green'}
           />
-          <Kpi label="Ticket Médio" value={fmtMoney(kpis.ticket, market, false)} />
+          {/* Cassia 2026-07-02: "Ticket Médio" -> "AOV" (termo usado em todas as outras abas) */}
+          <Kpi label="AOV" value={fmtMoney(kpis.ticket, market, false)} />
           <Kpi label="Em Estoque" value={fmtNum(kpis.emEstoque)} sub="warehouse" tone="green" />
           <Kpi label="On-Demand" value={fmtNum(kpis.onDemand)} sub="vendido, não produzido" tone="purple" />
           <Kpi label="Em Remessa · From-Batch" value={fmtNum(kpis.emRemessa)} sub="produzindo agora" tone="orange" />

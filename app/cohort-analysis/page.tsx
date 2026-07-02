@@ -1,11 +1,21 @@
-import { Placeholder } from "@/components/layout/Placeholder";
+// Cassia 2026-07-02: aba Cohort Analysis ligada (era placeholder Fase 3) — matriz de retenção
+// por safra de aquisição. Mesmo design system do LTV/Clientes; dados via /api/cohorts/[market].
+import CohortDashboard from './CohortDashboard';
+import { getDataFreshness } from '@/lib/ltv-dashboard/queries';
+import '../ltv-native/ltv-dashboard.css';
 
-export default function CohortPage() {
+export const revalidate = 3600;
+
+export default async function CohortPage() {
+  let freshness = '';
+  try {
+    freshness = await getDataFreshness();
+  } catch (err) {
+    console.error('[cohort-analysis] freshness failed', err);
+  }
   return (
-    <Placeholder
-      title="Cohort Analysis"
-      subtitle="Análise de coortes — retenção, LTV, comportamento por safra"
-      phase="Fase 3"
-    />
+    <div className="ltv-root">
+      <CohortDashboard freshness={freshness} />
+    </div>
   );
 }

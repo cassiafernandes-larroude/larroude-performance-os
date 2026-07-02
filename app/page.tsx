@@ -10,6 +10,33 @@ import { DashboardActions } from "@/components/shared/DashboardActions";
 import { FulfillmentFilter } from "@/components/filters/FulfillmentFilter";
 import { parseFulfillmentCategories } from "@/lib/shared/fulfillment-category";
 import { todayInMarket, yesterdayInMarket } from "@/lib/utils/market-tz";
+import type { MetricBundle } from "@/types/metric";
+
+// Cassia 2026-07-02: linha compacta Pré-Order (spend + ROAS de campanhas pre-order, split já
+// calculado na SQL do gold). Só aparece quando há spend pre-order no período — evita exibir
+// $0 nos dias em que o BQ gold ainda não processou (lag ~2d no Meta).
+function PreorderRow({ bundle }: { bundle: MetricBundle }) {
+  const spend = bundle.metrics.find((m) => m.key === "preorder_spend");
+  const roas = bundle.metrics.find((m) => m.key === "preorder_roas");
+  if (!spend || spend.value <= 0) return null;
+  return (
+    <div
+      className="-mt-3 mb-5 inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-[11px] lg:text-[12px]"
+      style={{ background: "var(--paper)", border: "1px solid var(--border)", color: "var(--ink-soft)" }}
+    >
+      <span className="font-semibold uppercase tracking-wider text-[10px]" style={{ color: "var(--ink-muted)" }}>
+        Pré-Order
+      </span>
+      <span>
+        spend <strong className="font-num" style={{ color: "var(--ink)" }}>{spend.formatted}</strong>
+      </span>
+      <span>·</span>
+      <span>
+        ROAS <strong className="font-num" style={{ color: "var(--ink)" }}>{roas?.formatted ?? "—"}</strong>
+      </span>
+    </div>
+  );
+}
 
 // Cassia 2026-06-12: Overview suporta ?day=today (intra-dia D0) e default
 // ?day=yesterday (D-1). Refresh button continua forçando re-fetch.
@@ -110,6 +137,7 @@ export default async function DailyBriefingPage({
             />
           ))}
         </div>
+        <PreorderRow bundle={us} />
 
         {/* ===== BR Section (logo abaixo do US) ===== */}
         <div className="section-marker mb-3">
@@ -130,6 +158,7 @@ export default async function DailyBriefingPage({
             />
           ))}
         </div>
+        <PreorderRow bundle={br} />
 
         {/* Cassia 2026-06-14: removido bloco "DIAGNOSTICS · cross-source" e Narrative do Overview */}
       </div>
