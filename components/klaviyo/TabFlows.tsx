@@ -175,7 +175,7 @@ export default function TabFlows({ market, period, custom }: { market: Market; p
   }, [selectedFlowId, market, period, custom?.start, custom?.end]);
 
   if (err) return <div className="empty">{err.slice(0, 200)}</div>;
-  if (!data) return <div className="loading">Loading flows ({market} / {period})...</div>;
+  if (!data) return <div className="loading">Loading flows ({market} / {String(period).replace(/^L/, '')})...</div>;
 
   const maxRev = Math.max(...rows.map(r => r.revenue), 1);
   const pageRows = rows.slice((page-1)*PER, page*PER);
@@ -355,7 +355,7 @@ export default function TabFlows({ market, period, custom }: { market: Market; p
       {/* FLOW VIEW — charts reativos ao contexto */}
       {(!selectedFlowId || stepView === 'FLOW') && <>
         <SectionHead pill="KPIs Over Time" pillVariant="purple" title={<><b>Performance over time</b> · escopo: {chartScope}</>} right={chartLoading ? 'Loading data...' : `${chartSource.length} pontos`} />
-        {chartLoading && <div className="loading">Carregando dados de {chartScope}...</div>}
+        {chartLoading && <div className="loading">Loading {chartScope} data...</div>}
         {!chartLoading && chartSource.length === 0 && <div className="empty">{bulkSeries?.throttled ? `Klaviyo rate limit ativo. Aguardando ${bulkSeries.loading ? '~30s, retry automático…' : '1min, recarregue.'}` : 'Sem dados de performance para o filtro selecionado.'}</div>}
         {!chartLoading && chartSource.length > 0 && (
           <div className={gridCls}>

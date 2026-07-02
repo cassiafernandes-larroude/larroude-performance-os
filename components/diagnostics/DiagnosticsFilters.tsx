@@ -49,7 +49,7 @@ export function DiagnosticsFilters({ counts }: {
       <div className="flex items-center gap-1.5">
         <span className="text-[11px] font-semibold mr-1" style={{ color: "var(--ink-muted)", letterSpacing: "0.06em" }}>PERÍODO</span>
         {(["7d", "14d", "28d", "3M"] as const).map((p) => (
-          <FilterPill key={p} label={p} active={period === p} onClick={() => setParam("period", p)} />
+          <FilterPill key={p} label={p.toUpperCase()} active={period === p} onClick={() => setParam("period", p)} />
         ))}
       </div>
     </div>

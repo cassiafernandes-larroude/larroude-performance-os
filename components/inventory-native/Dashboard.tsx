@@ -604,8 +604,8 @@ export default function InventoryDashboard() {
           <span className="right-info">{kpis.modelosAtivos} modelos ativos</span>
         </div>
         <div className="kpi-grid kpi-grid-8">
-          <Kpi label="Faturamento" value={fmtMoney(kpis.revP, market)} sub={`${fmtNum(kpis.qtyP)} unidades`} />
-          <Kpi label="COGS no Período" value={fmtMoney(kpis.cogsP, market)} sub={`${fmtPct(kpis.revP > 0 ? kpis.cogsP / kpis.revP : 0)} do faturamento`} />
+          <Kpi label="Receita" value={fmtMoney(kpis.revP, market)} sub={`${fmtNum(kpis.qtyP)} unidades`} />
+          <Kpi label="COGS no Período" value={fmtMoney(kpis.cogsP, market)} sub={`${fmtPct(kpis.revP > 0 ? kpis.cogsP / kpis.revP : 0)} da receita`} />
           <Kpi
             label="Margem Líquida"
             value={fmtPct(kpis.netWeighted)}
@@ -620,7 +620,7 @@ export default function InventoryDashboard() {
           <Kpi label="Em Trânsito" value={fmtNum(kpis.emTransito)} sub="indo pro warehouse" tone="gold" />
         </div>
         <div className="kpi-grid kpi-grid-4" style={{ marginTop: 10 }}>
-          <Kpi label="Faturamento Previsto" value={fmtMoney(kpis.fatPrevisto, market)} sub="estoque atual × preço atual" tone="green" />
+          <Kpi label="Receita Prevista" value={fmtMoney(kpis.fatPrevisto, market)} sub="estoque atual × preço atual" tone="green" />
           <Kpi label="Modelos Ativos" value={fmtNum(kpis.modelosAtivos)} sub={`de ${fmtNum(processed.length)} no catálogo`} />
           <Kpi label="Estoque Total" value={fmtNum(kpis.emEstoque + kpis.onDemand + kpis.emRemessa + kpis.emTransito)} sub="todas as etapas do ciclo" />
           <Kpi
@@ -670,7 +670,7 @@ export default function InventoryDashboard() {
                 <th style={{ width: 40 }}>#</th>
                 <th>Produto</th>
                 <th>Produção</th>
-                <th className="num">Faturamento</th>
+                <th className="num">Receita</th>
                 <th className="num">% do total</th>
                 <th className="num">% acumulado</th>
                 <th className="num">Unidades</th>
@@ -720,7 +720,7 @@ export default function InventoryDashboard() {
                 <th>Produto</th>
                 <th>Produção</th>
                 <th className="num">Estoque</th>
-                <th className="num">Faturamento</th>
+                <th className="num">Receita</th>
                 <th className="num">Velocidade</th>
                 <th>Cobertura</th>
                 <th className="num">Em Remessa</th>
@@ -770,7 +770,7 @@ export default function InventoryDashboard() {
                 <th>Produto</th>
                 <th>Produção</th>
                 <th className="num">Vendas 60d</th>
-                <th className="num">Faturamento</th>
+                <th className="num">Receita</th>
                 <th className="num">Estoque</th>
                 <th className="num">Custo unit.</th>
                 <th>Capital parado</th>
@@ -830,7 +830,7 @@ export default function InventoryDashboard() {
                 <th style={{ width: 40 }}>#</th>
                 <th>Produto</th>
                 <th>Produção</th>
-                <th className="num">Faturamento</th>
+                <th className="num">Receita</th>
                 <th className="num">COGS</th>
                 <th className="num">Bruta</th>
                 <th className="num">Contrib.</th>
@@ -918,7 +918,7 @@ export default function InventoryDashboard() {
               <tr>
                 <th>Produto</th>
                 <th>Produção</th>
-                <th className="num">Faturamento</th>
+                <th className="num">Receita</th>
                 <th className="num">% do tot.</th>
                 <th className="num">Unidades</th>
                 <th className="num">COGS</th>

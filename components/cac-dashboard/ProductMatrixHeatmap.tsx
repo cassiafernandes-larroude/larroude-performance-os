@@ -115,8 +115,8 @@ export default function ProductMatrixHeatmap({
           const hasNew = !!cell && cell.newCustomers > 0;
           const cac = cell?.cac ?? 0;
           const tooltip = hasNew
-            ? `${p.productName || p.motherSku}\n${date}\nCAC ${formatMoney(cac, market)}\n${cell?.newCustomers || 0} novos`
-            : `${date}\nsem novo cliente`;
+            ? `${p.productName || p.motherSku}\n${date}\nCAC ${formatMoney(cac, market)}\n${cell?.newCustomers || 0} new`
+            : `${date}\nno new customers`;
           return (
             <td
               key={date}

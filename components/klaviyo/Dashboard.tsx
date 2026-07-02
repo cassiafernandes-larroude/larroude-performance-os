@@ -43,7 +43,7 @@ export default function Dashboard() {
   const effectiveCustom = period === 'CUSTOM' ? appliedCustom : undefined;
   const periodLabel = useMemo(() => {
     if (period === 'CUSTOM' && appliedCustom) return `${appliedCustom.start} → ${appliedCustom.end}`;
-    return period;
+    return PRESET_LABELS[period] || period;
   }, [period, appliedCustom]);
 
   function applyCustom() {

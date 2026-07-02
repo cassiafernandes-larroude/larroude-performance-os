@@ -302,7 +302,7 @@ export default function Dashboard() {
           className="p-8 text-center text-sm rounded-2xl"
           style={{ background: '#fff', border: '0.8px solid #e5e3de', color: '#6b7280' }}
         >
-          Loading candidates from Shopify (28d)...
+          Loading candidates from Shopify (28D)...
         </div>
       )}
 

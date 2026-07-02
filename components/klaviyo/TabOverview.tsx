@@ -37,7 +37,7 @@ export default function TabOverview({ market, period, custom }: { market: Market
   }, [market, period, custom?.start, custom?.end]);
 
   if (err) return <div className="empty">{err.slice(0, 200)}</div>;
-  if (!data) return <div className="loading">Loading overview ({market} / {period})...</div>;
+  if (!data) return <div className="loading">Loading overview ({market} / {String(period).replace(/^L/, '')})...</div>;
 
   const c = data.campaigns, f = data.flows;
   const cmp = (data.compareSeries || []) as any[];

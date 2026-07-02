@@ -105,7 +105,7 @@ export default function ChannelSharePage() {
       {error && (
         <div className="card mt-4 p-4 border-l-4" style={{ borderLeftColor: '#ef4444' }}>
           <div className="text-sm font-medium" style={{ color: '#ef4444' }}>
-            Failed to load data
+            Error loading data
           </div>
           <div className="text-xs mt-1" style={{ color: '#6b7280' }}>{error}</div>
         </div>

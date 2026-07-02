@@ -112,7 +112,7 @@ export default function SessoesPage() {
         <span className="text-[11px] uppercase tracking-[0.12em] font-semibold mr-1" style={{ color: '#9ca3af' }}>PERÍODO</span>
         {PRESETS.map((p) => {
           const active = !applied && period === p;
-          return <button key={p} onClick={() => { setApplied(null); setPeriod(p); }} className={active ? PILL_ON : PILL_OFF} style={active ? { background: '#1a1a1a', color: '#fff' } : { background: '#ebe9e3', color: '#1a1a1a' }}>{p}</button>;
+          return <button key={p} onClick={() => { setApplied(null); setPeriod(p); }} className={active ? PILL_ON : PILL_OFF} style={active ? { background: '#1a1a1a', color: '#fff' } : { background: '#ebe9e3', color: '#1a1a1a' }}>{p.toUpperCase()}</button>;
         })}
         <span className="h-7 w-px mx-1" style={{ background: '#e5e3de' }} />
         <input type="date" value={draftStart} onChange={(e) => setDraftStart(e.target.value)} className="rounded-full px-4 py-2 text-[13px] bg-white" style={{ border: `1px solid ${applied ? '#ec4899' : '#e5e3de'}` }} />

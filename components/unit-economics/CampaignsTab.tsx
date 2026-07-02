@@ -932,7 +932,7 @@ export default function CampaignsTab() {
                   </div>
                 </div>
                 <div>
-                  <div className="text-[10px] uppercase tracking-wider" style={{ color: "var(--ink-muted)" }}>Faturamento previsto</div>
+                  <div className="text-[10px] uppercase tracking-wider" style={{ color: "var(--ink-muted)" }}>Projected revenue</div>
                   <div style={{ fontSize: 18, fontWeight: 800, color: "#166534" }}>
                     {c.forecastRevenue && c.forecastRevenue > 0
                       ? fmtMoney(c.forecastRevenue, c.market)
@@ -950,7 +950,7 @@ export default function CampaignsTab() {
                       : "—"}
                   </div>
                   <div className="text-[10px]" style={{ color: "var(--ink-muted)" }}>
-                    {c.targetROAS && c.targetROAS > 0 ? `Faturamento ÷ ${c.targetROAS.toFixed(1)}x` : ""}
+                    {c.targetROAS && c.targetROAS > 0 ? `Revenue ÷ ${c.targetROAS.toFixed(1)}x` : ""}
                   </div>
                 </div>
               </div>
@@ -1093,7 +1093,7 @@ function CampaignForecastPanel({
           }}
         >
           <div className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: "#166534" }}>
-            Faturamento previsto
+            Projected revenue
           </div>
           <div
             style={{
@@ -1144,7 +1144,7 @@ function CampaignForecastPanel({
               : marketingInvestment.toFixed(0)}
           </div>
           <div className="text-[10px] mt-1" style={{ color: "var(--ink-muted)" }}>
-            Faturamento ÷ ROAS alvo <b>{targetRoas.toFixed(1)}x</b>
+            Revenue ÷ target ROAS <b>{targetRoas.toFixed(1)}x</b>
           </div>
         </div>
       </div>

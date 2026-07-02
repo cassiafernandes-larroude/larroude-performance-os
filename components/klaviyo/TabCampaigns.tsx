@@ -98,7 +98,7 @@ export default function TabCampaigns({ market, period, custom }: { market: Marke
   useEffect(() => { setPage(1); }, [search]);
 
   if (err) return <div className="empty">{err.slice(0, 200)}</div>;
-  if (!data) return <div className="loading">Loading campaigns ({market} / {period})...</div>;
+  if (!data) return <div className="loading">Loading campaigns ({market} / {String(period).replace(/^L/, '')})...</div>;
 
   const maxRev = Math.max(...rows.map(r => r.revenue), 1);
   const pageRows = rows.slice((page-1)*PER, page*PER);

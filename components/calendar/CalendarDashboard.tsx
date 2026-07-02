@@ -311,7 +311,7 @@ function ActionRow({ a, market }: { a: Action; market: Market }) {
         {a.status === 'measured' && a.result && (
           <div>
             <div className="grid grid-cols-3 gap-2">
-              <Metric label="Faturamento" value={fmtMoney(a.result.gmv, market)} color="#10b981" />
+              <Metric label="Receita" value={fmtMoney(a.result.gmv, market)} color="#10b981" />
               <Metric label="Unidades" value={fmtN(a.result.units)} color="#5d4ec5" />
               <Metric label="Investido" value={a.result.spendOk ? fmtMoney(a.result.spend, market) : '—'} color="#e11d48" />
             </div>
@@ -368,7 +368,7 @@ function ActionRow({ a, market }: { a: Action; market: Market }) {
                   <span className="flex-1">Produto</span>
                   <span className="w-[150px] shrink-0">SKU</span>
                   <span className="w-[70px] shrink-0 text-right">Unid.</span>
-                  <span className="w-[90px] shrink-0 text-right">Faturamento</span>
+                  <span className="w-[90px] shrink-0 text-right">Receita</span>
                 </div>
                 {prods.map((p) => (
                   <div key={p.sku || p.title} className="flex items-center gap-3 text-[12px] py-0.5" style={{ color: 'var(--ink)' }}>

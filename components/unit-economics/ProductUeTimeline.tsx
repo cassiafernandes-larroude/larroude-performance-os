@@ -175,10 +175,10 @@ export default function ProductUeTimeline({ market, product, assumptions, market
       </div>
 
       {error && (
-        <div className="text-sm p-3" style={{ color: '#b3382f' }}>Erro: {error}</div>
+        <div className="text-sm p-3" style={{ color: '#b3382f' }}>Error: {error}</div>
       )}
       {loading && (
-        <div className="text-sm p-6 text-center" style={{ color: '#6b7280' }}>Carregando série…</div>
+        <div className="text-sm p-6 text-center" style={{ color: '#6b7280' }}>Loading series…</div>
       )}
       {!loading && !error && points.length === 0 && (
         <div className="text-sm p-6 text-center" style={{ color: '#6b7280' }}>

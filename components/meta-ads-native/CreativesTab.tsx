@@ -182,7 +182,7 @@ function SkuQuadro({
           <p className="text-[11px]" style={{ color: 'var(--ink-soft)' }}>{subtitle}</p>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:flex lg:items-center gap-2 lg:gap-3 text-[11px] w-full lg:w-auto">
-          <Stat label="Faturamento" value={formatCurrency(totals.revenue, currency, true)} color="#10b981" />
+          <Stat label="Revenue" value={formatCurrency(totals.revenue, currency, true)} color="#10b981" />
           <Stat label="Investimento" value={formatCurrency(totals.spend, currency, true)} color="var(--ink)" />
           <Stat label="ROAS" value={totals.roas > 0 ? `${formatDecimal(totals.roas)}×` : '—'} color={totals.roas >= 1 ? '#10b981' : totals.roas > 0 ? '#f59e0b' : 'var(--ink-muted)'} />
           <Stat label="Units" value={formatNumber(totals.units)} color="var(--ink-soft)" />

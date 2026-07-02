@@ -117,7 +117,7 @@ export default function TodaySalesCard({
         <button
           onClick={onRefresh}
           className="pill pill-ghost px-3 py-1.5 text-[11px] flex items-center gap-1.5 font-medium"
-          title="Refresh dados de hoje"
+          title="Refresh today's data"
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <path d="M3 12a9 9 0 0 1 9-9 9 9 0 0 1 6.7 3" />

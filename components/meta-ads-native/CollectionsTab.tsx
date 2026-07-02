@@ -52,8 +52,8 @@ export default function CollectionsTab({ region, since, until, currency }: Props
 
   return (
     <div className="space-y-6">
-      {loading && <div className="card text-center py-8" style={{ color: 'var(--ink-soft)' }}>Carregando coleções × criativos…</div>}
-      {error && <div className="card border-rose-300 bg-rose-50 text-rose-700 text-sm">Erro: {error}</div>}
+      {loading && <div className="card text-center py-8" style={{ color: 'var(--ink-soft)' }}>Loading collections × creatives…</div>}
+      {error && <div className="card border-rose-300 bg-rose-50 text-rose-700 text-sm">Error: {error}</div>}
 
       {!loading && (
         <div className="card" style={{ borderTop: '3px solid #5d4ec5' }}>
