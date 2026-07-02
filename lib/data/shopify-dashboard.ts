@@ -3,7 +3,7 @@ import { runQuery, hasBigQueryCredentials } from "@/lib/bigquery/client";
 import { cached } from "@/lib/cache";
 import { fulfillmentCategoryFilterSQL, type FulfillmentCategory } from "@/lib/shared/fulfillment-category";
 import { getPreorderMotherSkus } from "@/lib/shared/preorder-skus";
-import { EXCLUDED_TAGS_REGEX, excludeExchangesSQL } from "@/lib/shared/dtc-filters";
+import { EXCLUDED_TAGS_REGEX, excludeExchangesSQL, excludeRedoLineItemSQL } from "@/lib/shared/dtc-filters";
 
 const TZ: Record<Market, string> = { US: "America/New_York", BR: "America/Sao_Paulo" };
 const DATASET: Record<Market, string> = { US: "stg_shopify", BR: "stg_shopify_br" };
@@ -243,6 +243,7 @@ export async function getShopifyBundle(
           WHERE DATE(o.created_at, '${tz}') BETWEEN @from AND @to
             AND ${commonFiltersShopify(market, "o.")}
             ${fulO}
+            ${excludeRedoLineItemSQL('li')}
         ),
         refunds AS (
           SELECT IFNULL(SUM((SELECT SUM(CAST(JSON_VALUE(t,'$.amount') AS NUMERIC))
@@ -303,6 +304,7 @@ export async function getShopifyBundle(
             ${market === "BR" ? `
             AND LOWER(IFNULL(o.financial_status, '')) NOT IN ('pending', 'expired', 'authorized')` : ""}
             ${fulO}
+            ${excludeRedoLineItemSQL('li')}
         )
         SELECT
           COALESCE(sku_root, 'sem-sku') AS sku,
@@ -347,6 +349,7 @@ export async function getShopifyBundle(
           ${market === "BR" ? `
           AND LOWER(IFNULL(o.financial_status, '')) NOT IN ('pending', 'expired', 'authorized')` : ""}
           ${fulO}
+          ${excludeRedoLineItemSQL('li')}
         GROUP BY title
         ORDER BY units DESC
         LIMIT 8
@@ -375,6 +378,7 @@ export async function getShopifyBundle(
           ${market === "BR" ? `
           AND LOWER(IFNULL(o.financial_status, '')) NOT IN ('pending', 'expired', 'authorized')` : ""}
           ${fulO}
+          ${excludeRedoLineItemSQL('li')}
         GROUP BY collection
         ORDER BY revenue DESC
         LIMIT 8

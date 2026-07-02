@@ -45,6 +45,21 @@ export function excludeExchangesSQL(alias = ""): string {
   // Mudar receita = decisão de negócio explícita.
 }
 
+// Cassia 2026-07-02: desde Mar/2026 o app Redo adiciona um line item de $4.98
+// (sku 'x-redo', "Free Returns Coverage") em quase toda order US (~6-8k itens/mes).
+// Nao e' par vendido — qualquer SUM de quantity sobre line_items inflava units US ~20%.
+// Guard de NIVEL DE LINE ITEM: aplicar em toda query que faz UNNEST(line_items).
+export const REDO_COVERAGE_SKU = "x-redo";
+
+/**
+ * Exclui o line item de cobertura do Redo (sku 'x-redo') em CTEs que fazem
+ * UNNEST(JSON_QUERY_ARRAY(line_items)). Filtro de LINHA, nao de order.
+ * @param liVar nome da variavel do UNNEST (ex.: 'li')
+ */
+export function excludeRedoLineItemSQL(liVar = "li"): string {
+  return `AND LOWER(IFNULL(JSON_VALUE(${liVar}, '$.sku'), '')) != '${REDO_COVERAGE_SKU}'`;
+}
+
 /**
  * Clausula de exclusao por TAGS (order + customer). Usa a regex canonica.
  * @param alias prefixo da tabela (ex.: 'o'); vazio = colunas sem alias

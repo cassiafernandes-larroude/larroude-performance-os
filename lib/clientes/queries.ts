@@ -22,6 +22,7 @@ import {
   type Market,
 } from '@/lib/ltv-dashboard/queries';
 import { CHANNEL_UTM_PATTERNS } from '@/lib/shared/channel-utms';
+import { excludeRedoLineItemSQL } from '@/lib/shared/dtc-filters';
 
 export type { Market };
 
@@ -140,6 +141,7 @@ export async function getCustomerOrders(market: Market, customerId: string): Pro
         UNNEST(JSON_QUERY_ARRAY(line_items)) AS li
       WHERE ${COMMON_FILTERS_DTC(market)}
         AND JSON_VALUE(customer, '$.id') = @customerId
+        ${excludeRedoLineItemSQL('li')}
     ),
     clean_li AS (
       SELECT r.*, r.qty - IFNULL(rf.refunded_qty, 0) AS net_qty

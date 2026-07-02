@@ -37,7 +37,7 @@
  */
 
 import { runQuery } from './bigquery';
-import { EXCLUDED_TAGS_REGEX } from '@/lib/shared/dtc-filters';
+import { EXCLUDED_TAGS_REGEX, excludeRedoLineItemSQL } from '@/lib/shared/dtc-filters';
 import { getMetaSpendByDay } from './connectors/meta-ads';
 import { getGoogleAdsSpendByDay } from './connectors/google-ads';
 import { motherSkuOf, productTypeOf } from './connectors/shopify';
@@ -182,6 +182,7 @@ export function validOrdersCte(table: string, market: Market): string {
     FROM \`${table}\` o,
       UNNEST(JSON_QUERY_ARRAY(o.line_items)) AS li
     WHERE ${COMMON_FILTERS_DTC(market).replace(/test = FALSE/, 'o.test = FALSE').replace(/cancelled_at IS NULL/, 'o.cancelled_at IS NULL').replace(/JSON_VALUE\(customer/g, 'JSON_VALUE(o.customer').replace(/(?<![A-Za-z_])name LIKE/g, 'o.name LIKE').replace(/IFNULL\(tags/g, 'IFNULL(o.tags').replace(/IFNULL\(note/g, 'IFNULL(o.note').replace(/CAST\(total_price/g, 'CAST(o.total_price').replace(/(?<![A-Za-z_.])financial_status/g, 'o.financial_status')}
+      ${excludeRedoLineItemSQL('li')}
   ),
   __vo_clean_li AS (
     SELECT r.*, r.qty - IFNULL(rf.refunded_qty, 0) AS net_qty
@@ -934,6 +935,7 @@ export async function getProductLtv(
       WHERE ${COMMON_FILTERS_DTC(market).replace(/test = FALSE/, 'o.test = FALSE').replace(/cancelled_at IS NULL/, 'o.cancelled_at IS NULL').replace(/JSON_VALUE\(customer/g, 'JSON_VALUE(o.customer').replace(/CAST\(total_price/g, 'CAST(o.total_price').replace(/(?<![A-Za-z_.])financial_status/g, 'o.financial_status')}
         AND DATE(o.created_at, '${LTV_TZ[market]}') BETWEEN @start AND @end
         AND o.id IN (SELECT order_id FROM valid_orders)
+        ${excludeRedoLineItemSQL('li')}
     )
     SELECT
       r.order_date,
@@ -1249,6 +1251,7 @@ export async function getCustomerJourney(market: Market): Promise<CustomerJourne
       FROM \`${table}\` o,
         UNNEST(JSON_QUERY_ARRAY(o.line_items)) AS li
       WHERE ${COMMON_FILTERS_DTC(market).replace(/test = FALSE/, 'o.test = FALSE').replace(/cancelled_at IS NULL/, 'o.cancelled_at IS NULL').replace(/JSON_VALUE\(customer/g, 'JSON_VALUE(o.customer').replace(/(?<![A-Za-z_])name LIKE/g, 'o.name LIKE').replace(/IFNULL\(tags/g, 'IFNULL(o.tags').replace(/IFNULL\(note/g, 'IFNULL(o.note').replace(/CAST\(total_price/g, 'CAST(o.total_price').replace(/(?<![A-Za-z_.])financial_status/g, 'o.financial_status')}
+        ${excludeRedoLineItemSQL('li')}
     ),
     clean_li AS (
       SELECT r.*, r.qty - IFNULL(rf.refunded_qty, 0) AS net_qty

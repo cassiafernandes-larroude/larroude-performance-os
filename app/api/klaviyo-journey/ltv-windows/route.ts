@@ -3,9 +3,15 @@
 // Metodologia oficial Larroudé (Triple Whale-like):
 //   - LTV Preditivo = AOV × Frequency × (1 / (1 − returning_rate))
 //   - LTV Histórico = total_net_sales / total_customers (com refunds, todos os customers)
-// Filtros canônicos: exclude cancelled, test, b2b/wholesale, customer 5025734230182.
+// Cassia 2026-07-02: migrado de larroude-data-platform.shopify_* (warehouse errado, filtros
+// incompletos) para larroude-data-prod.stg_shopify(_br).orders com os filtros DTC canônicos
+// (dtcCoreFilters) + datas na timezone do mercado — mesmos números do resto do painel.
+
+import { dtcCoreFilters } from '@/lib/shared/dtc-filters';
 
 export const runtime = 'edge';
+
+const TZ: Record<string, string> = { us: 'America/New_York', br: 'America/Sao_Paulo' };
 
 function base64UrlEncode(input) {
   let str;
@@ -86,11 +92,13 @@ export async function GET(req: Request) {
     if (!["us", "br"].includes(account)) return new Response(JSON.stringify({ error: "account inválida" }), { status: 400, headers: { "content-type": "application/json" } });
     if (![90, 180, 365].includes(days)) return new Response(JSON.stringify({ error: "days deve ser 90, 180 ou 365" }), { status: 400, headers: { "content-type": "application/json" } });
 
-    const table = "larroude-data-platform.shopify_" + account + ".orders";
+    const market = account === "br" ? "BR" : "US";
+    const tz = TZ[account];
+    const table = "larroude-data-prod.stg_shopify" + (account === "br" ? "_br" : "") + ".orders";
     const sql = `
       WITH params AS (
-        SELECT DATE_SUB(DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY), INTERVAL @days DAY) AS start_date,
-               DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY) AS end_date
+        SELECT DATE_SUB(DATE_SUB(CURRENT_DATE('${tz}'), INTERVAL 1 DAY), INTERVAL @days DAY) AS start_date,
+               DATE_SUB(CURRENT_DATE('${tz}'), INTERVAL 1 DAY) AS end_date
       ),
       base AS (
         SELECT
@@ -103,13 +111,11 @@ export async function GET(req: Request) {
                   UNNEST(JSON_QUERY_ARRAY(r, '$.transactions')) AS t
               ), 0) AS net_sales
         FROM \`${table}\`, params
-        WHERE cancelled_at IS NULL AND test = FALSE
-          AND JSON_VALUE(customer, '$.id') IS NOT NULL
+        WHERE JSON_VALUE(customer, '$.id') IS NOT NULL
           AND JSON_VALUE(customer, '$.id') != '5025734230182'
-          AND (JSON_VALUE(customer, '$.tags') IS NULL
-               OR (NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(customer, '$.tags')), r'b2b')
-                   AND NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(customer, '$.tags')), r'wholesale')))
-          AND DATE(created_at) BETWEEN params.start_date AND params.end_date
+          AND financial_status NOT IN ('voided','refunded')
+          ${dtcCoreFilters(market)}
+          AND DATE(created_at, '${tz}') BETWEEN params.start_date AND params.end_date
       ),
       period_customers AS (
         SELECT customer_id, COUNT(*) AS orders_in_period, SUM(net_sales) AS net_sales_in_period

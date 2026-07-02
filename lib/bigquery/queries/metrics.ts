@@ -1,5 +1,5 @@
 import type { Market } from "@/types/metric";
-import { dtcCoreFilters } from "@/lib/shared/dtc-filters";
+import { dtcCoreFilters, excludeRedoLineItemSQL } from "@/lib/shared/dtc-filters";
 import { fulfillmentCategoryFilterSQL, PREORDER_CAMPAIGN_REGEX, type FulfillmentCategory } from "@/lib/shared/fulfillment-category";
 
 const TZ: Record<Market, string> = {
@@ -66,6 +66,7 @@ export function aggregatedKpisSQL(market: Market, fulCats?: FulfillmentCategory[
         AND o.financial_status NOT IN ('voided','refunded')
         ${dtcCoreFilters(market, 'o')}
         ${fulO}
+        ${excludeRedoLineItemSQL('li')}
     ),
     refunds_raw AS (
       SELECT

@@ -14,7 +14,7 @@
 
 import { runQuery } from './bigquery';
 import type { Granularity, Market } from './types';
-import { dtcCoreFilters } from '@/lib/shared/dtc-filters';
+import { dtcCoreFilters, excludeRedoLineItemSQL } from '@/lib/shared/dtc-filters';
 import { fulfillmentCategoryFilterSQL, preorderOrderPredicateSQL, FULFILLMENT_LOCATION_IDS, type FulfillmentCategory } from '@/lib/shared/fulfillment-category';
 
 // Timezone Shopify (alinhado ao admin oficial)
@@ -101,6 +101,7 @@ export async function queryAggregatedKpis(market: Market, start: string, end: st
            UNNEST(JSON_QUERY_ARRAY(line_items)) li
       WHERE DATE(o.created_at, '${TZ[market]}') BETWEEN @start AND @end
         AND o.financial_status NOT IN ('voided','refunded') ${shopifyOrderFilters(market, 'o', fulCats, dataset)}
+        ${excludeRedoLineItemSQL('li')}
     ),
     refunds_raw AS (
       SELECT
@@ -219,7 +220,8 @@ export async function queryOriginShare(market: Market, start: string, end: strin
     WITH ord AS (
       SELECT id, line_items,
         (SELECT IFNULL(SUM(CAST(JSON_VALUE(li,'$.quantity') AS INT64)), 0)
-         FROM UNNEST(JSON_QUERY_ARRAY(line_items)) li) AS units,
+         FROM UNNEST(JSON_QUERY_ARRAY(line_items)) li
+         WHERE TRUE ${excludeRedoLineItemSQL('li')}) AS units,
         CAST(total_price AS NUMERIC) AS revenue
       FROM \`larroude-data-prod.${dataset}.orders\`
       WHERE DATE(created_at, '${TZ[market]}') BETWEEN @start AND @end
@@ -272,6 +274,7 @@ export async function queryDailySales(market: Market, start: string, end: string
            UNNEST(JSON_QUERY_ARRAY(line_items)) li
       WHERE DATE(o.created_at, '${TZ[market]}') BETWEEN @start AND @end
         AND o.financial_status NOT IN ('voided','refunded') ${shopifyOrderFilters(market, 'o', fulCats, dataset)}
+        ${excludeRedoLineItemSQL('li')}
       GROUP BY d
     )
     SELECT

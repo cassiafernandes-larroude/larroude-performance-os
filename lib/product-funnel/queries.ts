@@ -11,6 +11,8 @@ import { canonicalSku } from '@/lib/calendar/ad-spend';
 import { extractAdRefFromName } from '@/lib/meta-ads-native/sku-extractor';
 import { getCogsBySku } from '@/lib/unit-economics/shopify-cogs';
 import { DEFAULT_ASSUMPTIONS } from '@/lib/unit-economics/cascade';
+import { DTC_MAX_ORDER_VALUE, excludeTagsSQL, excludeExchangesSQL, excludeRedoLineItemSQL } from '@/lib/shared/dtc-filters';
+import { FX_BRL_FALLBACK } from '@/lib/shared/fx';
 
 export type Market = 'US' | 'BR';
 
@@ -23,14 +25,24 @@ const ORDERS_TABLE: Record<Market, string> = {
   BR: 'larroude-data-prod.stg_shopify_br.orders',
 };
 const TZ: Record<Market, string> = { US: 'America/New_York', BR: 'America/Sao_Paulo' };
-const EXCLUDED_TAGS_REGEX = 'b2b|wholesale|marketplace|redo|influencer';
 const SHOPIFY_API_VERSION = process.env.SHOPIFY_API_VERSION || '2025-01';
 const GRAPH = 'https://graph.facebook.com/v20.0';
 const META_ACCOUNTS: Record<Market, string[]> = {
   US: ['2047856822417350', '929449929417505', '312869193575906'],
   BR: ['1735567560524487', '1975682443187483', '756931007040325'],
 };
-const FX_FALLBACK = 5.0;
+// Cassia 2026-07-02: filtros DTC canônicos com alias 'o' — antes só tags da order via regex local.
+// Inclui customer tags, cap de valor, trocas e financial_status (BR também exclui PIX não-pago).
+function pfOrderFilters(market: Market): string {
+  const fin = market === 'BR'
+    ? `AND o.financial_status NOT IN ('voided','refunded','pending','expired','authorized')`
+    : `AND o.financial_status NOT IN ('voided','refunded')`;
+  return `o.cancelled_at IS NULL AND o.test = FALSE
+        ${excludeTagsSQL('o')}
+        AND CAST(o.total_price AS NUMERIC) < ${DTC_MAX_ORDER_VALUE[market]}
+        ${fin}
+        ${excludeExchangesSQL('o')}`;
+}
 
 function shopCfg(market: Market) {
   if (market === 'US') return { domain: process.env.SHOPIFY_US_STORE_DOMAIN || 'larroude-com.myshopify.com', token: process.env.SHOPIFY_US_ADMIN_API_TOKEN || '' };
@@ -41,9 +53,9 @@ function metaToken(): string | null {
 }
 const today = () => new Date().toISOString().slice(0, 10);
 const addDays = (iso: string, n: number) => { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
-/** Fim da janela do drop: 14 dias a partir do lançamento (cap em hoje, pra não consultar futuro). */
-const WINDOW_DAYS = 14;
-function windowUntil(since: string): string { const end = addDays(since, WINDOW_DAYS); const t = today(); return end > t ? t : end; }
+/** Fim da janela do drop: N dias a partir do lançamento (cap em hoje, pra não consultar futuro). Default 14. */
+export const DEFAULT_WINDOW_DAYS = 14;
+function windowUntil(since: string, windowDays = DEFAULT_WINDOW_DAYS): string { const end = addDays(since, windowDays); const t = today(); return end > t ? t : end; }
 
 /** DROP_DD.MM.AA → data YYYY-MM-DD (data do drop). */
 function dropDate(tag: string): string | null {
@@ -116,7 +128,7 @@ async function getFx(market: Market, yyyymm: string): Promise<number> {
     const r = Number(rows?.[0]?.avg_rate_brl_usd);
     if (r > 0 && r < 20) return r;
   } catch { /* fallback */ }
-  return FX_FALLBACK;
+  return FX_BRL_FALLBACK;
 }
 /** Métricas de ads por SKU canônico numa janela (spend convertido p/ moeda do mercado, cliques, impressões). */
 async function getAdMetricsBySku(market: Market, since: string, until: string): Promise<{ map: Map<string, AdMetrics>; ok: boolean }> {
@@ -170,9 +182,9 @@ async function getSalesBySku(market: Market, since: string, until: string): Prom
              CAST(JSON_VALUE(l, '$.quantity') AS FLOAT64) AS qty,
              CAST(JSON_VALUE(l, '$.price') AS FLOAT64) AS price
       FROM ${ref} o, UNNEST(JSON_QUERY_ARRAY(o.line_items)) AS l
-      WHERE o.cancelled_at IS NULL AND o.test = FALSE
-        AND NOT REGEXP_CONTAINS(LOWER(IFNULL(o.tags, '')), r'${EXCLUDED_TAGS_REGEX}')
+      WHERE ${pfOrderFilters(market)}
         AND DATE(o.created_at, '${tz}') BETWEEN @since AND @until
+        ${excludeRedoLineItemSQL('l')}
     )
     SELECT li.sku AS sku,
            SUM(li.qty) AS gross_units,
@@ -208,9 +220,9 @@ function variantRegexFromCanonical(canonical: string): string {
 }
 
 /** Série diária de UM produto pré-order: sessões/add-to-cart (Shopify página) + unidades/faturamento (orders). */
-export async function getProductDaily(market: Market, handle: string, sku: string, since: string): Promise<DailyPoint[]> {
+export async function getProductDaily(market: Market, handle: string, sku: string, since: string, windowDays = DEFAULT_WINDOW_DAYS): Promise<DailyPoint[]> {
   const safeHandle = handle.replace(/[^a-z0-9._-]/gi, '');
-  const until = windowUntil(since);
+  const until = windowUntil(since, windowDays);
   const tz = TZ[market];
   const ref = '`' + ORDERS_TABLE[market] + '`';
   const skuRe = variantRegexFromCanonical(sku);
@@ -230,8 +242,7 @@ export async function getProductDaily(market: Market, handle: string, sku: strin
              CAST(JSON_VALUE(l, '$.quantity') AS FLOAT64) AS qty,
              CAST(JSON_VALUE(l, '$.price') AS FLOAT64) AS price
       FROM ${ref} o, UNNEST(JSON_QUERY_ARRAY(o.line_items)) AS l
-      WHERE o.cancelled_at IS NULL AND o.test = FALSE
-        AND NOT REGEXP_CONTAINS(LOWER(IFNULL(o.tags, '')), r'${EXCLUDED_TAGS_REGEX}')
+      WHERE ${pfOrderFilters(market)}
         AND DATE(o.created_at, '${tz}') BETWEEN @since AND @until
         AND REGEXP_CONTAINS(UPPER(JSON_VALUE(l, '$.sku')), @skuRe)
     )
@@ -271,6 +282,7 @@ export interface ProductFunnelRow {
   cogs: number; revMinusCost: number; contributionMargin: number; grossMargin: number;
   netProfit: number; netMargin: number;
   recommendation: 'produce' | 'evaluate' | 'stop' | 'nodata';
+  lowSample: boolean;
 }
 export interface PreorderFunnelResult {
   available: boolean;
@@ -279,21 +291,26 @@ export interface PreorderFunnelResult {
   drops: { drop: string; dropDate: string; windowComplete: boolean; rows: ProductFunnelRow[] }[];
 }
 
+// Cassia 2026-07-02: abaixo de 300 sessões a taxa de conversão não tem significância —
+// não emitimos produce/stop, forçamos 'evaluate' e sinalizamos lowSample pra UI.
+const LOW_SAMPLE_SESSIONS = 300;
+
 /**
- * Recomendação de produção (regra Cassia: demanda + margem + returns), avaliada na janela de 14d:
+ * Recomendação de produção (regra Cassia: demanda + margem + returns), avaliada na janela do drop:
  *   🟢 produce  : contribuição>0, margem bruta ≥ 50%, returns ≤ 15% e vendeu bem (≥10 un OU conv ≥ 1%)
  *   🔴 stop     : contribuição ≤ 0, returns > 25%, ou demanda muito baixa (<5 un e conv <0.5%)
- *   🟡 evaluate : lucrativo mas algum sinal fraco
+ *   🟡 evaluate : lucrativo mas algum sinal fraco — ou amostra pequena (<300 sessões)
  *   ⚪ nodata   : sem sinal de medição (0 sessões e 0 unidades)
  */
 function produceRec(r: { contributionMargin: number; grossMargin: number; returnRate: number; units: number; convRate: number; sessions: number }): ProductFunnelRow['recommendation'] {
   if (r.units === 0 && r.sessions === 0) return 'nodata';
+  if (r.sessions < LOW_SAMPLE_SESSIONS) return 'evaluate';
   if (r.contributionMargin <= 0 || r.returnRate > 25 || (r.units < 5 && r.convRate < 0.5)) return 'stop';
   if (r.contributionMargin > 0 && r.grossMargin >= 50 && r.returnRate <= 15 && (r.units >= 10 || r.convRate >= 1)) return 'produce';
   return 'evaluate';
 }
 
-export async function getPreorderFunnel(market: Market): Promise<PreorderFunnelResult> {
+export async function getPreorderFunnel(market: Market, windowDays = DEFAULT_WINDOW_DAYS): Promise<PreorderFunnelResult> {
   const products = await getPreorderProducts(market);
   if (!products.length) return { available: true, spendOk: true, drops: [] };
 
@@ -317,7 +334,7 @@ export async function getPreorderFunnel(market: Market): Promise<PreorderFunnelR
   const adByDate = new Map<string, Map<string, AdMetrics>>();
   const salesByDate = new Map<string, Map<string, Sales>>();
   await Promise.all(distinctSince.map(async (since) => {
-    const until = windowUntil(since); // 14 dias a partir do lançamento
+    const until = windowUntil(since, windowDays); // N dias a partir do lançamento (default 14)
     const [fn, ad, sl] = await Promise.all([
       getProductPageFunnel(market, since, until).catch(() => new Map<string, Funnel>()),
       getAdMetricsBySku(market, since, until).catch(() => ({ map: new Map<string, AdMetrics>(), ok: false })),
@@ -359,9 +376,10 @@ export async function getPreorderFunnel(market: Market): Promise<PreorderFunnelR
         units, revenue, returnRate,
         cogs, revMinusCost, contributionMargin, grossMargin, netProfit, netMargin,
         recommendation: produceRec({ contributionMargin, grossMargin, returnRate, units, convRate, sessions: f.sessions }),
+        lowSample: f.sessions < LOW_SAMPLE_SESSIONS,
       };
     }).sort((x, y) => y.revenue - x.revenue);
-    const windowComplete = addDays(since, WINDOW_DAYS) <= today();
+    const windowComplete = addDays(since, windowDays) <= today();
     drops.push({ drop: tag, dropDate: since, windowComplete, rows });
   }
   drops.sort((a, b) => b.dropDate.localeCompare(a.dropDate));

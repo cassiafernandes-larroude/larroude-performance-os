@@ -1,8 +1,14 @@
 ﻿// Vercel Edge Function — atribuição Klaviyo via Shopify (BigQuery REST API)
-// Lê de larroude-data-platform.shopify_{us,br}.orders, filtra utm_source=klaviyo.
-// Auth via JWT assinado com SA private_key (crypto.subtle, Edge runtime).
+// Filtra utm_source=klaviyo no landing_site. Auth via JWT assinado com SA private_key.
+// Cassia 2026-07-02: migrado de larroude-data-platform.shopify_* (warehouse errado, SEM filtro
+// DTC — contava B2B/teste/canceladas) para larroude-data-prod.stg_shopify(_br).orders com os
+// filtros DTC canônicos (dtcCoreFilters) + mês na timezone do mercado.
+
+import { dtcCoreFilters } from '@/lib/shared/dtc-filters';
 
 export const runtime = 'edge';
+
+const TZ: Record<string, string> = { us: 'America/New_York', br: 'America/Sao_Paulo' };
 
 const BQ_PROJECT_FALLBACK = "larroude-data-platform";
 
@@ -127,16 +133,20 @@ export async function GET(req: Request) {
     const next = month === 12 ? { y: year + 1, m: 1 } : { y: year, m: month + 1 };
     const endDate = next.y + "-" + pad(next.m) + "-01";
 
-    const table = "larroude-data-platform.shopify_" + account + ".orders";
+    const market = account === "br" ? "BR" : "US";
+    const tz = TZ[account];
+    const table = "larroude-data-prod.stg_shopify" + (account === "br" ? "_br" : "") + ".orders";
     const sql =
       "SELECT" +
       "  COUNT(*) AS total_orders," +
-      "  IFNULL(ROUND(SUM(total_price), 2), 0) AS total_revenue," +
-      "  COUNTIF(REGEXP_CONTAINS(landing_site, r'(?i)[?&]utm_source=klaviyo')) AS klaviyo_orders," +
-      "  IFNULL(ROUND(SUM(IF(REGEXP_CONTAINS(landing_site, r'(?i)[?&]utm_source=klaviyo'), total_price, 0)), 2), 0) AS klaviyo_revenue," +
+      "  IFNULL(ROUND(SUM(CAST(total_price AS FLOAT64)), 2), 0) AS total_revenue," +
+      "  COUNTIF(REGEXP_CONTAINS(IFNULL(landing_site, ''), r'(?i)[?&]utm_source=klaviyo')) AS klaviyo_orders," +
+      "  IFNULL(ROUND(SUM(IF(REGEXP_CONTAINS(IFNULL(landing_site, ''), r'(?i)[?&]utm_source=klaviyo'), CAST(total_price AS FLOAT64), 0)), 2), 0) AS klaviyo_revenue," +
       "  ANY_VALUE(currency) AS currency " +
       "FROM `" + table + "` " +
-      "WHERE created_at >= TIMESTAMP(@start_date) AND created_at < TIMESTAMP(@end_date)";
+      "WHERE DATE(created_at, '" + tz + "') >= DATE(@start_date) AND DATE(created_at, '" + tz + "') < DATE(@end_date)" +
+      "  AND financial_status NOT IN ('voided','refunded') " +
+      dtcCoreFilters(market);
 
     const projectId = process.env.GCP_PROJECT_ID || BQ_PROJECT_FALLBACK;
     const j = await runBQQuery(projectId, sql, { start_date: startDate, end_date: endDate });

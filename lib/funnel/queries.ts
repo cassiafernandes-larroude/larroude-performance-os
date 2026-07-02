@@ -7,17 +7,28 @@
 import { runShopifyQL } from '@/lib/main-dashboard/shopify-admin';
 import { runQuery } from '@/lib/ltv-dashboard/bigquery';
 import { klaviyoFetch } from '@/lib/klaviyo/klaviyo';
+import { DTC_MAX_ORDER_VALUE, excludeTagsSQL, excludeExchangesSQL } from '@/lib/shared/dtc-filters';
 
 export type Market = 'US' | 'BR';
 export type Granularity = 'day' | 'week' | 'month';
 
 // Cassia 2026-06-21: tabela de orders local (evita importar o módulo pesado ltv-dashboard/queries
-// no bundle da rota). Regex de tags inline (mesmo valor canônico).
+// no bundle da rota).
 const ORDERS_TABLE: Record<Market, string> = {
   US: 'larroude-data-prod.stg_shopify.orders',
   BR: 'larroude-data-prod.stg_shopify_br.orders',
 };
-const EXCLUDED_TAGS_REGEX = 'b2b|wholesale|marketplace|redo|influencer';
+
+// Cassia 2026-07-02: alinhado ao canônico (lib/shared/dtc-filters) — antes só filtrava tags da
+// ORDER com regex local; faltavam tags do customer, cap de valor e exclusão de trocas.
+// NÃO inclui financial_status de propósito: getPaymentBreakdown precisa dos pending (bucket
+// PIX-pendente) e getPaidOrdersDaily já conta só financial_status='paid'.
+function funnelOrderFilters(market: Market): string {
+  return `cancelled_at IS NULL AND test = FALSE
+      ${excludeTagsSQL()}
+      AND CAST(total_price AS NUMERIC) < ${DTC_MAX_ORDER_VALUE[market]}
+      ${excludeExchangesSQL()}`;
+}
 
 export interface FunnelPoint {
   date: string;
@@ -143,8 +154,7 @@ export async function getPaymentBreakdown(market: Market, since: string, until: 
       SELECT id AS order_id, financial_status AS fs,
              LOWER(JSON_VALUE(payment_gateway_names, '$[0]')) AS gw
       FROM ${ordRef}
-      WHERE cancelled_at IS NULL AND test = FALSE
-        AND NOT REGEXP_CONTAINS(LOWER(IFNULL(tags, '')), r'${EXCLUDED_TAGS_REGEX}')
+      WHERE ${funnelOrderFilters(market)}
         AND DATE(created_at, '${tz}') BETWEEN @since AND @until
     ),
     tx AS (
@@ -243,8 +253,7 @@ export async function getPaidOrdersDaily(market: Market, since: string, until: s
     SELECT FORMAT_DATE('%Y-%m-%d', DATE(created_at, '${tz}')) AS d,
            COUNTIF(financial_status = 'paid') AS paid
     FROM ${tableRef}
-    WHERE cancelled_at IS NULL AND test = FALSE
-      AND NOT REGEXP_CONTAINS(LOWER(IFNULL(tags, '')), r'${EXCLUDED_TAGS_REGEX}')
+    WHERE ${funnelOrderFilters(market)}
       AND DATE(created_at, '${tz}') BETWEEN @since AND @until
     GROUP BY d
     ORDER BY d
