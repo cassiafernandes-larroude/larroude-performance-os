@@ -89,7 +89,7 @@ export default function GoogleAdsDashboard() {
       <div className="flex items-center gap-2 flex-wrap mb-3">
         {(['US', 'BR'] as const).map((m) => (
           <button key={m} onClick={() => { setMarket(m); setIsCustom(false); }} className={market === m ? MKT_ACTIVE : MKT_INACTIVE}>
-            <span className="text-[10px] font-bold opacity-70 mr-1.5">{m}</span>{m === 'US' ? 'United States' : 'Brasil'}
+            <span className="text-[10px] font-bold opacity-70 mr-1.5">{m}</span>{m === 'US' ? 'Estados Unidos' : 'Brasil'}
           </button>
         ))}
       </div>

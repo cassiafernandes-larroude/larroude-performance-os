@@ -48,7 +48,7 @@ export function ChatDrawer({
           <button
             className="p-2 rounded-lg"
             style={{ color: "var(--ink-muted)" }}
-            aria-label="Historico"
+            aria-label="Histórico"
           >
             <History className="w-4 h-4" />
           </button>

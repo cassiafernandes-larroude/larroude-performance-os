@@ -36,7 +36,7 @@ export default async function DiagnosticsPage({
     <div className="px-4 lg:px-8 py-5 lg:py-8 max-w-[1500px] mx-auto">
       <div className="mb-6">
         <h1 className="font-display text-[26px] lg:text-[36px]" style={{ color: "var(--ink)" }}>
-          Diagnosticos
+          Diagnósticos
         </h1>
         <p className="text-[12px] lg:text-[14px] mt-1" style={{ color: "var(--ink-soft)" }}>
           Cross-source rule engine - {all.length} diagnostics in this period {period}

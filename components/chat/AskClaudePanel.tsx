@@ -12,10 +12,10 @@ type Message = {
 };
 
 const SUGGESTIONS = [
-  "Qual o ROAS gross do US nos ultimos 28 dias?",
-  "Compara CAC US vs BR no periodo 28d",
-  "Quais sao os diagnosticos criticos agora?",
-  "O que e nCAC?",
+  "Qual o ROAS gross do US nos últimos 28 dias?",
+  "Compara CAC US vs BR no período 28d",
+  "Quais são os diagnósticos críticos agora?",
+  "O que é nCAC?",
 ];
 
 export function AskClaudePanel() {
@@ -91,7 +91,7 @@ export function AskClaudePanel() {
           </div>
           <div>
             <h1 className="text-[16px] font-semibold" style={{ color: "var(--ink)" }}>Ask Claude</h1>
-            <p className="text-[11px]" style={{ color: "var(--ink-muted)" }}>BigQuery - Diagnosticos - Comparacao US vs BR</p>
+            <p className="text-[11px]" style={{ color: "var(--ink-muted)" }}>BigQuery · Diagnósticos · Comparação US vs BR</p>
           </div>
         </div>
         {hasCredentials === false && (
@@ -182,7 +182,7 @@ export function AskClaudePanel() {
             {loading && (
               <div className="flex items-center gap-2 text-[12px]" style={{ color: "var(--ink-muted)" }}>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Claude esta pensando + chamando tools...</span>
+                <span>Claude está pensando e chamando tools…</span>
               </div>
             )}
           </div>

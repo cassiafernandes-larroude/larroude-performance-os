@@ -257,7 +257,7 @@ export function FiltersBar({ hidePeriod = false, hideDateRange = false, showFulf
                 </div>
               </div>
               <div>
-                <div className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--ink-muted)" }}>Periodo</div>
+                <div className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--ink-muted)" }}>Período</div>
                 <div className="grid grid-cols-3 gap-2">
                   {periods.map((p) => (
                     <button
@@ -271,7 +271,7 @@ export function FiltersBar({ hidePeriod = false, hideDateRange = false, showFulf
                 </div>
               </div>
               <div>
-                <div className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--ink-muted)" }}>Periodo customizado</div>
+                <div className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--ink-muted)" }}>Período customizado</div>
                 <div className="grid grid-cols-2 gap-2 mb-2">
                   <label className="block">
                     <span className="text-[11px]" style={{ color: "var(--ink-muted)" }}>De</span>

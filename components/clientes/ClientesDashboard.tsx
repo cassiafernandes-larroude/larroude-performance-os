@@ -132,7 +132,7 @@ export default function ClientesDashboard({ freshness }: { freshness: string }) 
             <div className="kpi-grid">
               <KpiCard label="Historical LTV" value={formatMoney(k.ltvHistorical, market, true)} sub="net_sales / clientes (incl. devoluções)" />
               <KpiCard label="Customer Lifetime" value={k.customerLifetime > 0 ? `${k.customerLifetime.toFixed(2)} a` : '—'} sub="1 / (1 − % recorrentes) · em anos" />
-              <KpiCard label="LTV / CAC" value={k.ltvCacRatio > 0 ? k.ltvCacRatio.toFixed(2) : '—'} sub={k.cac > 0 ? `CAC ${formatMoney(k.cac, market, true)} · saudável ≥ 3` : 'spend Meta+Google indisponível'} highlight />
+              <KpiCard label="LTV / CAC" value={k.ltvCacRatio > 0 ? k.ltvCacRatio.toFixed(2) : '—'} sub={k.cac > 0 ? `CAC ${formatMoney(k.cac, market, true)} · saudável ≥ 3` : 'gasto Meta+Google indisponível'} highlight />
               <KpiCard label="Median LTV (P50)" value={formatMoney(k.ltvMedian, market, true)} sub="mediana dos clientes" />
               <KpiCard label="LTV P75" value={formatMoney(k.ltvP75, market, true)} sub="top 25% gastam acima" />
               <KpiCard label="LTV P90" value={formatMoney(k.ltvP90, market, true)} sub="top 10% — alto valor" />

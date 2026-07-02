@@ -56,7 +56,7 @@ export default function TabBenchmarks({ market, period, custom }: { market: Mark
 
   return (
     <>
-      <SectionHead pill="Benchmarks" pillVariant="gold" title={<><b>Scorecard by type</b> &middot; actual vs LarroudÃ© baseline (p25) and target (p75)</>} right={`${camps.length} camp types / ${flows.length} flow types`} />
+      <SectionHead pill="Benchmarks" pillVariant="gold" title={<><b>Scorecard by type</b> &middot; actual vs Larroudé baseline (p25) and target (p75)</>} right={`${camps.length} camp types / ${flows.length} flow types`} />
 
       <SectionHead pill="Campaigns" pillVariant="pink" title={<><b>By type</b></>} />
       <div className="bm-grid">{camps.map(r => row(r, 'pink'))}</div>

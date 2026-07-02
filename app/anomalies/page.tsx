@@ -46,7 +46,7 @@ export default async function AnomaliesPage() {
               <thead>
                 <tr style={{ borderBottom: "1px solid var(--border)" }}>
                   <th className="text-left py-2.5 pr-4 label-meta">MERCADO</th>
-                  <th className="text-left py-2.5 pr-4 label-meta">METRICA</th>
+                  <th className="text-left py-2.5 pr-4 label-meta">MÉTRICA</th>
                   <th className="text-right py-2.5 pr-4 label-meta">DELTA</th>
                   <th className="text-right py-2.5 pr-4 label-meta">Z-SCORE</th>
                   <th className="text-left py-2.5 label-meta">SEVERIDADE</th>
