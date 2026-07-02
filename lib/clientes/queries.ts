@@ -7,8 +7,9 @@
  * orders agregando por customer.id; exclui guest checkouts). Nunca inventa dado: em falha a
  * rota devolve available:false e a UI avisa.
  *
- * Datas: usa DATE(created_at) (UTC), IGUAL ao motor LTV, para os números baterem com o bloco de
- * KPIs (que reusa getLtvKpiSummary). Identidade (email) é mascarada na borda (route/UI), não aqui.
+ * Datas: usa DATE(created_at, LTV_TZ) — timezone de mercado, IGUAL ao motor LTV (Cassia 2026-07-02),
+ * para os números baterem com o bloco de KPIs (que reusa getLtvKpiSummary). Identidade (email) é
+ * mascarada na borda (route/UI), não aqui.
  */
 
 import { runQuery } from '@/lib/ltv-dashboard/bigquery';
@@ -17,6 +18,7 @@ import {
   COMMON_FILTERS_DTC,
   NET_SALES_EXPR,
   validOrdersCte,
+  LTV_TZ,
   type Market,
 } from '@/lib/ltv-dashboard/queries';
 import { CHANNEL_UTM_PATTERNS } from '@/lib/shared/channel-utms';
@@ -130,7 +132,7 @@ export async function getCustomerOrders(market: Market, customerId: string): Pro
     ),
     raw_li AS (
       SELECT id AS order_id,
-             DATE(created_at) AS order_date,
+             DATE(created_at, '${LTV_TZ[market]}') AS order_date,
              CAST(JSON_VALUE(li, '$.id') AS INT64) AS line_item_id,
              TRIM(REGEXP_REPLACE(JSON_VALUE(li, '$.title'), r'\\s+', ' ')) AS title_norm,
              CAST(JSON_VALUE(li, '$.quantity') AS FLOAT64) AS qty
@@ -154,7 +156,7 @@ export async function getCustomerOrders(market: Market, customerId: string): Pro
     o AS (
       SELECT
         name,
-        FORMAT_DATE('%Y-%m-%d', DATE(created_at)) AS order_date,
+        FORMAT_DATE('%Y-%m-%d', DATE(created_at, '${LTV_TZ[market]}')) AS order_date,
         ${NET_SALES_EXPR} AS net_sales,
         fulfillment_status,
         financial_status,
@@ -195,7 +197,7 @@ export async function getNewVsReturning(market: Market, start: string, end: stri
     WITH
     ${validOrdersCte(table, market)},
     first_order AS (
-      SELECT JSON_VALUE(customer, '$.id') AS customer_id, MIN(DATE(created_at)) AS first_dt
+      SELECT JSON_VALUE(customer, '$.id') AS customer_id, MIN(DATE(created_at, '${LTV_TZ[market]}')) AS first_dt
       FROM \`${table}\`
       WHERE ${COMMON_FILTERS_DTC(market)}
         AND id IN (SELECT order_id FROM valid_orders)
@@ -208,7 +210,7 @@ export async function getNewVsReturning(market: Market, start: string, end: stri
       FROM \`${table}\`
       WHERE ${COMMON_FILTERS_DTC(market)}
         AND id IN (SELECT order_id FROM valid_orders)
-        AND DATE(created_at) BETWEEN @start AND @end
+        AND DATE(created_at, '${LTV_TZ[market]}') BETWEEN @start AND @end
       GROUP BY customer_id
     )
     SELECT
@@ -245,7 +247,7 @@ export async function getTopCustomers(market: Market, start: string, end: string
     WITH
     ${validOrdersCte(table, market)},
     first_order AS (
-      SELECT JSON_VALUE(customer, '$.id') AS customer_id, MIN(DATE(created_at)) AS first_dt
+      SELECT JSON_VALUE(customer, '$.id') AS customer_id, MIN(DATE(created_at, '${LTV_TZ[market]}')) AS first_dt
       FROM \`${table}\`
       WHERE ${COMMON_FILTERS_DTC(market)}
         AND id IN (SELECT order_id FROM valid_orders)
@@ -259,11 +261,11 @@ export async function getTopCustomers(market: Market, start: string, end: string
         ANY_VALUE(JSON_VALUE(customer, '$.email'))      AS email,
         COUNT(*) AS orders,
         SUM(${NET_SALES_EXPR}) AS revenue,
-        FORMAT_DATE('%Y-%m-%d', MAX(DATE(created_at))) AS last_order
+        FORMAT_DATE('%Y-%m-%d', MAX(DATE(created_at, '${LTV_TZ[market]}'))) AS last_order
       FROM \`${table}\`
       WHERE ${COMMON_FILTERS_DTC(market)}
         AND id IN (SELECT order_id FROM valid_orders)
-        AND DATE(created_at) BETWEEN @start AND @end
+        AND DATE(created_at, '${LTV_TZ[market]}') BETWEEN @start AND @end
       GROUP BY customer_id
     )
     SELECT
@@ -305,7 +307,7 @@ export async function getOpenOrders(market: Market, limit = 50): Promise<OpenOrd
     ${COMMON_FILTERS_DTC(market)}
     AND (fulfillment_status IS NULL OR fulfillment_status = 'partial')
     AND financial_status NOT IN ('refunded','voided')
-    AND DATE(created_at) >= DATE_SUB(CURRENT_DATE(), INTERVAL 365 DAY)
+    AND DATE(created_at, '${LTV_TZ[market]}') >= DATE_SUB(CURRENT_DATE(), INTERVAL 365 DAY)
   `;
   const totalsSql = `
     SELECT
@@ -323,7 +325,7 @@ export async function getOpenOrders(market: Market, limit = 50): Promise<OpenOrd
       ANY_VALUE(JSON_VALUE(customer, '$.email'))      AS email,
       COUNT(*) AS open_orders,
       SUM(CAST(total_price AS FLOAT64)) AS open_value,
-      DATE_DIFF(CURRENT_DATE(), MIN(DATE(created_at)), DAY) AS oldest_days
+      DATE_DIFF(CURRENT_DATE(), MIN(DATE(created_at, '${LTV_TZ[market]}')), DAY) AS oldest_days
     FROM \`${table}\`
     WHERE ${openWhere}
     GROUP BY customer_id
@@ -363,7 +365,7 @@ export async function getCohorts(market: Market): Promise<CohortCell[]> {
     WITH
     ${validOrdersCte(table, market)},
     first_order AS (
-      SELECT JSON_VALUE(customer, '$.id') AS customer_id, MIN(DATE(created_at)) AS first_dt
+      SELECT JSON_VALUE(customer, '$.id') AS customer_id, MIN(DATE(created_at, '${LTV_TZ[market]}')) AS first_dt
       FROM \`${table}\`
       WHERE ${COMMON_FILTERS_DTC(market)}
         AND id IN (SELECT order_id FROM valid_orders)
@@ -376,7 +378,7 @@ export async function getCohorts(market: Market): Promise<CohortCell[]> {
     ),
     activity AS (
       SELECT JSON_VALUE(customer, '$.id') AS customer_id,
-             DATE_TRUNC(DATE(created_at), MONTH) AS order_month
+             DATE_TRUNC(DATE(created_at, '${LTV_TZ[market]}'), MONTH) AS order_month
       FROM \`${table}\`
       WHERE ${COMMON_FILTERS_DTC(market)}
         AND id IN (SELECT order_id FROM valid_orders)

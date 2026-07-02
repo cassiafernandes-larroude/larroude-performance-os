@@ -53,6 +53,10 @@ export { topLtvMinCustomers };
 
 export type Market = 'US' | 'BR';
 
+// Cassia 2026-07-02: LTV/Clientes migrados de UTC para timezone de mercado (regra do CLAUDE.md),
+// alinhando cortes de dia/mês com Main/CAC/Overview. Coortes históricas deslocam levemente na borda.
+export const LTV_TZ: Record<Market, string> = { US: 'America/New_York', BR: 'America/Sao_Paulo' };
+
 // Tabelas BQ no projeto larroude-data-prod (mesmo usado pelo Main Dashboard / Overview).
 // O Dashboard LTV original usava 'larroude-data-platform.shopify_us.orders' -
 // no lpos os dados Shopify estao em larroude-data-prod.stg_shopify(_br).orders.
@@ -171,7 +175,7 @@ export function validOrdersCte(table: string, market: Market): string {
     SELECT
       JSON_VALUE(o.customer, '$.id') AS customer_id,
       o.id AS order_id,
-      DATE(o.created_at) AS order_date,
+      DATE(o.created_at, '${LTV_TZ[market]}') AS order_date,
       CAST(JSON_VALUE(li, '$.id') AS INT64) AS line_item_id,
       TRIM(REGEXP_REPLACE(JSON_VALUE(li, '$.title'), r'\\s+', ' ')) AS title_norm,
       CAST(JSON_VALUE(li, '$.quantity') AS FLOAT64) AS qty
@@ -395,12 +399,12 @@ export async function getLtvKpiSummary(
     base AS (
       SELECT
         JSON_VALUE(customer, '$.id') AS customer_id,
-        DATE(created_at) AS order_date,
+        DATE(created_at, '${LTV_TZ[market]}') AS order_date,
         id AS order_id,
         ${NET_SALES_EXPR} AS net_sales
       FROM \`${table}\`
       WHERE ${COMMON_FILTERS_DTC(market)}
-        AND DATE(created_at) BETWEEN @start AND @end
+        AND DATE(created_at, '${LTV_TZ[market]}') BETWEEN @start AND @end
         AND id IN (SELECT order_id FROM valid_orders)
     ),
     period_customers AS (
@@ -479,7 +483,7 @@ export async function getLtvKpiSummary(
       FROM (
         SELECT
           JSON_VALUE(customer, '$.id') AS customer_id,
-          DATE(created_at) AS order_date
+          DATE(created_at, '${LTV_TZ[market]}') AS order_date
         FROM \`${table}\`
         WHERE ${COMMON_FILTERS_DTC(market)}
       )
@@ -584,11 +588,11 @@ export async function getDailyLtvSeries(
     base AS (
       SELECT
         JSON_VALUE(customer, '$.id') AS customer_id,
-        DATE(created_at) AS order_date,
+        DATE(created_at, '${LTV_TZ[market]}') AS order_date,
         ${NET_SALES_EXPR} AS net_sales
       FROM \`${table}\`
       WHERE ${COMMON_FILTERS_DTC(market)}
-        AND DATE(created_at) BETWEEN @start AND @end
+        AND DATE(created_at, '${LTV_TZ[market]}') BETWEEN @start AND @end
         AND id IN (SELECT order_id FROM valid_orders)
     ),
     cust_window AS (
@@ -669,20 +673,20 @@ export async function getMonthlyLtvSeries(market: Market): Promise<MonthlyLtvPoi
     window_orders AS (
       SELECT
         JSON_VALUE(customer, '$.id') AS customer_id,
-        DATE(created_at) AS order_date,
+        DATE(created_at, '${LTV_TZ[market]}') AS order_date,
         id AS order_id,
-        FORMAT_DATE('%Y-%m', DATE(created_at)) AS ym,
+        FORMAT_DATE('%Y-%m', DATE(created_at, '${LTV_TZ[market]}')) AS ym,
         ${NET_SALES_EXPR} AS net_sales
       FROM \`${table}\`
       WHERE ${COMMON_FILTERS_DTC(market)}
-        AND DATE(created_at) >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 11 MONTH), MONTH)
+        AND DATE(created_at, '${LTV_TZ[market]}') >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 11 MONTH), MONTH)
         AND id IN (SELECT order_id FROM valid_orders)
     ),
     -- First order ever per customer (também valid_orders apenas)
     first_order_ever AS (
       SELECT
         JSON_VALUE(customer, '$.id') AS customer_id,
-        MIN(DATE(created_at)) AS first_d
+        MIN(DATE(created_at, '${LTV_TZ[market]}')) AS first_d
       FROM \`${table}\`
       WHERE ${COMMON_FILTERS_DTC(market)}
         AND id IN (SELECT order_id FROM valid_orders)
@@ -883,7 +887,7 @@ export async function getProductLtv(
       SUM(${NET_SALES_EXPR}) AS lifetime_in_window
     FROM \`${table}\`
     WHERE ${COMMON_FILTERS_DTC(market)}
-      AND DATE(created_at) BETWEEN @start AND @end
+      AND DATE(created_at, '${LTV_TZ[market]}') BETWEEN @start AND @end
       AND id IN (SELECT order_id FROM valid_orders)
     GROUP BY customer_id
   `;
@@ -914,12 +918,12 @@ export async function getProductLtv(
         UNNEST(JSON_QUERY_ARRAY(o.refunds)) AS r,
         UNNEST(JSON_QUERY_ARRAY(r, '$.refund_line_items')) AS rli
       WHERE o.cancelled_at IS NULL AND o.test = FALSE
-        AND DATE(o.created_at) BETWEEN @start AND @end
+        AND DATE(o.created_at, '${LTV_TZ[market]}') BETWEEN @start AND @end
       GROUP BY o.id, line_item_id
     ),
     raw_li AS (
       SELECT
-        FORMAT_DATE('%Y-%m-%d', DATE(o.created_at)) AS order_date,
+        FORMAT_DATE('%Y-%m-%d', DATE(o.created_at, '${LTV_TZ[market]}')) AS order_date,
         JSON_VALUE(o.customer, '$.id') AS customer_id,
         o.id AS order_id,
         CAST(JSON_VALUE(li, '$.id') AS INT64) AS line_item_id,
@@ -928,7 +932,7 @@ export async function getProductLtv(
       FROM \`${table}\` o,
         UNNEST(JSON_QUERY_ARRAY(o.line_items)) AS li
       WHERE ${COMMON_FILTERS_DTC(market).replace(/test = FALSE/, 'o.test = FALSE').replace(/cancelled_at IS NULL/, 'o.cancelled_at IS NULL').replace(/JSON_VALUE\(customer/g, 'JSON_VALUE(o.customer').replace(/CAST\(total_price/g, 'CAST(o.total_price').replace(/(?<![A-Za-z_.])financial_status/g, 'o.financial_status')}
-        AND DATE(o.created_at) BETWEEN @start AND @end
+        AND DATE(o.created_at, '${LTV_TZ[market]}') BETWEEN @start AND @end
         AND o.id IN (SELECT order_id FROM valid_orders)
     )
     SELECT
@@ -1143,7 +1147,7 @@ export async function getRetentionStats(market: Market): Promise<RetentionStats>
     base AS (
       SELECT
         JSON_VALUE(customer, '$.id') AS customer_id,
-        DATE(created_at) AS order_date,
+        DATE(created_at, '${LTV_TZ[market]}') AS order_date,
         id AS order_id
       FROM \`${table}\`
       WHERE ${COMMON_FILTERS_DTC(market)}
@@ -1236,7 +1240,7 @@ export async function getCustomerJourney(market: Market): Promise<CustomerJourne
       SELECT
         JSON_VALUE(o.customer, '$.id') AS customer_id,
         o.id AS order_id,
-        DATE(o.created_at) AS order_date,
+        DATE(o.created_at, '${LTV_TZ[market]}') AS order_date,
         CAST(JSON_VALUE(li, '$.id') AS INT64) AS line_item_id,
         JSON_VALUE(li, '$.sku') AS sku,
         JSON_VALUE(li, '$.title') AS title,
