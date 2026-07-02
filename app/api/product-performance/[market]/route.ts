@@ -7,6 +7,8 @@ import { memo, TTL_30M } from '@/lib/ltv-dashboard/memo-cache';
 import { dateRangeForPeriod, dateRangeCompleted, previousRangeOf } from '@/lib/utils/periods';
 import { parseFulfillmentCategories, type FulfillmentCategory } from '@/lib/shared/fulfillment-category';
 import { getPreorderMotherSkus } from '@/lib/shared/preorder-skus';
+import { getPendingByMotherSku, type PendingBySku } from '@/lib/sop/remessas';
+import { getForecastNext4w } from '@/lib/sop/forecast';
 import type { Period } from '@/types/metric';
 
 export const dynamic = 'force-dynamic';
@@ -37,6 +39,15 @@ interface PerfRow {
   fisico: number | null;   // estoque real (RS + Ship Essential US / RS BR)
   remessa: number | null;  // lote em produção (Senda)
   d2d: number | null;      // produção sob demanda (Possibility; sentinela ~9999/tamanho)
+}
+
+// Cassia 2026-07-02: camada S&OP anexada ao ranking — pares pendentes de produção
+// ("a caminho", silver Senda) + unidades projetadas 4 semanas (motor do Forecast).
+// null = fonte indisponível/sem dado pro SKU; a UI degrada (esconde a linha/badge).
+interface SopRow extends PerfRow {
+  aCaminhoPares: number | null;
+  aCaminhoChegada: string | null; // YYYY-MM-DD (só datas válidas: hoje → +2 anos)
+  forecast4w: number | null;
 }
 
 function resolveRange(sp: URLSearchParams): { start: string; end: string } {
@@ -110,6 +121,17 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
   const fulCats = parseFulfillmentCategories(req.nextUrl.searchParams.get('fulCats'));
 
   try {
+    // S&OP em paralelo com o ranking — falha NUNCA derruba a aba (catch → null).
+    const pendingP: Promise<Record<string, PendingBySku> | null> = getPendingByMotherSku().catch(() => null);
+    const forecastP: Promise<Record<string, number> | null> = (m === 'ALL'
+      ? Promise.all([getForecastNext4w('US'), getForecastNext4w('BR')]).then(([us, br]) => {
+          const out: Record<string, number> = { ...us };
+          for (const [k, v] of Object.entries(br)) out[k] = (out[k] || 0) + v;
+          return out;
+        })
+      : getForecastNext4w(m as Market)
+    ).catch(() => null);
+
     // Esquenta o cache de SKUs pre-order p/ o filtro de origem (exclusão pre-order).
     if (fulCats?.length) await Promise.all(m === 'ALL' ? [getPreorderMotherSkus('US'), getPreorderMotherSkus('BR')] : [getPreorderMotherSkus(m as Market)]);
 
@@ -154,8 +176,20 @@ export async function GET(req: NextRequest, ctx: { params: { market: string } })
     const totalUnits = products.reduce((s, r) => s + r.units, 0);
     const totalRevenue = products.reduce((s, r) => s + r.revenue, 0);
 
+    // Anexa a camada S&OP por SKU-mãe (best-effort; null quando não há match/fonte).
+    const [pending, forecast] = await Promise.all([pendingP, forecastP]);
+    const sopProducts: SopRow[] = products.map((p) => {
+      const pend = pending?.[p.motherSku] ?? null;
+      return {
+        ...p,
+        aCaminhoPares: pend ? pend.pendingPairs : null,
+        aCaminhoChegada: pend ? pend.nextDelivery : null,
+        forecast4w: forecast?.[p.motherSku] ?? null,
+      };
+    });
+
     return NextResponse.json(
-      { market: m, start, end, currency, fx, totalUnits, totalRevenue, productCount: products.length, products },
+      { market: m, start, end, currency, fx, totalUnits, totalRevenue, productCount: sopProducts.length, products: sopProducts },
       { headers: { 'Cache-Control': 'public, max-age=0, s-maxage=300, stale-while-revalidate=1800' } }
     );
   } catch (err) {

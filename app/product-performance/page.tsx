@@ -50,6 +50,36 @@ interface ProductRow {
   group: ProductGroup; isB2B: boolean; isCollab: boolean; isNew: boolean;
   materials: string[]; colors: string[]; collab: string | null; drop: string | null;
   fisico: number | null; remessa: number | null; d2d: number | null;
+  // Cassia 2026-07-02: camada S&OP anexada pela API — pares pendentes de produção
+  // ("a caminho", Senda) e unidades projetadas 4 semanas (motor do Forecast). null = sem dado.
+  aCaminhoPares?: number | null; aCaminhoChegada?: string | null; forecast4w?: number | null;
+}
+
+// Cassia 2026-07-02: cobertura de estoque (S&OP) = físico ÷ velocidade diária do período.
+// <14d = risco (vermelho) · 14–30d = atenção (âmbar) · >30d = confortável (verde) ·
+// sem vendas no período = ∞ (cinza) · sem estoque rastreado = —.
+function coverageOf(p: ProductRow, periodDays: number): { label: string; color: string; title: string } {
+  if (p.fisico == null) return { label: '—', color: '#9ca3af', title: 'Sem estoque rastreado' };
+  if (p.units <= 0 || periodDays <= 0) return { label: '∞', color: '#9ca3af', title: 'Sem vendas no período — cobertura indefinida' };
+  const days = p.fisico / (p.units / periodDays);
+  const label = days <= 0 ? '0d' : days > 999 ? '999d+' : `${Math.round(days)}d`;
+  const color = days < 14 ? '#dc2626' : days <= 30 ? '#b45309' : '#16A34A';
+  return { label, color, title: `Cobertura: estoque físico ÷ velocidade diária (${periodDays} dias do período)` };
+}
+
+// Risco de ruptura: projeção 4 semanas maior que físico + a caminho (remessa Senda).
+// Cassia 2026-07-02: se o produto tem D2D (Possibility, produção sob demanda), o risco
+// vira aviso âmbar "coberto por D2D" — dá pra produzir, mas com lead time.
+function isRupturaRisk(p: ProductRow): boolean {
+  return p.forecast4w != null && p.fisico != null && p.forecast4w > (p.fisico + (p.aCaminhoPares ?? 0));
+}
+function hasD2dCover(p: ProductRow): boolean {
+  return (p.d2d ?? 0) > 0;
+}
+
+function fmtDDMM(iso: string): string {
+  const [, m, d] = iso.split('-');
+  return `${d}/${m}`;
 }
 interface VariantStockRow { sku: string; size: string | null; fisico: number; remessa: number; d2d: number }
 type CatKey = 'all' | 'collab' | 'b2b' | 'tenis' | 'bolsas' | 'vestuario' | 'material' | 'cor';
@@ -297,6 +327,8 @@ export default function ProductPerformancePage() {
   }, [market, rangeQS, selKey, perf?.fx]);
 
   const products = perf?.products || [];
+  // Dias do período selecionado — denominador da velocidade diária (cobertura S&OP).
+  const periodDays = perf?.start && perf?.end ? daysInclusive(perf.start, perf.end) : 0;
   // Fonte do CARROSSEL: filtrada por origem (carProducts) quando há filtro; senão = todas as origens.
   const carSource = fulCats.length && carProducts ? carProducts : products;
   // TABELA (todas as origens) — independe do filtro de origem.
@@ -656,11 +688,11 @@ export default function ProductPerformancePage() {
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
         {[
           { live: true, label: 'UNIDADES HOJE', value: liveToday ? fmtNum(liveToday.units) : '…', sub: 'seleção · hoje' },
-          { live: true, label: 'FATURAMENTO HOJE', value: liveToday ? fmtMoney(liveToday.revenue) : '…', sub: 'seleção · hoje' },
+          { live: true, label: 'RECEITA HOJE', value: liveToday ? fmtMoney(liveToday.revenue) : '…', sub: 'seleção · hoje' },
           { live: true, label: 'ROAS HOJE', value: !liveToday ? '…' : liveToday.roas != null ? `${liveToday.roas.toFixed(2)}x` : liveToday.hasAds ? '0.00x' : '— sem ads',
             sub: liveToday && liveToday.hasAds ? `spend ${fmtMoney(liveToday.spend)} · ads Meta` : 'sem SKU anunciado' },
           { live: false, label: 'UNIDADES NO PERÍODO', value: loadingPerf ? '…' : fmtNum(selUnits), sub: 'seleção' },
-          { live: false, label: 'FATURAMENTO NO PERÍODO', value: loadingPerf ? '…' : fmtMoney(selRevenue), sub: 'seleção' },
+          { live: false, label: 'RECEITA NO PERÍODO', value: loadingPerf ? '…' : fmtMoney(selRevenue), sub: 'seleção' },
         ].map((k) => (
           <div key={k.label} className="card p-4" style={k.live ? { borderLeft: '3px solid #16A34A' } : undefined}>
             <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', color: '#6b7280' }}>{k.label}</div>
@@ -682,7 +714,7 @@ export default function ProductPerformancePage() {
           <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
             <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#6b7280' }}>🏆 Ranking · selecione quantos quiser</span>
             <div className="flex items-center gap-1">
-              <button onClick={() => setSortBy('revenue')} className={pillBtn(sortBy === 'revenue')}>Fat.</button>
+              <button onClick={() => setSortBy('revenue')} className={pillBtn(sortBy === 'revenue')}>Rec.</button>
               <button onClick={() => setSortBy('units')} className={pillBtn(sortBy === 'units')}>Un.</button>
             </div>
           </div>
@@ -696,14 +728,18 @@ export default function ProductPerformancePage() {
               <thead>
                 <tr className="text-left" style={{ color: '#9ca3af', fontSize: 10, textTransform: 'uppercase' }}>
                   <th className="py-1 pr-1"></th><th className="py-1 pr-2">#</th><th className="py-1 pr-2">Produto</th>
-                  <th className="py-1 pr-2 text-right">Un</th><th className="py-1 text-right">Fat.</th>
+                  <th className="py-1 pr-2 text-right">Un</th>
+                  <th className="py-1 pr-2 text-right" title="Cobertura: estoque físico ÷ velocidade diária do período">Cobert.</th>
+                  <th className="py-1 text-right">Rec.</th>
                 </tr>
               </thead>
               <tbody>
-                {loadingPerf && <tr><td colSpan={5} className="py-4 text-center" style={{ color: '#6b7280' }}>Carregando…</td></tr>}
+                {loadingPerf && <tr><td colSpan={6} className="py-4 text-center" style={{ color: '#6b7280' }}>Carregando…</td></tr>}
                 {!loadingPerf && ranked.map((p, i) => {
                   const isSel = selected.has(p.motherSku);
                   const hasAds = today ? adKeysForMother(p.motherSku, today.adSpendBySku).length > 0 : false;
+                  const cov = coverageOf(p, periodDays);
+                  const ruptura = isRupturaRisk(p);
                   return (
                     <tr key={p.motherSku} onClick={() => toggle(p.motherSku)}
                       style={{ cursor: 'pointer', background: isSel ? '#fff0f6' : undefined, borderTop: '1px solid #f0ece4' }}>
@@ -715,10 +751,22 @@ export default function ProductPerformancePage() {
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="font-mono" style={{ fontSize: 10, color: '#9ca3af' }}>{p.motherSku}</span>
+                          {ruptura && (hasD2dCover(p)
+                            ? <span title={`Demanda projetada 4 semanas (${fmtNum(p.forecast4w!)} un) acima de físico + a caminho (${fmtNum((p.fisico ?? 0) + (p.aCaminhoPares ?? 0))}), mas o produto tem D2D (Possibility) — produção sob demanda cobre, com lead time`}
+                              className="inline-block px-1.5 rounded-full font-bold" style={{ fontSize: 9, color: '#b45309', background: '#fdf3e3' }}>⚠ demanda &gt; estoque · D2D</span>
+                            : <span title={`Risco de ruptura: projeção 4 semanas (${fmtNum(p.forecast4w!)} un) maior que físico + a caminho (${fmtNum((p.fisico ?? 0) + (p.aCaminhoPares ?? 0))}) e sem D2D`}
+                              className="inline-block px-1.5 rounded-full font-bold" style={{ fontSize: 9, color: '#dc2626', background: '#fdeaea' }}>⚠ risco ruptura</span>
+                          )}
                           <button onClick={(e) => { e.stopPropagation(); setSelected(new Set([p.motherSku])); }} className="text-[9px] underline" style={{ color: '#c7c2b6' }}>só este</button>
+                        </div>
+                        <div style={{ fontSize: 9.5, color: p.aCaminhoPares ? '#b45309' : '#c7c2b6' }} title="Pares pendentes em remessas ativas (produção Senda)">
+                          {p.aCaminhoPares
+                            ? <>🚚 A caminho: {fmtNum(p.aCaminhoPares)} pares{p.aCaminhoChegada ? ` · chega ~${fmtDDMM(p.aCaminhoChegada)}` : ''}</>
+                            : 'A caminho: —'}
                         </div>
                       </td>
                       <td className="py-1.5 pr-2 text-right font-num">{fmtNum(p.units)}</td>
+                      <td className="py-1.5 pr-2 text-right font-num" title={cov.title} style={{ color: cov.color, fontWeight: 600 }}>{cov.label}</td>
                       <td className="py-1.5 text-right font-num">{fmtMoney(p.revenue)}</td>
                     </tr>
                   );
@@ -744,7 +792,7 @@ export default function ProductPerformancePage() {
           {selCount > 0 && !loadingSeries && unitPoints.length > 0 && (
             <div className="grid grid-cols-1 gap-4">
               <BarLineChart title={`UNIDADES VENDIDAS / TEMPO${selCount > 1 ? ' (soma da seleção)' : ''}`} data={unitPoints} color="#5d4ec5" unit="number" market={market === 'BR' ? 'BR' : 'US'} height={240} />
-              <BarLineChart title={`FATURAMENTO / TEMPO${selCount > 1 ? ' (soma)' : ''}${market === 'ALL' ? ' · US$' : ''}`} data={revPoints} color="#16A34A" unit="currency" market={market === 'BR' ? 'BR' : 'US'} height={240} />
+              <BarLineChart title={`RECEITA / TEMPO${selCount > 1 ? ' (soma)' : ''}${market === 'ALL' ? ' · US$' : ''}`} data={revPoints} color="#16A34A" unit="currency" market={market === 'BR' ? 'BR' : 'US'} height={240} />
             </div>
           )}
         </div>
@@ -980,7 +1028,7 @@ function PreorderFunnelTab({ market, cur, loc }: { market: 'US' | 'BR'; cur: str
     { key: 'ctr', label: 'CTR', fmt: (r) => pct(r.ctr), grp: 'ads', tg: 'ads' },
     { key: 'spend', label: 'Investido', fmt: (r) => money(r.spend), grp: 'ads', tg: 'ads' },
     { key: 'units', label: 'Unidades', fmt: (r) => num(r.units), grp: 'res' },
-    { key: 'revenue', label: 'Faturamento', fmt: (r) => money(r.revenue), grp: 'res' },
+    { key: 'revenue', label: 'Receita', fmt: (r) => money(r.revenue), grp: 'res' },
     { key: 'returnRate', label: 'Returns', fmt: (r) => pct(r.returnRate), grp: 'res' },
     { key: 'revMinusCost', label: 'Receita − custo', fmt: (r) => money(r.revMinusCost), grp: 'pl' },
     { key: 'grossMargin', label: 'M. bruta', fmt: (r) => pct(r.grossMargin), grp: 'pl', tg: 'margin' },
@@ -1019,7 +1067,7 @@ function PreorderFunnelTab({ market, cur, loc }: { market: 'US' | 'BR'; cur: str
           { label: 'Add ao carrinho', values: (daily || []).map((p) => p.atc), color: '#0ea5e9' },
           { label: 'Unidades vendidas', values: (daily || []).map((p) => p.units), color: '#10b981' },
         ];
-        const revSeries: Series[] = [{ label: 'Faturamento', values: (daily || []).map((p) => p.revenue), color: '#16A34A' }];
+        const revSeries: Series[] = [{ label: 'Receita', values: (daily || []).map((p) => p.revenue), color: '#16A34A' }];
         return (
           <div className="card p-4">
             <div className="flex items-center gap-2 flex-wrap mb-3">
@@ -1031,13 +1079,13 @@ function PreorderFunnelTab({ market, cur, loc }: { market: 'US' | 'BR'; cur: str
                 ))}
               </select>
             </div>
-            {!sel && <div className="text-[12px] py-4 text-center" style={{ color: '#9ca3af' }}>Escolha um produto para ver sessões, add-to-cart, unidades e faturamento por dia (desde o drop).</div>}
+            {!sel && <div className="text-[12px] py-4 text-center" style={{ color: '#9ca3af' }}>Escolha um produto para ver sessões, add-to-cart, unidades e receita por dia (desde o drop).</div>}
             {sel && loadingDaily && <div className="text-[12px] py-4 text-center" style={{ color: '#9ca3af' }}>Carregando série…</div>}
             {sel && !loadingDaily && daily && daily.length === 0 && <div className="text-[12px] py-4 text-center" style={{ color: '#9ca3af' }}>Sem dados diários para este produto na janela.</div>}
             {sel && !loadingDaily && daily && daily.length > 0 && (
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                 <MultiLineChart title="Funil · sessões / add-to-cart / unidades (dia)" dates={dates} series={countSeries} unit="number" market={market} height={260} />
-                <MultiLineChart title="Faturamento por dia" dates={dates} series={revSeries} unit="currency" market={market} height={260} />
+                <MultiLineChart title="Receita por dia" dates={dates} series={revSeries} unit="currency" market={market} height={260} />
               </div>
             )}
           </div>
