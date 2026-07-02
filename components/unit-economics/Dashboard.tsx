@@ -28,6 +28,7 @@ interface ApiResponse {
   marketingCoverage: number;
   marketingPerUnit: number;
   partial?: boolean;
+  spendWarnings?: string[];
   pagesProcessed?: number;
   catalogProductsCount?: number;
   catalogVariantsCount?: number;
@@ -310,6 +311,16 @@ export default function Dashboard({ freshness }: { freshness: string }) {
       {loading && !data && (
         <div className="card mt-4 p-8 text-center text-sm" style={{ color: '#6b7280' }}>
           Loading today's data from Shopify… (30min cache after 1st load)
+        </div>
+      )}
+
+      {data && (data.spendWarnings?.length ?? 0) > 0 && (
+        <div
+          className="card mt-4 p-3 text-sm"
+          style={{ borderColor: '#dc2626', background: '#fef2f2', color: '#991b1b' }}
+        >
+          <strong>⚠ Ad spend unavailable:</strong> {data.spendWarnings!.join(' + ')} spend failed to
+          load and was counted as $0 — marketing per unit and net CM are UNDERSTATED. Retry later.
         </div>
       )}
 

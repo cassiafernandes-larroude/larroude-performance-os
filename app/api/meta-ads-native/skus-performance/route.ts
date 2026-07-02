@@ -16,7 +16,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { hasBigQueryCredentials } from '@/lib/bigquery/client';
 import { shopifyGraphQL, hasShopifyCredentials } from '@/lib/shopify/admin';
 import { extractAdRefFromName } from '@/lib/meta-ads-native/sku-extractor';
-import { EXCLUDED_TAGS_REGEX } from '@/lib/shared/dtc-filters';
+import { EXCLUDED_TAGS_REGEX, excludeExchangesSQL } from '@/lib/shared/dtc-filters';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 600;
@@ -150,6 +150,7 @@ export async function POST(req: NextRequest) {
           AND NOT REGEXP_CONTAINS(LOWER(IFNULL(o.tags, '')), r'${EXCLUDED_TAGS}')
           AND (JSON_VALUE(o.customer, '$.tags') IS NULL OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(o.customer, '$.tags')), r'${EXCLUDED_TAGS}'))
           AND CAST(o.total_price AS NUMERIC) < ${MAX_ORDER_VALUE[market]}
+          ${excludeExchangesSQL('o')}
       ),
       parsed AS (
         SELECT

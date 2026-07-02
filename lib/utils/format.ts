@@ -7,7 +7,8 @@ const COMPACT_USD = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 2,
 });
 
-const COMPACT_BRL = new Intl.NumberFormat("en-US", {
+// Cassia 2026-07-02: BRL em locale pt-BR (R$ 1.234,56) — antes usava en-US (R$1,234.56)
+const COMPACT_BRL = new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
   notation: "compact",
@@ -20,7 +21,7 @@ const FULL_USD = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0,
 });
 
-const FULL_BRL = new Intl.NumberFormat("en-US", {
+const FULL_BRL = new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
   maximumFractionDigits: 0,

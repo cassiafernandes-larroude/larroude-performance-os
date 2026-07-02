@@ -234,12 +234,30 @@ export async function getDashboardPayload(
   // Mesma regra do Overview (lib/data/metrics.ts).
   const fixedToolsCost = getFixedToolsCostInRange(market, period.start, period.end);
   const fixedToolsCostPrev = getFixedToolsCostInRange(market, period.prevStart, period.prevEnd);
-  // Cassia 2026-06-14: TODOS canais % da receita (Agent.shop BR, Awin US+BR, ShopMy US)
-  // calculados via helper genérico — substitui getAgentShopCost
-  const percentRevCosts = getPercentRevenueCosts(market, channelMix as any[]);
-  const agentShopCost = Object.values(percentRevCosts).reduce((s, v) => s + v, 0);
-  // Prev: aproxima usando mesma soma (não temos channelMix do período anterior)
-  const agentShopCostPrev = agentShopCost;
+  // Cassia 2026-06-14: TODOS canais % da receita (Agent.shop BR, Awin US+BR, ShopMy US).
+  // Cassia 2026-07-02: base canônica = getPercentRevenueCostsFromBQ (mesma de computeTotalSpend /
+  // CAC/LTV/Overview) — antes usava o channelMix próprio do Main, divergindo do resto. O helper
+  // via channelMix vira fallback se o BQ falhar.
+  let percentRevCosts: Record<string, number> = {};
+  let agentShopCost = 0;
+  let agentShopCostPrev = 0;
+  try {
+    const { getPercentRevenueCostsFromBQ } = await import('@/lib/channel-costs-bq');
+    const [pctCurr, pctPrev] = await Promise.all([
+      getPercentRevenueCostsFromBQ(market, period.start, period.end),
+      getPercentRevenueCostsFromBQ(market, period.prevStart, period.prevEnd),
+    ]);
+    percentRevCosts = pctCurr.byChannel;
+    agentShopCost = pctCurr.total;
+    agentShopCostPrev = pctPrev.total;
+  } catch (e) {
+    console.warn('[main pct-rev-bq] fallback channelMix:', e);
+  }
+  if (agentShopCost === 0) {
+    percentRevCosts = getPercentRevenueCosts(market, channelMix as any[]);
+    agentShopCost = Object.values(percentRevCosts).reduce((s, v) => s + v, 0);
+    agentShopCostPrev = agentShopCost; // aproximação (não temos channelMix do período anterior)
+  }
 
   // Cassia 2026-06-20: filtro de origem (3 categorias) -> escala o spend por regra:
   //   Pre-Order  <- investimento nas campanhas com pre-order/pré-venda no nome (regex).

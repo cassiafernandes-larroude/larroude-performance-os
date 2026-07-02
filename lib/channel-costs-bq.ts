@@ -20,7 +20,7 @@ import type { Market } from "@/types/metric";
 
 // Patterns vindos do helper central lib/shared/channel-utms.ts (UTMs reais do Shopify)
 import { CHANNEL_UTM_PATTERNS } from "@/lib/shared/channel-utms";
-import { EXCLUDED_TAGS_REGEX } from "@/lib/shared/dtc-filters";
+import { EXCLUDED_TAGS_REGEX, excludeExchangesSQL } from "@/lib/shared/dtc-filters";
 const PERCENT_REV_PATTERNS: Record<string, string> = {
   "Agent.shop": CHANNEL_UTM_PATTERNS.agentShop,
   "Awin": CHANNEL_UTM_PATTERNS.awin,
@@ -35,9 +35,11 @@ export async function getPercentRevenueCostsFromBQ(
   const result: Record<string, number> = {};
   if (!hasBigQueryCredentials()) return { byChannel: result, total: 0 };
 
+  // Cassia 2026-07-02: dataset US é stg_shopify (stg_shopify_us NÃO existe — a query US
+  // falhava silenciosamente e Awin/ShopMy entravam como $0 no TOTAL SPEND de todos os dashboards).
   const tbl = market === "BR"
     ? "larroude-data-prod.stg_shopify_br.orders"
-    : "larroude-data-prod.stg_shopify_us.orders";
+    : "larroude-data-prod.stg_shopify.orders";
   const tz = market === "BR" ? "America/Sao_Paulo" : "America/New_York";
   const capVal = market === "BR" ? 25000 : 30000;
 
@@ -51,14 +53,17 @@ export async function getPercentRevenueCostsFromBQ(
       SELECT SUM(CAST(total_price AS NUMERIC)) AS rev
       FROM \`${tbl}\`
       WHERE DATE(created_at, '${tz}') BETWEEN @start AND @end
+        AND cancelled_at IS NULL
+        AND test = FALSE
         AND financial_status NOT IN ('voided','refunded')
-        AND LOWER(IFNULL(financial_status, '')) NOT IN ('pending', 'expired', 'authorized')
+        ${market === "BR" ? `AND LOWER(IFNULL(financial_status, '')) NOT IN ('pending', 'expired', 'authorized')` : ""}
         AND (
           JSON_VALUE(customer, '$.tags') IS NULL
           OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(customer, '$.tags')), r'${EXCLUDED_TAGS_REGEX}')
         )
         AND NOT REGEXP_CONTAINS(LOWER(IFNULL(tags, '')), r'${EXCLUDED_TAGS_REGEX}')
         AND CAST(total_price AS NUMERIC) < ${capVal}
+        ${excludeExchangesSQL()}
         AND (
           REGEXP_CONTAINS(LOWER(IFNULL(landing_site, '')), r'${pattern}')
           OR REGEXP_CONTAINS(LOWER(IFNULL(referring_site, '')), r'${pattern}')

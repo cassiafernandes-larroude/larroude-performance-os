@@ -77,13 +77,18 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
         }),
         queryMetaAdsTotal(market as MainMarket, start, end).catch((err) => {
           console.error('[ue] Meta failed:', err);
-          return { spend: 0 } as any;
+          return { spend: 0, failed: true } as any;
         }),
         queryGoogleAdsTotalViaSupermetrics(market as MainMarket, start, end).catch((err) => {
           console.error('[ue] Google failed:', err);
-          return { spend: 0 } as any;
+          return { spend: 0, failed: true } as any;
         }),
       ]);
+
+      // Cassia 2026-07-02: falha de spend não pode ser silenciosa (spend=0 subestima CAC/marketing-por-unidade)
+      const spendWarnings: string[] = [];
+      if ((metaTotal as any).failed) spendWarnings.push('Meta');
+      if ((googleTotal as any).failed) spendWarnings.push('Google');
 
       const metaAdj = getMetaSpendAdjustment(market, start, end);
       const metaSpend = (Number(metaTotal.spend) || 0) + metaAdj;
@@ -254,6 +259,7 @@ export async function GET(_req: NextRequest, ctx: { params: { market: string } }
         metaSpend,
         googleSpend,
         marketingCoverage: 1.0,
+        spendWarnings,
         marketingPerUnit,
         products: mergedProducts,
         variants: mergedVariants,

@@ -120,22 +120,27 @@ export async function getUnitEconomics(
   const dataset = ordersDataset(market);
   const cap = MAX_ORDER_VALUE[market];
   const currency: 'USD' | 'BRL' = market === 'US' ? 'USD' : 'BRL';
+  // Cassia 2026-07-02: TZ por mercado + exclusão de PIX não-pago (BR), alinhado ao getProductPerformance
+  const tz = market === 'US' ? 'America/New_York' : 'America/Sao_Paulo';
+  const finStatus = market === 'BR'
+    ? `o.financial_status NOT IN ('voided','refunded','pending','expired','authorized')`
+    : `o.financial_status NOT IN ('voided','refunded')`;
 
   const sql = `
     WITH
     valid_orders AS (
       SELECT
         o.id AS order_id,
-        DATE(o.created_at) AS order_date,
+        DATE(o.created_at, '${tz}') AS order_date,
         o.line_items,
         o.refunds,
         o.payment_gateway_names,
         CAST(o.total_price AS NUMERIC) AS order_total
       FROM \`larroude-data-prod.${dataset}.orders\` o
-      WHERE DATE(o.created_at) BETWEEN @start AND @end
+      WHERE DATE(o.created_at, '${tz}') BETWEEN @start AND @end
         AND o.cancelled_at IS NULL
         AND o.test = FALSE
-        AND o.financial_status NOT IN ('voided', 'refunded')
+        AND ${finStatus}
         AND NOT REGEXP_CONTAINS(LOWER(IFNULL(o.tags, '')), r'${EXCLUDED_TAGS_REGEX}')
         AND (JSON_VALUE(o.customer, '$.tags') IS NULL OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(o.customer, '$.tags')), r'${EXCLUDED_TAGS_REGEX}'))
         AND CAST(o.total_price AS NUMERIC) < ${cap}
@@ -364,19 +369,24 @@ export async function getProductUeTimeseries(
   const cap = MAX_ORDER_VALUE[market];
   const bucketExpr = bucketDateExpr(granularity);
   const fulFilter = fulfillmentCategoryFilterSQL(fulCats, 'o', dataset);
+  // Cassia 2026-07-02: TZ por mercado + exclusão de PIX não-pago (BR)
+  const tz = market === 'US' ? 'America/New_York' : 'America/Sao_Paulo';
+  const finStatus = market === 'BR'
+    ? `o.financial_status NOT IN ('voided','refunded','pending','expired','authorized')`
+    : `o.financial_status NOT IN ('voided','refunded')`;
 
   const sql = `
     WITH
     valid_orders AS (
       SELECT
         o.id AS order_id,
-        DATE(o.created_at) AS order_date,
+        DATE(o.created_at, '${tz}') AS order_date,
         o.line_items
       FROM \`larroude-data-prod.${dataset}.orders\` o
-      WHERE DATE(o.created_at) BETWEEN @start AND @end
+      WHERE DATE(o.created_at, '${tz}') BETWEEN @start AND @end
         AND o.cancelled_at IS NULL
         AND o.test = FALSE
-        AND o.financial_status NOT IN ('voided', 'refunded')
+        AND ${finStatus}
         AND NOT REGEXP_CONTAINS(LOWER(IFNULL(o.tags, '')), r'${EXCLUDED_TAGS_REGEX}')
         AND (JSON_VALUE(o.customer, '$.tags') IS NULL OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(o.customer, '$.tags')), r'${EXCLUDED_TAGS_REGEX}'))
         AND CAST(o.total_price AS NUMERIC) < ${cap}
@@ -451,19 +461,24 @@ export async function getOverallUeTimeseries(
   const cap = MAX_ORDER_VALUE[market];
   const bucketExpr = bucketDateExpr(granularity);
   const fulFilter = fulfillmentCategoryFilterSQL(fulCats, 'o', dataset);
+  // Cassia 2026-07-02: TZ por mercado + exclusão de PIX não-pago (BR)
+  const tz = market === 'US' ? 'America/New_York' : 'America/Sao_Paulo';
+  const finStatus = market === 'BR'
+    ? `o.financial_status NOT IN ('voided','refunded','pending','expired','authorized')`
+    : `o.financial_status NOT IN ('voided','refunded')`;
 
   const sql = `
     WITH
     valid_orders AS (
       SELECT
         o.id AS order_id,
-        DATE(o.created_at) AS order_date,
+        DATE(o.created_at, '${tz}') AS order_date,
         o.line_items
       FROM \`larroude-data-prod.${dataset}.orders\` o
-      WHERE DATE(o.created_at) BETWEEN @start AND @end
+      WHERE DATE(o.created_at, '${tz}') BETWEEN @start AND @end
         AND o.cancelled_at IS NULL
         AND o.test = FALSE
-        AND o.financial_status NOT IN ('voided', 'refunded')
+        AND ${finStatus}
         AND NOT REGEXP_CONTAINS(LOWER(IFNULL(o.tags, '')), r'${EXCLUDED_TAGS_REGEX}')
         AND (JSON_VALUE(o.customer, '$.tags') IS NULL OR NOT REGEXP_CONTAINS(LOWER(JSON_VALUE(o.customer, '$.tags')), r'${EXCLUDED_TAGS_REGEX}'))
         AND CAST(o.total_price AS NUMERIC) < ${cap}

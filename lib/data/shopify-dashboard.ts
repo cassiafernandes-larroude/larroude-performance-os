@@ -3,7 +3,7 @@ import { runQuery, hasBigQueryCredentials } from "@/lib/bigquery/client";
 import { cached } from "@/lib/cache";
 import { fulfillmentCategoryFilterSQL, type FulfillmentCategory } from "@/lib/shared/fulfillment-category";
 import { getPreorderMotherSkus } from "@/lib/shared/preorder-skus";
-import { EXCLUDED_TAGS_REGEX } from "@/lib/shared/dtc-filters";
+import { EXCLUDED_TAGS_REGEX, excludeExchangesSQL } from "@/lib/shared/dtc-filters";
 
 const TZ: Record<Market, string> = { US: "America/New_York", BR: "America/Sao_Paulo" };
 const DATASET: Record<Market, string> = { US: "stg_shopify", BR: "stg_shopify_br" };
@@ -196,6 +196,7 @@ function commonFiltersShopify(market: Market, alias: string = ""): string {
     AND NOT REGEXP_CONTAINS(LOWER(IFNULL(${a}tags, '')), r'${EXCLUDED_TAGS_REGEX}')
     AND CAST(${a}total_price AS NUMERIC) < ${cap}
     ${pix}
+    ${excludeExchangesSQL(a.replace(/\.$/, ""))}
   `;
 }
 
